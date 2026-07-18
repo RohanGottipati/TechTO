@@ -5,21 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        twinto: {
-          ink: "#0A0D14",
-          panel: "rgba(15,19,28,0.82)",
-          border: "rgba(255,255,255,0.08)",
-          text: "#EDEFF3",
-          muted: "#8B93A3",
-          accent: "#5B8DEF",
-          red: "#E0333B",
-          amber: "#E3A83B",
-          teal: "#3FBF9F",
-          error: "#FF5C5C",
-        },
+        // Charcoal tinted toward the acceptance green, so panels and map
+        // read as one surface.
+        ink: "#0c0f10",
+        "ink-bright": "#e8ede9",
+        "ink-dim": "#cfd8d0",
+        muted: "#98a29b",
+        panel: "rgba(18, 22, 21, 0.92)",
+        hairline: "rgba(226, 236, 228, 0.09)",
+        oppose: "#db6055",
+        support: "#38ad6b",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        ui: ["var(--font-ui)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
     },

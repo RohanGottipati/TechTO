@@ -2,18 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-sans: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
-}
-
 html,
 body {
   margin: 0;
   padding: 0;
-  background-color: #0a0d14;
-  color: #edeff3;
-  font-family: var(--font-sans);
+  background-color: #0c0f10;
+  color: #cfd8d0;
+  font-family: var(--font-ui), system-ui, sans-serif;
 }
 
 body {
@@ -22,46 +17,38 @@ body {
   overflow: hidden;
 }
 
-/* MapLibre fills its container; keep attribution legible against the dark shell. */
-.maplibregl-map {
-  width: 100%;
-  height: 100%;
-}
-
+/* MapLibre chrome, restyled for the dark surface. */
 .maplibregl-ctrl-attrib {
-  background: rgba(10, 13, 20, 0.65) !important;
-  color: rgba(237, 239, 243, 0.75) !important;
-  font-size: 10px !important;
-  border-radius: 6px !important;
+  background: rgba(18, 22, 21, 0.85) !important;
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px !important;
 }
 
 .maplibregl-ctrl-attrib a {
-  color: rgba(237, 239, 243, 0.85) !important;
+  color: rgba(152, 162, 155, 0.9) !important;
 }
 
-.maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-bottom-left {
-  z-index: 5;
+.maplibregl-ctrl-group {
+  background: rgba(18, 22, 21, 0.92) !important;
+  border: 1px solid rgba(226, 236, 228, 0.08);
+  border-radius: 2px !important;
+  box-shadow: none !important;
 }
 
-.maplibregl-canvas-container,
-.maplibregl-canvas {
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(226, 236, 228, 0.08) !important;
+}
+
+.maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(0.85);
+}
+
+.maplibregl-canvas:focus {
   outline: none;
-}
-
-/* Thin, unobtrusive scrollbars for the dense side panels. */
-.twinto-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-}
-
-.twinto-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.twinto-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.16);
-  border-radius: 6px;
 }
 
 @media (prefers-reduced-motion: reduce) {

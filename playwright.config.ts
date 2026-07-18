@@ -1,21 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Use 3010 so local `next dev` on 3000 is not confused with the e2e server.
-const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3010);
+const PORT = 3005;
 const baseURL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 120_000,
-  expect: { timeout: 30_000 },
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
   fullyParallel: false,
-  workers: 1,
   retries: 0,
   reporter: "list",
   use: {
     baseURL,
     trace: "on-first-retry",
-    screenshot: "only-on-failure",
   },
   projects: [
     {
@@ -24,16 +21,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Force mock mode for e2e even when a live BACKBOARD_API_KEY is present in
-    // the developer .env, so CI and local Playwright never spend API credits.
-    command: `npm run build && npx next start -p ${PORT}`,
+    command: `npm run build && PORT=${PORT} npm run start`,
     url: baseURL,
-    reuseExistingServer: false,
-    timeout: 240_000,
-    env: {
-      ...process.env,
-      BACKBOARD_MOCK_MODE: "true",
-      PORT: String(PORT),
-    },
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
   },
 });

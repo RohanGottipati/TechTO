@@ -1,15 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, IBM_Plex_Mono } from "next/font/google";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
-const dmSans = DM_Sans({
+const archivo = Archivo({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-ui",
   display: "swap",
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
+const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
   variable: "--font-mono",
@@ -17,9 +17,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TwinTO | AI Citizens for Adaptive Toronto Transit",
+  title: "ToronTwin | Toronto simulation dashboard",
   description:
-    "A simulated Toronto transit digital twin: weighted citizen cohorts and a virtual Backboard planning department test schedule changes before they reach a real planner.",
+    "Interactive 2D geospatial dashboard for Toronto: real neighbourhoods, real TTC routes, and a synthetic resident population reacting to policy scenarios.",
 };
 
 export const viewport: Viewport = {
@@ -27,7 +27,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#0A0D14",
+  themeColor: "#0c0f10",
 };
 
 export default function RootLayout({
@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${ibmPlexMono.variable}`}>
+    <html lang="en" className={`${archivo.variable} ${plexMono.variable}`}>
       <body>{children}</body>
     </html>
   );

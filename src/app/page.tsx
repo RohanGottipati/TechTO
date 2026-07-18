@@ -1,5 +1,9 @@
-import { TwinTOAppShell } from "@/components/twinto/TwinTOAppShell";
+import { DashboardClient } from "@/components/dashboard/DashboardClient";
 
 export default function HomePage() {
-  return <TwinTOAppShell />;
+  return (
+    <main className="h-dvh w-screen overflow-hidden bg-ink">
+      <DashboardClient />
+    </main>
+  );
 }

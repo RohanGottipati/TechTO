@@ -37,3 +37,24 @@ next-env.d.ts
 
 # Roster reconciliation reports may include remote assistant IDs
 docs/backboard/roster-reconciliation/
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data: raw citywide downloads are bounded-slice inputs, not outputs.
+# Only data/processed/ (the clipped, reprojected twin inputs) is tracked.
+data/raw/
+OpinionQA/
+ANES/
+
+# Local model serving and HF cache (large, host-specific)
+.vllm-env/
+.hf_cache/
+
+# Regenerable Phase 1 eval outputs (keep committed gate evidence snapshots)
+eval/output/*
+!eval/output/phase1_gate_evidence/
+!eval/output/phase2_gate_evidence/
