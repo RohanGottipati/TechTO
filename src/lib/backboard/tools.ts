@@ -8,6 +8,8 @@ import type { ChatToolDefinition } from "@/lib/backboard/client";
  * docs/twinto-implementation.md section 13.6 for the canonical catalogue.
  */
 export const TOOL_NAMES = {
+  GET_CURRENT_MAP_CONTEXT: "get_current_map_context",
+  SEARCH_NEIGHBOURHOODS: "search_neighbourhoods",
   GET_NETWORK_SNAPSHOT: "get_network_snapshot",
   GET_ROUTE_SCHEDULE: "get_route_schedule",
   GET_DEPARTURE_LOADS: "get_departure_loads",
@@ -19,15 +21,20 @@ export const TOOL_NAMES = {
   GET_VEHICLE_CAPACITY: "get_vehicle_capacity",
   GET_FLEET_AVAILABILITY: "get_fleet_availability",
   GET_DEMOGRAPHICS: "get_neighbourhood_demographics",
+  GET_TRANSIT_ACCESSIBILITY: "get_transit_accessibility",
+  GET_POPULATION_EMPLOYMENT_GROWTH: "get_population_and_employment_growth",
+  GET_LAND_USE_CONTEXT: "get_land_use_context",
   GET_ACCESSIBILITY: "get_accessibility_constraints",
   GET_EVENT_CONTEXT: "get_event_context",
   GET_WEATHER_CONTEXT: "get_weather_context",
   GET_INCIDENTS: "get_service_incidents",
   FIND_SIMILAR: "find_similar_interventions",
+  GENERATE_STATION_CANDIDATES: "generate_station_candidates",
   PROPOSE_VARIANTS: "propose_schedule_variants",
   CALL_CITIZEN_MODEL: "call_citizen_reaction_model",
   AGGREGATE_REACTIONS: "aggregate_citizen_reactions",
   RUN_SIMULATION: "run_transit_simulation",
+  SIMULATE_STATION_CANDIDATE: "simulate_station_candidate",
   CALCULATE_WAIT: "calculate_wait_metrics",
   CALCULATE_LOAD: "calculate_load_balance",
   CALCULATE_RELIABILITY: "calculate_reliability",
@@ -39,6 +46,7 @@ export const TOOL_NAMES = {
   COMPARE_POLICIES: "compare_interventions",
   SAVE_ITERATION: "save_policy_iteration",
   RETRIEVE_DOCUMENTS: "retrieve_policy_documents",
+  COMPOSE_MAP_ACTIONS: "compose_map_actions",
   WRITE_MEMORY: "write_approved_memory",
   CREATE_TRAINING: "create_training_examples",
 } as const;
@@ -214,6 +222,32 @@ const citizenReactionContextSchemaProperty = {
 };
 
 export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
+  [TOOL_NAMES.GET_CURRENT_MAP_CONTEXT]: {
+    name: TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
+    description:
+      "Read the current TwinTO map context: center, zoom, selected station/neighbourhood, visible layers, and any highlighted candidates. Fixture-backed when no live map state is supplied.",
+    parameters: {
+      type: "object",
+      properties: {
+        scenarioId: scenarioIdParameter,
+      },
+      required: [],
+    },
+  },
+  [TOOL_NAMES.SEARCH_NEIGHBOURHOODS]: {
+    name: TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
+    description:
+      "Search synthetic Toronto neighbourhood fixtures by name, tags, or underserved-after-hours flags. Returns bounded candidate areas with centroids.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Neighbourhood name or free-text query." },
+        tags: { type: "array", items: { type: "string" }, description: "Optional tags such as downtown, waterfront, underserved-night." },
+        limit: { type: "number", description: "Maximum neighbourhoods to return (default 5)." },
+      },
+      required: [],
+    },
+  },
   [TOOL_NAMES.GET_NETWORK_SNAPSHOT]: {
     name: TOOL_NAMES.GET_NETWORK_SNAPSHOT,
     description:
@@ -318,6 +352,43 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
       "Fetch the census-weighted synthetic rider cohorts affected by a scenario: home/destination zones, income and age bands, mobility needs, and sensitivity priors. Never a real Statistics Canada extract; illustrative weights for this demo only.",
     parameters: scenarioOnlyParameters,
   },
+  [TOOL_NAMES.GET_TRANSIT_ACCESSIBILITY]: {
+    name: TOOL_NAMES.GET_TRANSIT_ACCESSIBILITY,
+    description:
+      "Summarize transit accessibility for a neighbourhood or station catchment using fixture geometry (walk sheds, elevator coverage). Synthetic-fixture only.",
+    parameters: {
+      type: "object",
+      properties: {
+        neighbourhoodId: { type: "string" },
+        stationId: { type: "string" },
+      },
+      required: [],
+    },
+  },
+  [TOOL_NAMES.GET_POPULATION_EMPLOYMENT_GROWTH]: {
+    name: TOOL_NAMES.GET_POPULATION_EMPLOYMENT_GROWTH,
+    description:
+      "Return synthetic population and employment growth proxies for a neighbourhood. Illustrative planning inputs, not official forecasts.",
+    parameters: {
+      type: "object",
+      properties: {
+        neighbourhoodId: { type: "string" },
+      },
+      required: ["neighbourhoodId"],
+    },
+  },
+  [TOOL_NAMES.GET_LAND_USE_CONTEXT]: {
+    name: TOOL_NAMES.GET_LAND_USE_CONTEXT,
+    description:
+      "Return synthetic land-use and corridor context for a neighbourhood (residential mix, employment intensity, event venues).",
+    parameters: {
+      type: "object",
+      properties: {
+        neighbourhoodId: { type: "string" },
+      },
+      required: ["neighbourhoodId"],
+    },
+  },
   [TOOL_NAMES.GET_ACCESSIBILITY]: {
     name: TOOL_NAMES.GET_ACCESSIBILITY,
     description:
@@ -367,6 +438,19 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
         limit: { type: "number", description: "Maximum records to return (default 3)." },
       },
       required: [],
+    },
+  },
+  [TOOL_NAMES.GENERATE_STATION_CANDIDATES]: {
+    name: TOOL_NAMES.GENERATE_STATION_CANDIDATES,
+    description:
+      "Generate bounded synthetic station or neighbourhood candidates for a planning question. Returns candidate ids, labels, coordinates, and catchment notes. Never invents geometry outside the fixture catalogue.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Planning question or corridor description." },
+        limit: { type: "number", description: "Maximum candidates (default 5)." },
+      },
+      required: ["query"],
     },
   },
   [TOOL_NAMES.PROPOSE_VARIANTS]: {
@@ -431,6 +515,20 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
         },
       },
       required: ["scenarioId", "reactions"],
+    },
+  },
+  [TOOL_NAMES.SIMULATE_STATION_CANDIDATE]: {
+    name: TOOL_NAMES.SIMULATE_STATION_CANDIDATE,
+    description:
+      "Run a lightweight fixture simulation for a generated station/neighbourhood candidate and return proxy wait, access, and demand metrics. Deterministic given seed.",
+    parameters: {
+      type: "object",
+      properties: {
+        candidateId: { type: "string" },
+        scenarioId: scenarioIdParameter,
+        seed: { type: "number" },
+      },
+      required: ["candidateId"],
     },
   },
   [TOOL_NAMES.RUN_SIMULATION]: {
@@ -541,6 +639,22 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
         limit: { type: "number", description: "Maximum excerpts to return (default 5)." },
       },
       required: ["query"],
+    },
+  },
+  [TOOL_NAMES.COMPOSE_MAP_ACTIONS]: {
+    name: TOOL_NAMES.COMPOSE_MAP_ACTIONS,
+    description:
+      "Compose an allowlisted list of TwinTO map actions (fly_to_center, fit_bounds, highlight_neighbourhoods, show_candidate_markers, etc.). The frontend validates and executes; never emit arbitrary JavaScript or URLs.",
+    parameters: {
+      type: "object",
+      properties: {
+        actions: {
+          type: "array",
+          description: "Allowlisted MapAction objects for the TwinTO MapLibre frontend.",
+          items: { type: "object" },
+        },
+      },
+      required: ["actions"],
     },
   },
   [TOOL_NAMES.WRITE_MEMORY]: {

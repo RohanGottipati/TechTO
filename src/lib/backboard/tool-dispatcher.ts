@@ -15,11 +15,13 @@ import { getCitizenReactionProvider } from "@/lib/citizen-reaction/provider";
 import type { CitizenReactionAggregate, CitizenReactionBatchResult } from "@/lib/citizen-reaction/schemas";
 import { listCohorts } from "@/data/transit/cohorts";
 import { getScenario, getStressOverlay, listStressOverlays } from "@/data/transit/scenarios";
+import { listNeighbourhoods, requireNeighbourhood, searchNeighbourhoods } from "@/data/transit/neighbourhoods";
 import { getTransitRepository, type TransitRepository } from "@/lib/transit/repository";
 import { rankInterventions, type RankableIntervention } from "@/lib/transit/candidate-ranker";
 import { simulateTransit } from "@/lib/transit/simulator";
 import { stressTestIntervention, type StressTestOutcome } from "@/lib/transit/stress-tests";
 import { transitInterventionSchema, type TransitIntervention, type TransitSimulationResult } from "@/lib/transit/schemas";
+import { parseMapActions } from "@/lib/twinto/map-actions";
 
 export class ToolDispatchError extends Error {}
 
@@ -49,15 +51,54 @@ export interface PolicyIterationRecord {
  * stress tests, and citizen reactions performed earlier in the same run
  * without the model having to echo huge payloads back.
  */
+export interface MapContextState {
+  center: [number, number];
+  zoom: number;
+  selectedStationId: string | null;
+  selectedNeighbourhoodId: string | null;
+  highlightedNeighbourhoodIds: string[];
+  visibleLayers: string[];
+}
+
 export interface RunContext {
   scenarioId: string;
   adapter: BackboardAdapter;
   simulationsByCandidateId: Map<string, CandidateSimulationState>;
   iterations: PolicyIterationRecord[];
+  mapContext: MapContextState;
+  stationCandidates: Array<{
+    candidateId: string;
+    neighbourhoodId: string;
+    label: string;
+    coordinates: [number, number];
+    rankHint: number;
+  }>;
+  composedMapActions: unknown[];
 }
 
-export function createRunContext(scenarioId: string, adapter: BackboardAdapter): RunContext {
-  return { scenarioId, adapter, simulationsByCandidateId: new Map(), iterations: [] };
+const DEFAULT_MAP_CONTEXT: MapContextState = {
+  center: [-79.3832, 43.6532],
+  zoom: 12.5,
+  selectedStationId: "union",
+  selectedNeighbourhoodId: null,
+  highlightedNeighbourhoodIds: [],
+  visibleLayers: ["transit", "neighbourhoods"],
+};
+
+export function createRunContext(
+  scenarioId: string,
+  adapter: BackboardAdapter,
+  mapContext?: Partial<MapContextState>,
+): RunContext {
+  return {
+    scenarioId,
+    adapter,
+    simulationsByCandidateId: new Map(),
+    iterations: [],
+    mapContext: { ...DEFAULT_MAP_CONTEXT, ...mapContext },
+    stationCandidates: [],
+    composedMapActions: [],
+  };
 }
 
 export interface ToolCallOutcome {
@@ -645,6 +686,27 @@ async function executeTool(
   const repo = getTransitRepository();
 
   switch (name as ToolName) {
+    case TOOL_NAMES.GET_CURRENT_MAP_CONTEXT:
+      return {
+        dataMode: "synthetic-fixture",
+        provenance: "run-context-map",
+        ...context.mapContext,
+        scenarioId: context.scenarioId,
+      };
+    case TOOL_NAMES.SEARCH_NEIGHBOURHOODS: {
+      const parsed = z
+        .object({
+          query: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          limit: z.number().int().positive().max(10).optional(),
+        })
+        .strict()
+        .parse(args ?? {});
+      return {
+        dataMode: "synthetic-fixture",
+        neighbourhoods: searchNeighbourhoods(parsed.query, parsed.tags, parsed.limit ?? 5),
+      };
+    }
     case TOOL_NAMES.GET_NETWORK_SNAPSHOT:
       return handleGetNetworkSnapshot(repo);
     case TOOL_NAMES.GET_ROUTE_SCHEDULE:
@@ -667,6 +729,33 @@ async function executeTool(
       return handleGetFleetAvailability(args, repo);
     case TOOL_NAMES.GET_DEMOGRAPHICS:
       return handleGetDemographics(args, repo);
+    case TOOL_NAMES.GET_TRANSIT_ACCESSIBILITY: {
+      const parsed = z
+        .object({ neighbourhoodId: z.string().optional(), stationId: z.string().optional() })
+        .strict()
+        .parse(args ?? {});
+      const neighbourhood = parsed.neighbourhoodId
+        ? requireNeighbourhood(parsed.neighbourhoodId)
+        : listNeighbourhoods()[0];
+      return {
+        dataMode: "synthetic-fixture",
+        neighbourhoodId: neighbourhood.id,
+        stationId: parsed.stationId ?? context.mapContext.selectedStationId,
+        walkShedMinutes: 10,
+        elevatorCoverage: neighbourhood.underservedAfter22 ? "partial" : "good",
+        notes: neighbourhood.landUse,
+      };
+    }
+    case TOOL_NAMES.GET_POPULATION_EMPLOYMENT_GROWTH: {
+      const { neighbourhoodId } = z.object({ neighbourhoodId: z.string().min(1) }).strict().parse(args);
+      const n = requireNeighbourhood(neighbourhoodId);
+      return { dataMode: "synthetic-fixture", neighbourhoodId: n.id, ...n.growthProxy };
+    }
+    case TOOL_NAMES.GET_LAND_USE_CONTEXT: {
+      const { neighbourhoodId } = z.object({ neighbourhoodId: z.string().min(1) }).strict().parse(args);
+      const n = requireNeighbourhood(neighbourhoodId);
+      return { dataMode: "synthetic-fixture", neighbourhoodId: n.id, landUse: n.landUse, tags: n.tags };
+    }
     case TOOL_NAMES.GET_ACCESSIBILITY:
       return handleGetAccessibility(args, repo);
     case TOOL_NAMES.GET_EVENT_CONTEXT:
@@ -677,6 +766,30 @@ async function executeTool(
       return handleGetIncidents(args, repo);
     case TOOL_NAMES.FIND_SIMILAR:
       return handleFindSimilar(args, repo);
+    case TOOL_NAMES.GENERATE_STATION_CANDIDATES: {
+      const parsed = z
+        .object({ query: z.string().min(1), limit: z.number().int().positive().max(8).optional() })
+        .strict()
+        .parse(args);
+      const neighbourhoods = searchNeighbourhoods(parsed.query, undefined, parsed.limit ?? 5);
+      const candidates = neighbourhoods.map((n, index) => ({
+        candidateId: `station-${n.id}`,
+        neighbourhoodId: n.id,
+        label: `${n.name} station option`,
+        coordinates: n.center,
+        rankHint: index + 1,
+        tags: n.tags,
+        underservedAfter22: n.underservedAfter22,
+      }));
+      context.stationCandidates = candidates.map((c) => ({
+        candidateId: c.candidateId,
+        neighbourhoodId: c.neighbourhoodId,
+        label: c.label,
+        coordinates: c.coordinates,
+        rankHint: c.rankHint,
+      }));
+      return { dataMode: "synthetic-fixture", candidates };
+    }
     case TOOL_NAMES.PROPOSE_VARIANTS:
       return handleProposeVariants(args, context);
     case TOOL_NAMES.CALL_CITIZEN_MODEL:
@@ -685,6 +798,43 @@ async function executeTool(
       return handleAggregateReactions(args);
     case TOOL_NAMES.RUN_SIMULATION:
       return handleRunSimulation(args, context);
+    case TOOL_NAMES.SIMULATE_STATION_CANDIDATE: {
+      const parsed = z
+        .object({
+          candidateId: z.string().min(1),
+          scenarioId: z.string().optional(),
+          seed: z.number().optional(),
+        })
+        .strict()
+        .parse(args);
+      const candidate =
+        context.stationCandidates.find((c) => c.candidateId === parsed.candidateId) ??
+        (() => {
+          const neighbourhoods = listNeighbourhoods();
+          const n = neighbourhoods[0];
+          return {
+            candidateId: parsed.candidateId,
+            neighbourhoodId: n.id,
+            label: n.name,
+            coordinates: n.center,
+            rankHint: 1,
+          };
+        })();
+      const seed = parsed.seed ?? TOOL_DISPATCH_SEED;
+      const demandIndex = requireNeighbourhood(candidate.neighbourhoodId).growthProxy.populationIndex;
+      return {
+        dataMode: "synthetic-fixture",
+        candidateId: candidate.candidateId,
+        seed,
+        metrics: {
+          meanWaitMinutes: Number((4.2 / demandIndex).toFixed(2)),
+          accessScore: Number((0.55 + demandIndex * 0.1).toFixed(2)),
+          equityGap: candidate.neighbourhoodId === "parkdale" || candidate.neighbourhoodId === "regent-park" ? 0.12 : 0.22,
+          estimatedNewRiders: Math.round(800 * demandIndex),
+        },
+        provenance: "fixture-station-proxy-simulator",
+      };
+    }
     case TOOL_NAMES.CALCULATE_WAIT:
       return handleCalculateWait(args, context);
     case TOOL_NAMES.CALCULATE_LOAD:
@@ -707,6 +857,19 @@ async function executeTool(
       return handleSaveIteration(args, context);
     case TOOL_NAMES.RETRIEVE_DOCUMENTS:
       return handleRetrieveDocuments(args);
+    case TOOL_NAMES.COMPOSE_MAP_ACTIONS: {
+      const parsed = z.object({ actions: z.array(z.unknown()) }).strict().parse(args);
+      const validated = parseMapActions(parsed.actions);
+      const accepted = validated.ok ? validated.actions : [];
+      context.composedMapActions = accepted;
+      return {
+        ok: validated.ok,
+        accepted,
+        rejected: validated.ok ? [] : validated.rejected,
+        errors: validated.ok ? [] : validated.errors,
+        note: "Frontend remains the final executor of map actions.",
+      };
+    }
     case TOOL_NAMES.WRITE_MEMORY:
       return handleWriteMemory(args, context, assistantId);
     case TOOL_NAMES.CREATE_TRAINING:
