@@ -1,8 +1,3 @@
-# others
-OpinionQA/
-.*
-ANES/
-
 # dependencies
 /node_modules
 /.pnp
@@ -39,3 +34,36 @@ yarn-error.log*
 .vscode
 tsconfig.tsbuildinfo
 next-env.d.ts
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data: raw citywide downloads are bounded-slice inputs, not outputs.
+# Only data/processed/ (the clipped, reprojected twin inputs) is tracked.
+data/raw/
+
+# Local model serving (vLLM, isolated from the twin project's own venv to
+# avoid dependency conflicts) and HF model cache -- large, host-specific,
+# regenerable via `pip install vllm` + `vllm serve <model>`.
+.vllm-env/
+.hf_cache/
+
+# Per-run Phase 1 eval outputs (heatmap PNG, persona-level CSVs) are
+# regenerable via `uv run python -m eval.heatmap_phase1`; not committed so
+# stale runs don't silently look authoritative. The one exception is
+# eval/output/phase1_gate_evidence/, a deliberately-committed snapshot of
+# the specific run cited as gate evidence in OVERNIGHT_LOG.md.
+eval/output/*
+!eval/output/phase1_gate_evidence/
+!eval/output/phase2_gate_evidence/
+
+# data/raw/opinionqa/ and data/raw/anes/ hold real Pew/ANES microdata the
+# user downloaded manually (CodaLab / ANES data center, both gated behind
+# accounts/ToS). Covered by the data/raw/ rule above already, called out
+# here explicitly: never commit this, even aggregated derivatives should be
+# double-checked for respondent-identifying content before committing
+# (eval/output/phase2_gate_evidence/ is aggregate statistics only, not
+# raw rows -- verified before staging).
