@@ -9,6 +9,8 @@ import { useTwinTOStore } from "@/store/useTwinTOStore";
 import type { UseBackboardRunResult } from "@/lib/twinto/use-backboard-run";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { cn } from "@/lib/utils/cn";
+import type { CityPlanRankingRow } from "@/components/planner/CityPlanStrip";
+import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 
 interface ChatMessage {
   id: string;
@@ -16,8 +18,8 @@ interface ChatMessage {
   content: string;
 }
 
-const TORONTWIN_WELCOME =
-  "Ask how Toronto residents might react on day one to a policy change, or click a neighbourhood on the map to dig into that area. Answers are from a synthetic, census-weighted preview population.";
+const EXAMPLE_ASK =
+  "Should I place a new train station in Wychwood or in Ionview?";
 
 function applyMapActions(actions: MapAction[]): void {
   const map = useMapStore.getState();
@@ -48,6 +50,10 @@ export interface MapChatBarProps {
   includeWebSearch?: boolean;
   /** When false, chat answers only (no Backboard planning kickoff). Default true if `run` is provided. */
   enablePlanningRun?: boolean;
+  /** Coolness open-city planner via /api/planner/run (orchestrator agent). */
+  enableCityPlanRun?: boolean;
+  onCityPlanQuestion?: (question: string) => Promise<{ summary?: string; ranking?: CityPlanRankingRow[]; chosenId?: string } | void>;
+  cityPlanRunning?: boolean;
 }
 
 /**
@@ -57,6 +63,9 @@ export function MapChatBar({
   run,
   includeWebSearch = false,
   enablePlanningRun,
+  enableCityPlanRun = false,
+  onCityPlanQuestion,
+  cityPlanRunning = false,
 }: MapChatBarProps) {
   const planningEnabled = enablePlanningRun ?? Boolean(run);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -65,13 +74,7 @@ export function MapChatBar({
   const [expanded, setExpanded] = useState(false);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "system",
-      content: TORONTWIN_WELCOME,
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const selectedPlace = useMapStore((s) => s.selectedPlace);
   const layers = useMapStore((s) => s.layers);
@@ -151,6 +154,35 @@ export function MapChatBar({
       .map(([key]) => key);
 
     try {
+      // Open-city path: Planning Orchestrator agent (tools + optional subagents)
+      if (enableCityPlanRun && onCityPlanQuestion) {
+        const payload = await onCityPlanQuestion(text);
+        const ranking = payload?.ranking ?? [];
+        const rankLines = ranking
+          .slice(0, 5)
+          .map(
+            (r: CityPlanRankingRow, i: number) =>
+              `${i + 1}. ${r.title} (mean ${Number(r.mean).toFixed(2)}, support ${(Number(r.supportShare) * 100).toFixed(0)}%)`,
+          )
+          .join("\n");
+        let body = payload?.summary?.trim() || "Done.";
+        if (ranking.length) {
+          body +=
+            `\n\nRanked scenarios:\n${rankLines}` +
+            (payload?.chosenId ? `\n\nLeading: ${payload.chosenId}` : "") +
+            "\n\n(Simulated day-one acceptance; not real public opinion or ridership.)";
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `plan-${Date.now()}`,
+            role: "assistant",
+            content: body,
+          },
+        ]);
+        return;
+      }
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -221,7 +253,7 @@ export function MapChatBar({
   }
 
   const showTranscript = expanded && messages.length > 0;
-  const isRunning = Boolean(run?.isRunning);
+  const isRunning = Boolean(run?.isRunning) || cityPlanRunning;
   const showBlinkCaret = !input && !focused;
 
   return (
@@ -250,10 +282,14 @@ export function MapChatBar({
                 className={
                   message.role === "user"
                     ? "ml-8 rounded-2xl bg-white/25 px-3 py-2 text-white"
-                    : "mr-4 rounded-2xl bg-white/10 px-3 py-2 text-white/90 whitespace-pre-wrap"
+                    : "mr-4 rounded-2xl bg-white/10 px-3 py-2 text-white/90"
                 }
               >
-                {message.content}
+                {message.role === "user" ? (
+                  <p className="whitespace-pre-wrap text-[12px] leading-relaxed">{message.content}</p>
+                ) : (
+                  <ChatMarkdown content={message.content} />
+                )}
               </div>
             ))}
             {(isRunning || busy) && (
@@ -295,10 +331,17 @@ export function MapChatBar({
           onClick={() => inputRef.current?.focus()}
         >
           {showBlinkCaret && (
-            <span className="pointer-events-none absolute inset-y-0 left-1 flex items-center gap-1 text-[15px] text-white/45">
-              <span className="chat-blink-caret" aria-hidden />
-              Ask how Toronto would react to a change…
-            </span>
+            <button
+              type="button"
+              className="pointer-events-auto absolute inset-y-0 left-1 right-1 flex items-center gap-1 truncate text-left text-[15px] text-white/45 transition hover:text-white/70"
+              onClick={() => {
+                setInput(EXAMPLE_ASK);
+                inputRef.current?.focus();
+              }}
+            >
+              <span className="chat-blink-caret shrink-0" aria-hidden />
+              <span className="truncate">{EXAMPLE_ASK}</span>
+            </button>
           )}
           <input
             ref={inputRef}
@@ -306,10 +349,10 @@ export function MapChatBar({
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder={focused ? "Ask how Toronto would react to a change…" : ""}
+            placeholder={focused ? EXAMPLE_ASK : ""}
             className="chat-glass-input relative w-full bg-transparent px-1 py-2 text-[15px] outline-none"
             data-testid="city-copilot-input"
-            aria-label="Ask how Toronto would react to a change"
+            aria-label="Ask a Toronto planning question"
           />
         </div>
 

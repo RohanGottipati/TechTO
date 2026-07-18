@@ -8,31 +8,25 @@ import {
 import { TORONTO_SCOPE_AGENT_RULE } from "@/lib/twinto/toronto-scope";
 
 /**
- * Canonical TwinTO Backboard roster: exactly 16 consolidated assistants.
- * Responsibilities from the former 54-specialist set are merged into these
- * roles; platform features (tools, RAG, memory, streaming) are preserved.
+ * Principled city-planning roster (~11). Competence lives in tools + twin;
+ * no niche one-use-case agents (no NuclearSitingAgent, no schedule-only roles).
  */
 export const TWINTO_ASSISTANT_KEYS = [
   "city-copilot",
   "planning-orchestrator",
-  "demand-mobility-analyst",
-  "transit-network-planner",
-  "geospatial-planning-agent",
-  "citizen-response-agent",
-  "accessibility-equity-agent",
-  "events-incidents-agent",
-  "reliability-safety-agent",
-  "cost-infrastructure-agent",
-  "carbon-traffic-agent",
-  "simulation-optimization-agent",
+  "geospatial-twin",
+  "scenario-designer",
+  "citizen-response",
+  "equity-impact",
+  "feasibility",
   "adversarial-reviewer",
   "evidence-auditor",
   "final-policy-judge",
-  "explanation-map-action-agent",
+  "explanation-map",
 ] as const;
 
 export type TwinTOAssistantKey = (typeof TWINTO_ASSISTANT_KEYS)[number];
-/** @deprecated Prefer TwinTOAssistantKey; kept as the historical export name. */
+/** @deprecated Prefer TwinTOAssistantKey */
 export type AssistantRoleKey = TwinTOAssistantKey;
 
 export type { KnowledgeDocumentRef };
@@ -66,16 +60,18 @@ export type PlanningIntent =
   | "NEW_STATION_LOCATION"
   | "SCHEDULE_CHANGE"
   | "EVENT_RESPONSE"
-  | "COMPARE_EXISTING_CANDIDATES";
+  | "COMPARE_EXISTING_CANDIDATES"
+  | "OPEN_CITY_ASK";
 
 const SHARED_GUARD = `
-You are part of TwinTO, a simulated Toronto transit planning environment.
+You are part of ToronTwin / TwinTO, a Toronto city planning sandbox on Backboard.
 You must use tool results for all factual and numerical claims.
 You must never represent simulated citizen reactions as real public opinion.
 You must never reveal private chain-of-thought.
 You must state when data is synthetic or fixture-based.
-You may propose or analyze policies, but deterministic simulation and hard
-safety/accessibility checks determine whether a policy is viable.
+Day-one acceptance is not a ridership or economic forecast.
+You may propose ScenarioPatches via general twin verbs (query/patch/run); never
+invent niche tools like add_nuclear_plant.
 
 ${TORONTO_SCOPE_AGENT_RULE}
 `.trim();
@@ -113,285 +109,193 @@ function role(
 export const ASSISTANT_ROSTER: Record<TwinTOAssistantKey, AssistantRoleDefinition> = {
   "city-copilot": role({
     key: "city-copilot",
-    name: "TwinTO — City Copilot",
-    shortDescription: "Persistent user-facing chat; classifies intents and preserves thread context.",
+    name: "ToronTwin — City Copilot",
+    shortDescription: "Front-door chat; intent handoff to the planning department.",
     uiGroup: "Conversation",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.FAST_CLASSIFICATION,
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
+      TOOL_NAMES.QUERY_TWIN,
       TOOL_NAMES.RETRIEVE_DOCUMENTS,
       TOOL_NAMES.COMPOSE_MAP_ACTIONS,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT"),
     promptBody: `
-You are the TwinTO City Copilot. You own the persistent user-facing chat thread
-on the Toronto map. Classify each message as a planning intent, read current
-map context, resolve follow-ups such as "the second option" or "this
-neighbourhood", and hand complex planning to the Planning Orchestrator. Never
-perform unsupported numerical analysis yourself; stream grounded answers that
-cite tool and specialist evidence. If the user asks about any place outside
-the City of Toronto, say clearly that TwinTO only covers Toronto and ask them
-to reframe the question inside Toronto.
+You are the City Copilot. Own the user-facing chat on the Toronto map. Classify
+intents (navigation, explanation, or open city ask), resolve follow-ups, and
+hand complex planning to the Planning Orchestrator. Never invent numeric
+acceptance yourself; cite tools and specialists.
 `.trim(),
   }),
 
   "planning-orchestrator": role({
     key: "planning-orchestrator",
-    name: "TwinTO — Planning Orchestrator",
-    shortDescription: "Decomposes requests, selects specialist bundles, and coordinates parallel work.",
+    name: "ToronTwin — Planning Orchestrator",
+    shortDescription: "Unopinionated coordinator agent: tools over fixed city workflows.",
     uiGroup: "Planning",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
     thinking: { effort: "medium" },
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
-      TOOL_NAMES.GET_NETWORK_SNAPSHOT,
-      TOOL_NAMES.FIND_SIMILAR,
+      TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
+      TOOL_NAMES.QUERY_TWIN,
+      TOOL_NAMES.PATCH_TWIN,
+      TOOL_NAMES.SNAPSHOT_TWIN,
+      TOOL_NAMES.DIFF_TWIN,
+      TOOL_NAMES.PROPOSE_SCENARIOS,
+      TOOL_NAMES.SCORE_POPULATION,
+      TOOL_NAMES.RUN_TWIN_ANALYSIS,
+      TOOL_NAMES.INVOKE_ASSISTANT,
       TOOL_NAMES.RETRIEVE_DOCUMENTS,
-      TOOL_NAMES.SAVE_ITERATION,
+      TOOL_NAMES.COMPOSE_MAP_ACTIONS,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
     promptBody: `
-You are the TwinTO Planning Orchestrator. Convert the user request into a
-planning workflow, state explicit assumptions when needed, select the relevant
-specialist bundle, run independent specialists in parallel, coordinate chained
-tool rounds, request revisions when evidence is incomplete, and send completed
-evidence packs to the Final Policy Judge.
+You are ToronTwin's Planning Orchestrator: a free-form agent for Toronto city
+planning, analogous to Claude Code for a city twin.
+
+You have general tools (query/patch/snapshot/diff twin, propose_scenarios,
+score_population, invoke_assistant, map helpers). Tools are optional; you
+choose whether to talk, tool-call, or both on any turn.
+
+Stay a competent chat colleague. Do not invent ScenarioPatches or rankings
+when tools are not useful. When you do score acceptance, it is simulated
+day-one feel, never ridership or real public opinion.
+
+Final answer is plain prose to the user.
 `.trim(),
   }),
 
-  "demand-mobility-analyst": role({
-    key: "demand-mobility-analyst",
-    name: "TwinTO — Demand and Mobility Analyst",
-    shortDescription: "Arrivals, OD flows, peaks, latent demand, waiting, shift and night mobility.",
-    uiGroup: "Analysis",
-    memory: "Readonly",
-    modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
-    toolNames: [
-      TOOL_NAMES.GET_PASSENGER_ARRIVALS,
-      TOOL_NAMES.GET_OD_FLOWS,
-      TOOL_NAMES.GET_DEPARTURE_LOADS,
-      TOOL_NAMES.GET_TRANSFER_DEMAND,
-      TOOL_NAMES.GET_DEMOGRAPHICS,
-      TOOL_NAMES.GET_POPULATION_EMPLOYMENT_GROWTH,
-      TOOL_NAMES.CALCULATE_WAIT,
-    ],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
-    promptBody: `
-You analyze passenger demand and mobility: arrivals, origin-destination flows,
-peak periods, underserved demand, schedule flexibility, waiting behaviour,
-shift-worker and late-night demand, and car-to-transit potential. Report only
-tool-backed patterns and label fixture data.
-`.trim(),
-  }),
-
-  "transit-network-planner": role({
-    key: "transit-network-planner",
-    name: "TwinTO — Transit Network Planner",
-    shortDescription: "Subway, streetcar, and bus schedule and route candidates.",
-    uiGroup: "Planning",
-    memory: "Readonly",
-    modelRequirement: MODEL_PROFILES.STRUCTURED_PLANNING,
-    toolNames: [
-      TOOL_NAMES.GET_NETWORK_SNAPSHOT,
-      TOOL_NAMES.GET_ROUTE_SCHEDULE,
-      TOOL_NAMES.GET_VEHICLE_CAPACITY,
-      TOOL_NAMES.GET_FLEET_AVAILABILITY,
-      TOOL_NAMES.PROPOSE_VARIANTS,
-      TOOL_NAMES.GENERATE_STATION_CANDIDATES,
-      TOOL_NAMES.FIND_SIMILAR,
-    ],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
-    promptBody: `
-You plan subway, streetcar, and bus service changes: frequency, retiming, route
-extensions, new routes, transfer coordination, signal-priority concepts, and
-journey continuity. Generate multiple structured candidate policies; never
-declare a final winner.
-`.trim(),
-  }),
-
-  "geospatial-planning-agent": role({
-    key: "geospatial-planning-agent",
-    name: "TwinTO — Geospatial Planning Agent",
-    shortDescription: "Map context, neighbourhood search, station placement geometry.",
+  "geospatial-twin": role({
+    key: "geospatial-twin",
+    name: "ToronTwin — Geospatial Twin",
+    shortDescription: "Query/patch city geometry, land use, networks via twin verbs.",
     uiGroup: "Planning",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
+      TOOL_NAMES.QUERY_TWIN,
+      TOOL_NAMES.PATCH_TWIN,
+      TOOL_NAMES.SNAPSHOT_TWIN,
+      TOOL_NAMES.DIFF_TWIN,
       TOOL_NAMES.GET_LAND_USE_CONTEXT,
-      TOOL_NAMES.GET_TRANSIT_ACCESSIBILITY,
+      TOOL_NAMES.GET_NETWORK_SNAPSHOT,
       TOOL_NAMES.GENERATE_STATION_CANDIDATES,
       TOOL_NAMES.COMPOSE_MAP_ACTIONS,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
     promptBody: `
-You interpret the active map viewport and selected features, search
-neighbourhoods and corridors, generate bounded candidate areas and station
-coordinates with catchments, and validate that geographic claims come from
-known geometry. Every candidate coordinate must be inside the City of Toronto.
-Never propose stations, routes, or catchments outside Toronto. Never choose
-the final winner.
+You operate the city twin: query and patch geometry, land use, corridors, and
+POIs. Every coordinate must be inside Toronto. Use general edit kinds
+(add_poi, close_route, add_corridor, set_policy, set_land_use). Never pick the
+final winner.
 `.trim(),
   }),
 
-  "citizen-response-agent": role({
-    key: "citizen-response-agent",
-    name: "TwinTO — Citizen Response Agent",
-    shortDescription: "Calls the citizen-reaction provider and aggregates simulated opinions.",
+  "scenario-designer": role({
+    key: "scenario-designer",
+    name: "ToronTwin — Scenario Designer",
+    shortDescription: "Proposes N general ScenarioPatches for any city ask.",
+    uiGroup: "Planning",
+    memory: "Readonly",
+    modelRequirement: MODEL_PROFILES.STRUCTURED_PLANNING,
+    toolNames: [
+      TOOL_NAMES.PROPOSE_SCENARIOS,
+      TOOL_NAMES.PATCH_TWIN,
+      TOOL_NAMES.QUERY_TWIN,
+      TOOL_NAMES.GET_NETWORK_SNAPSHOT,
+      TOOL_NAMES.PROPOSE_VARIANTS,
+      TOOL_NAMES.GENERATE_STATION_CANDIDATES,
+      TOOL_NAMES.FIND_SIMILAR,
+    ],
+    knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
+    promptBody: `
+You design multiple ScenarioPatches for the user ask: stations, stadiums,
+energy sites, corridor changes, policy levers. Always propose 2+ alternatives
+plus a counterfactual when useful. Never declare the final winner.
+`.trim(),
+  }),
+
+  "citizen-response": role({
+    key: "citizen-response",
+    name: "ToronTwin — Citizen Response",
+    shortDescription: "Scores census-weighted population acceptance for patches.",
     uiGroup: "Analysis",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
     toolNames: [
+      TOOL_NAMES.SCORE_POPULATION,
       TOOL_NAMES.CALL_CITIZEN_MODEL,
       TOOL_NAMES.AGGREGATE_REACTIONS,
       TOOL_NAMES.GET_DEMOGRAPHICS,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "CITIZEN_MODEL"),
     promptBody: `
-You call FreeSolo CitizenReactionLM or the active mock provider, batch weighted
-cohorts, aggregate mode/schedule/opinion changes, and report uncertainty.
-Always label reactions as simulated. Never call them real public consultation.
+You score day-one acceptance via score_population / citizen-reaction tools.
+Always label outputs as simulated. Never call them real consultation. Opinions
+are the audit trail; scores are readouts.
 `.trim(),
   }),
 
-  "accessibility-equity-agent": role({
-    key: "accessibility-equity-agent",
-    name: "TwinTO — Accessibility and Equity Agent",
-    shortDescription: "Accessibility constraints, equity gaps, and hard access guardrails.",
+  "equity-impact": role({
+    key: "equity-impact",
+    name: "ToronTwin — Equity Impact",
+    shortDescription: "Who wins/loses across neighbourhoods and groups for any policy.",
     uiGroup: "Analysis",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.RISK_REASONING,
     thinking: { effort: "high" },
     toolNames: [
       TOOL_NAMES.GET_ACCESSIBILITY,
-      TOOL_NAMES.GET_TRANSIT_ACCESSIBILITY,
       TOOL_NAMES.GET_DEMOGRAPHICS,
       TOOL_NAMES.CALCULATE_ACCESSIBILITY,
       TOOL_NAMES.CALCULATE_EQUITY,
+      TOOL_NAMES.SCORE_POPULATION,
+      TOOL_NAMES.QUERY_TWIN,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "ACCESSIBILITY_EQUITY"),
     promptBody: `
-You evaluate accessibility constraints, mobility-needs impacts, and the
-distribution of benefits and harms across income, neighbourhood, age, and work
-schedules. Reject recommendations that violate hard accessibility rules.
+You evaluate distributional impacts of any ScenarioPatch: income, neighbourhood,
+age, accessibility. Flag inequitable concentrations of harm.
 `.trim(),
   }),
 
-  "events-incidents-agent": role({
-    key: "events-incidents-agent",
-    name: "TwinTO — Events and Incident Agent",
-    shortDescription: "Concerts, weather, closures, construction, and emergency reroutes.",
-    uiGroup: "Analysis",
-    memory: "Readonly",
-    modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
-    toolNames: [
-      TOOL_NAMES.GET_EVENT_CONTEXT,
-      TOOL_NAMES.GET_WEATHER_CONTEXT,
-      TOOL_NAMES.GET_INCIDENTS,
-      TOOL_NAMES.GET_NETWORK_SNAPSHOT,
-    ],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "SAFETY_RELIABILITY"),
-    promptBody: `
-You analyze concerts and sporting events, weather, closures, construction,
-disabled vehicles, service suspensions, temporary demand surges, and emergency
-rerouting. Optional public web context is allowed only when enabled; still
-prefer tool and fixture evidence for numbers.
-`.trim(),
-  }),
-
-  "reliability-safety-agent": role({
-    key: "reliability-safety-agent",
-    name: "TwinTO — Reliability and Safety Agent",
-    shortDescription: "Crowding, capacity, bunching, delays, and hard safety constraints.",
-    uiGroup: "Validation",
-    memory: "Readonly",
-    modelRequirement: MODEL_PROFILES.RISK_REASONING,
-    thinking: { effort: "high" },
-    toolNames: [
-      TOOL_NAMES.GET_STOP_CROWDING,
-      TOOL_NAMES.GET_VEHICLE_CAPACITY,
-      TOOL_NAMES.GET_FLEET_AVAILABILITY,
-      TOOL_NAMES.GET_DELAY_HISTORY,
-      TOOL_NAMES.CALCULATE_LOAD,
-      TOOL_NAMES.CALCULATE_RELIABILITY,
-      TOOL_NAMES.STRESS_TEST,
-    ],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "SAFETY_RELIABILITY"),
-    promptBody: `
-You assess platform and vehicle crowding, capacity, headway reliability,
-bunching, delay propagation, and fleet feasibility. Enforce hard simulated
-safety constraints and reject unsafe candidates regardless of other benefits.
-`.trim(),
-  }),
-
-  "cost-infrastructure-agent": role({
-    key: "cost-infrastructure-agent",
-    name: "TwinTO — Cost and Infrastructure Agent",
-    shortDescription: "Operating cost, infrastructure feasibility, and productivity proxies.",
+  feasibility: role({
+    key: "feasibility",
+    name: "ToronTwin — Feasibility",
+    shortDescription: "Cost, infra, safety, carbon, ops constraints for any proposal.",
     uiGroup: "Analysis",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
     toolNames: [
       TOOL_NAMES.CALCULATE_COST,
+      TOOL_NAMES.CALCULATE_CARBON,
+      TOOL_NAMES.CALCULATE_RELIABILITY,
+      TOOL_NAMES.CALCULATE_LOAD,
       TOOL_NAMES.GET_FLEET_AVAILABILITY,
       TOOL_NAMES.GET_LAND_USE_CONTEXT,
-      TOOL_NAMES.FIND_SIMILAR,
-    ],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "IMPACT"),
-    promptBody: `
-You estimate operating-cost proxies, vehicle and operator requirements,
-construction and right-of-way feasibility, infrastructure complexity, and
-travel-time productivity value. Distinguish short-term and long-term
-feasibility; never invent capital budgets.
-`.trim(),
-  }),
-
-  "carbon-traffic-agent": role({
-    key: "carbon-traffic-agent",
-    name: "TwinTO — Carbon and Traffic Agent",
-    shortDescription: "Car-trip shifts, congestion proxies, and transport emissions estimates.",
-    uiGroup: "Analysis",
-    memory: "Readonly",
-    modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
-    toolNames: [TOOL_NAMES.CALCULATE_CARBON, TOOL_NAMES.GET_OD_FLOWS, TOOL_NAMES.GET_LAND_USE_CONTEXT],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "IMPACT"),
-    promptBody: `
-You estimate car-trip changes, road congestion proxies, vehicle kilometres, and
-transport emissions. State carbon assumptions and limitations clearly; fixture
-estimates are not live inventories.
-`.trim(),
-  }),
-
-  "simulation-optimization-agent": role({
-    key: "simulation-optimization-agent",
-    name: "TwinTO — Simulation and Optimization Agent",
-    shortDescription: "Runs the deterministic simulator and compares baseline vs candidates.",
-    uiGroup: "Validation",
-    memory: "Readonly",
-    modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
-    toolNames: [
+      TOOL_NAMES.GET_EVENT_CONTEXT,
+      TOOL_NAMES.RUN_TWIN_ANALYSIS,
+      TOOL_NAMES.STRESS_TEST,
       TOOL_NAMES.RUN_SIMULATION,
-      TOOL_NAMES.SIMULATE_STATION_CANDIDATE,
-      TOOL_NAMES.CALCULATE_WAIT,
-      TOOL_NAMES.CALCULATE_LOAD,
-      TOOL_NAMES.COMPARE_POLICIES,
     ],
-    knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
+    knowledgeDocuments: docs("GENERAL_TRANSIT", "IMPACT", "SAFETY_RELIABILITY"),
     promptBody: `
-You call the deterministic transit simulator, build reproducible scenarios,
-compare baseline and candidate metrics, and validate simulator versions and
-seeds. Language-model opinion must never replace simulator results.
+You assess feasibility: cost, infrastructure, safety, carbon, and operational
+stress for any city patch. Call transit metric tools only when the ask needs
+them; they are tools, not your identity.
 `.trim(),
   }),
 
   "adversarial-reviewer": role({
     key: "adversarial-reviewer",
-    name: "TwinTO — Adversarial Reviewer",
-    shortDescription: "Stress-tests leaders, counterfactuals, and hidden harms. Memory off.",
+    name: "ToronTwin — Adversarial Reviewer",
+    shortDescription: "Attacks proposals; finds failure modes. Memory off.",
     uiGroup: "Validation",
     memory: "off",
     modelRequirement: MODEL_PROFILES.RISK_REASONING,
@@ -399,21 +303,21 @@ seeds. Language-model opinion must never replace simulator results.
     toolNames: [
       TOOL_NAMES.STRESS_TEST,
       TOOL_NAMES.COMPARE_POLICIES,
-      TOOL_NAMES.PROPOSE_VARIANTS,
-      TOOL_NAMES.RUN_SIMULATION,
+      TOOL_NAMES.PROPOSE_SCENARIOS,
+      TOOL_NAMES.DIFF_TWIN,
+      TOOL_NAMES.SCORE_POPULATION,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "SAFETY_RELIABILITY", "PLANNING"),
     promptBody: `
-You challenge the leading proposal, test a no-change counterfactual, propose a
-materially different alternative, inject combined failures, and look for
-displaced congestion and hidden harms. Memory is off for adversarial runs.
+You challenge leading proposals, test no-change counterfactuals, and surface
+hidden harms (including event/surge stress). Memory is off.
 `.trim(),
   }),
 
   "evidence-auditor": role({
     key: "evidence-auditor",
-    name: "TwinTO — Evidence Auditor",
-    shortDescription: "Provenance, citations, fixture labeling, and metric consistency checks.",
+    name: "ToronTwin — Evidence Auditor",
+    shortDescription: "Audit trail: claims must cite twin/population tool outputs.",
     uiGroup: "Validation",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.RISK_REASONING,
@@ -421,41 +325,37 @@ displaced congestion and hidden harms. Memory is off for adversarial runs.
     toolNames: [
       TOOL_NAMES.RETRIEVE_DOCUMENTS,
       TOOL_NAMES.COMPARE_POLICIES,
-      TOOL_NAMES.GET_NETWORK_SNAPSHOT,
+      TOOL_NAMES.DIFF_TWIN,
+      TOOL_NAMES.QUERY_TWIN,
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
     promptBody: `
-You check that every factual and numerical conclusion comes from tools,
-documents, repository data, citizen-provider output, or simulator output.
-Confirm provenance, identify synthetic/fixture data, verify citations, and
-reject unsupported conclusions. Confirm the recommended candidate matches the
-metrics.
+You verify every factual claim traces to twin query/patch/diff, population
+scores, or documents. Reject unsupported conclusions.
 `.trim(),
   }),
 
   "final-policy-judge": role({
     key: "final-policy-judge",
-    name: "TwinTO — Final Policy Judge",
-    shortDescription: "Ranks validated candidates under hard constraints; never invents metrics.",
+    name: "ToronTwin — Final Policy Judge",
+    shortDescription: "Ranks validated ScenarioPatches; never invents metrics.",
     uiGroup: "Decision",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.RISK_REASONING,
     thinking: { effort: "high" },
-    toolNames: [TOOL_NAMES.COMPARE_POLICIES, TOOL_NAMES.RETRIEVE_DOCUMENTS],
+    toolNames: [TOOL_NAMES.COMPARE_POLICIES, TOOL_NAMES.SCORE_POPULATION, TOOL_NAMES.RETRIEVE_DOCUMENTS],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING", "ACCESSIBILITY_EQUITY", "SAFETY_RELIABILITY"),
     promptBody: `
-You compare all validated candidates across safety, reliability, accessibility,
-equity, demand, feasibility, cost, carbon, and citizen reactions. Respect
-deterministic hard constraints. Return recommend, recommend_with_conditions,
-compare_only, insufficient_evidence, or reject_all. Preserve meaningful
-disagreement. Never invent metrics.
+You rank validated ScenarioPatches on acceptance, equity, and feasibility.
+Return recommend, recommend_with_conditions, compare_only, insufficient_evidence,
+or reject_all. Never invent metrics. Acceptance is not ridership.
 `.trim(),
   }),
 
-  "explanation-map-action-agent": role({
-    key: "explanation-map-action-agent",
-    name: "TwinTO — Explanation and Map Action Agent",
-    shortDescription: "Final chat explanation, map actions, follow-ups, and approved memory writes.",
+  "explanation-map": role({
+    key: "explanation-map",
+    name: "ToronTwin — Explanation and Map",
+    shortDescription: "Plain-language explain + allowlisted map actions.",
     uiGroup: "Conversation",
     memory: "Readonly",
     modelRequirement: MODEL_PROFILES.SUMMARY,
@@ -467,113 +367,58 @@ disagreement. Never invent metrics.
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "CITIZEN_MODEL"),
     promptBody: `
-You produce the final chat explanation, technical and concise summary variants,
-safe allowlisted map actions, and suggested follow-ups. Label simulated
-opinions. Every map action coordinate must be inside the City of Toronto;
-never emit fly_to, markers, or highlights outside Toronto. Write approved
-memory only after explicit user confirmation. Mark eligible runs for training
-curation. Never expose raw chain-of-thought.
+You produce the final explanation and safe map actions. Label simulated
+opinions. Coordinates must stay in Toronto.
 `.trim(),
   }),
 };
 
+/** Same agents for every open city ask (station / stadium / nuclear / …). */
+export const PRINCIPLED_CITY_BUNDLE: readonly TwinTOAssistantKey[] = [
+  "city-copilot",
+  "planning-orchestrator",
+  "geospatial-twin",
+  "scenario-designer",
+  "citizen-response",
+  "equity-impact",
+  "feasibility",
+  "adversarial-reviewer",
+  "evidence-auditor",
+  "final-policy-judge",
+  "explanation-map",
+];
+
 export const ASSISTANT_UI_GROUPS = {
-  Conversation: ["city-copilot", "explanation-map-action-agent"],
-  Planning: ["planning-orchestrator", "transit-network-planner", "geospatial-planning-agent"],
-  Analysis: [
-    "demand-mobility-analyst",
-    "citizen-response-agent",
-    "accessibility-equity-agent",
-    "events-incidents-agent",
-    "cost-infrastructure-agent",
-    "carbon-traffic-agent",
-  ],
-  Validation: [
-    "reliability-safety-agent",
-    "simulation-optimization-agent",
-    "adversarial-reviewer",
-    "evidence-auditor",
-  ],
+  Conversation: ["city-copilot", "explanation-map"],
+  Planning: ["planning-orchestrator", "geospatial-twin", "scenario-designer"],
+  Analysis: ["citizen-response", "equity-impact", "feasibility"],
+  Validation: ["adversarial-reviewer", "evidence-auditor"],
   Decision: ["final-policy-judge"],
 } as const satisfies Record<string, readonly TwinTOAssistantKey[]>;
 
 export const INTENT_BUNDLES: Record<PlanningIntent, readonly TwinTOAssistantKey[]> = {
-  SIMPLE_MAP_NAVIGATION: ["city-copilot", "geospatial-planning-agent", "explanation-map-action-agent"],
-  SIMPLE_EXPLANATION: ["city-copilot", "evidence-auditor", "explanation-map-action-agent"],
-  NEW_STATION_LOCATION: [
-    "city-copilot",
-    "planning-orchestrator",
-    "demand-mobility-analyst",
-    "transit-network-planner",
-    "geospatial-planning-agent",
-    "citizen-response-agent",
-    "accessibility-equity-agent",
-    "reliability-safety-agent",
-    "cost-infrastructure-agent",
-    "carbon-traffic-agent",
-    "simulation-optimization-agent",
-    "adversarial-reviewer",
-    "evidence-auditor",
-    "final-policy-judge",
-    "explanation-map-action-agent",
-  ],
-  SCHEDULE_CHANGE: [
-    "city-copilot",
-    "planning-orchestrator",
-    "demand-mobility-analyst",
-    "transit-network-planner",
-    "citizen-response-agent",
-    "accessibility-equity-agent",
-    "reliability-safety-agent",
-    "cost-infrastructure-agent",
-    "simulation-optimization-agent",
-    "adversarial-reviewer",
-    "evidence-auditor",
-    "final-policy-judge",
-    "explanation-map-action-agent",
-  ],
-  EVENT_RESPONSE: [
-    "city-copilot",
-    "planning-orchestrator",
-    "demand-mobility-analyst",
-    "transit-network-planner",
-    "geospatial-planning-agent",
-    "citizen-response-agent",
-    "accessibility-equity-agent",
-    "events-incidents-agent",
-    "reliability-safety-agent",
-    "cost-infrastructure-agent",
-    "carbon-traffic-agent",
-    "simulation-optimization-agent",
-    "adversarial-reviewer",
-    "evidence-auditor",
-    "final-policy-judge",
-    "explanation-map-action-agent",
-  ],
+  SIMPLE_MAP_NAVIGATION: ["city-copilot", "geospatial-twin", "explanation-map"],
+  SIMPLE_EXPLANATION: ["city-copilot", "evidence-auditor", "explanation-map"],
+  NEW_STATION_LOCATION: PRINCIPLED_CITY_BUNDLE,
+  SCHEDULE_CHANGE: PRINCIPLED_CITY_BUNDLE,
+  EVENT_RESPONSE: PRINCIPLED_CITY_BUNDLE,
   COMPARE_EXISTING_CANDIDATES: [
     "city-copilot",
-    "simulation-optimization-agent",
+    "feasibility",
     "evidence-auditor",
     "final-policy-judge",
-    "explanation-map-action-agent",
+    "explanation-map",
   ],
+  OPEN_CITY_ASK: PRINCIPLED_CITY_BUNDLE,
 };
 
 export function selectAssistantsForIntent(
   intent: PlanningIntent,
-  options?: { includeEvents?: boolean },
+  _options?: { includeEvents?: boolean },
 ): TwinTOAssistantKey[] {
-  const keys = new Set<TwinTOAssistantKey>(INTENT_BUNDLES[intent]);
-  if (options?.includeEvents && intent === "NEW_STATION_LOCATION") {
-    keys.add("events-incidents-agent");
-  }
-  return Array.from(keys);
+  return Array.from(new Set(INTENT_BUNDLES[intent]));
 }
 
-/**
- * Scenario adapter for the flagship schedule demo. Prefer
- * selectAssistantsForIntent for chat-driven runs.
- */
 export function selectAssistantBundle(
   scenarioId: string,
   options?: { includeConcert?: boolean; includeWeather?: boolean },
@@ -582,21 +427,19 @@ export function selectAssistantBundle(
     options?.includeConcert === true ||
     options?.includeWeather === true ||
     scenarioId === "departure-406-412";
-  if (includeEvents && scenarioId === "departure-406-412") {
-    return selectAssistantsForIntent("EVENT_RESPONSE");
+  if (includeEvents) return selectAssistantsForIntent("EVENT_RESPONSE");
+  if (scenarioId === "open-city" || scenarioId.startsWith("city:")) {
+    return selectAssistantsForIntent("OPEN_CITY_ASK");
   }
-  if (scenarioId === "departure-406-412") {
-    return selectAssistantsForIntent("SCHEDULE_CHANGE", { includeEvents });
-  }
-  return selectAssistantsForIntent("SCHEDULE_CHANGE", { includeEvents });
+  return selectAssistantsForIntent("SCHEDULE_CHANGE");
 }
 
-/** @deprecated Use INTENT_BUNDLES.SCHEDULE_CHANGE / EVENT_RESPONSE instead. */
+/** @deprecated */
 export const CORE_SCHEDULE_BUNDLE = INTENT_BUNDLES.SCHEDULE_CHANGE;
-/** @deprecated Use INTENT_BUNDLES.EVENT_RESPONSE instead. */
-export const CONCERT_BUNDLE = ["events-incidents-agent"] as const;
-/** @deprecated Use INTENT_BUNDLES.EVENT_RESPONSE instead. */
-export const WEATHER_BUNDLE = ["events-incidents-agent"] as const;
+/** @deprecated events folded into adversarial/feasibility */
+export const CONCERT_BUNDLE = ["adversarial-reviewer"] as const;
+/** @deprecated */
+export const WEATHER_BUNDLE = ["feasibility"] as const;
 
 export function listAssistantRoles(): AssistantRoleDefinition[] {
   return TWINTO_ASSISTANT_KEYS.map((key) => ASSISTANT_ROSTER[key]);

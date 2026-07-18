@@ -26,6 +26,14 @@ import { simulateTransit } from "@/lib/transit/simulator";
 import { stressTestIntervention, type StressTestOutcome } from "@/lib/transit/stress-tests";
 import { transitInterventionSchema, type TransitIntervention, type TransitSimulationResult } from "@/lib/transit/schemas";
 import { parseMapActions } from "@/lib/twinto/map-actions";
+import { emptyTwinSnapshot, patchTwin, queryTwin, type TwinSnapshot } from "@/lib/planner/state";
+import { diffTwin } from "@/lib/planner/diff";
+import { parseScenarioPatch, parseScenarioPatches, type ScenarioPatch } from "@/lib/planner/scenario";
+import { getPopulationProvider } from "@/lib/population/provider";
+import type { PopulationProvider } from "@/lib/population/provider";
+import { matchCannedAsk } from "@/lib/planner/canned";
+import { isTwinTOAssistantKey, ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
+import { getToolDefinitions } from "@/lib/backboard/tools";
 
 export class ToolDispatchError extends Error {}
 
@@ -80,6 +88,18 @@ export interface RunContext {
     rankHint: number;
   }>;
   composedMapActions: unknown[];
+  /** In-memory city twin for open asks (query/patch/run). */
+  twin: TwinSnapshot;
+  twinBaseline: TwinSnapshot;
+  twinSnapshots: Map<string, TwinSnapshot>;
+  proposedCityPatches: ScenarioPatch[];
+  /** Optional injected population provider (tests / city runs). */
+  populationProvider?: PopulationProvider;
+  populationSeed?: number;
+  /** Roles invoked via invoke_assistant during this run. */
+  invokedAssistants: string[];
+  /** Prevent nested invoke recursion. */
+  invokeDepth: number;
 }
 
 const DEFAULT_MAP_CONTEXT: MapContextState = {
@@ -96,6 +116,10 @@ export function createRunContext(
   adapter: BackboardAdapter,
   mapContext?: Partial<MapContextState>,
   runId?: string,
+  extras?: {
+    populationProvider?: PopulationProvider;
+    populationSeed?: number;
+  },
 ): RunContext {
   return {
     scenarioId,
@@ -106,6 +130,14 @@ export function createRunContext(
     mapContext: { ...DEFAULT_MAP_CONTEXT, ...mapContext },
     stationCandidates: [],
     composedMapActions: [],
+    twin: emptyTwinSnapshot(),
+    twinBaseline: emptyTwinSnapshot(),
+    twinSnapshots: new Map(),
+    proposedCityPatches: [],
+    populationProvider: extras?.populationProvider,
+    populationSeed: extras?.populationSeed,
+    invokedAssistants: [],
+    invokeDepth: 0,
   };
 }
 
@@ -963,6 +995,171 @@ async function executeTool(
       return handleWriteMemory(args, context, assistantId);
     case TOOL_NAMES.CREATE_TRAINING:
       return handleCreateTraining(args, context, repo);
+    case TOOL_NAMES.QUERY_TWIN: {
+      const parsed = z
+        .object({
+          kind: z.string().optional(),
+          neighbourhoodCode: z.string().optional(),
+        })
+        .strict()
+        .parse(args ?? {});
+      return {
+        dataMode: "in-memory-twin",
+        result: queryTwin(context.twin, parsed),
+      };
+    }
+    case TOOL_NAMES.PATCH_TWIN: {
+      const parsed = z.object({ patch: z.unknown() }).strict().parse(args);
+      const patch = parseScenarioPatch(parsed.patch);
+      const before = context.twin;
+      context.twin = patchTwin(context.twin, patch);
+      context.proposedCityPatches.push(patch);
+      return {
+        dataMode: "in-memory-twin",
+        version: context.twin.version,
+        diff: diffTwin(before, context.twin),
+        patchId: patch.id,
+      };
+    }
+    case TOOL_NAMES.SNAPSHOT_TWIN: {
+      const key = `v${context.twin.version}`;
+      context.twinSnapshots.set(key, structuredClone(context.twin));
+      return { dataMode: "in-memory-twin", key, snapshot: context.twin };
+    }
+    case TOOL_NAMES.DIFF_TWIN: {
+      const parsed = z.object({ against: z.string().optional() }).strict().parse(args ?? {});
+      const againstKey = parsed.against ?? "baseline";
+      const other =
+        againstKey === "baseline"
+          ? context.twinBaseline
+          : context.twinSnapshots.get(againstKey) ?? context.twinBaseline;
+      return { dataMode: "in-memory-twin", diff: diffTwin(other, context.twin) };
+    }
+    case TOOL_NAMES.PROPOSE_SCENARIOS: {
+      const parsed = z
+        .object({
+          patches: z.array(z.unknown()).min(1),
+          question: z.string().optional(),
+        })
+        .strict()
+        .parse(args);
+      let patches = parseScenarioPatches(parsed.patches);
+      if (parsed.question) {
+        const canned = matchCannedAsk(parsed.question);
+        if (canned && patches.length === 0) patches = [...canned.patches];
+      }
+      context.proposedCityPatches = patches;
+      return {
+        dataMode: "in-memory-twin",
+        count: patches.length,
+        patchIds: patches.map((p) => p.id),
+        patches,
+      };
+    }
+    case TOOL_NAMES.SCORE_POPULATION: {
+      const parsed = z
+        .object({
+          patch: z.unknown().optional(),
+          question: z.string().min(1),
+          scenarioId: z.string().optional(),
+        })
+        .strict()
+        .parse(args);
+      const pop = context.populationProvider ?? getPopulationProvider();
+      const personas = await pop.load();
+      let twin = context.twin;
+      let scenarioId = parsed.scenarioId ?? `score-${context.twin.version}`;
+      if (parsed.patch) {
+        const patch = parseScenarioPatch(parsed.patch);
+        twin = patchTwin(emptyTwinSnapshot(), patch);
+        scenarioId = parsed.scenarioId ?? patch.id;
+      }
+      const score = await pop.score({
+        personas,
+        twin,
+        question: parsed.question,
+        scenarioId,
+        seed: context.populationSeed,
+      });
+      return {
+        dataMode: "population-provider",
+        provider: score.provider,
+        scenarioId: score.scenarioId,
+        citywide: score.citywide,
+        neighbourhoodCount: Object.keys(score.byNeighbourhood).length,
+        note: "Simulated day-one acceptance; not real public opinion or ridership.",
+      };
+    }
+    case TOOL_NAMES.INVOKE_ASSISTANT: {
+      const parsed = z
+        .object({
+          role: z.string().min(1),
+          task: z.string().min(1),
+        })
+        .strict()
+        .parse(args);
+      if (!isTwinTOAssistantKey(parsed.role)) {
+        throw new ToolDispatchError(`Unknown assistant role "${parsed.role}"`);
+      }
+      if (parsed.role === "planning-orchestrator") {
+        throw new ToolDispatchError("Cannot invoke the planning-orchestrator from itself.");
+      }
+      if (context.invokeDepth >= 1) {
+        throw new ToolDispatchError("invoke_assistant nesting limit reached.");
+      }
+      context.invokedAssistants.push(parsed.role);
+      context.invokeDepth += 1;
+      const { resolveAssistant } = await import("@/lib/backboard/assistant-manifest");
+      const { runToolLoop } = await import("@/lib/backboard/run-tool-loop");
+      const resolved = await resolveAssistant(parsed.role, context.adapter);
+      const loop = await runToolLoop({
+        adapter: context.adapter,
+        assistantId: resolved.record.assistantId,
+        content: parsed.task,
+        systemPrompt: resolved.role.systemPrompt,
+        modelName: resolved.model.modelName,
+        llmProvider: resolved.model.provider,
+        tools: getToolDefinitions(resolved.role.toolNames.filter((n) => n !== TOOL_NAMES.INVOKE_ASSISTANT)),
+        thinking: resolved.role.thinking,
+        memory: resolved.role.memory,
+        context,
+        maxRounds: 4,
+        jsonOutput: true,
+      });
+      context.invokeDepth -= 1;
+      return {
+        role: parsed.role,
+        name: ASSISTANT_ROSTER[parsed.role].name,
+        content: loop.finalResult.content,
+        toolRounds: loop.rounds,
+        toolsUsed: loop.toolCallLog.map((t) => t.toolName),
+      };
+    }
+    case TOOL_NAMES.RUN_TWIN_ANALYSIS: {
+      const parsed = z
+        .object({
+          analysis: z.enum(["population_score"]),
+          question: z.string().min(1),
+          scenarioId: z.string().optional(),
+        })
+        .strict()
+        .parse(args);
+      const pop = context.populationProvider ?? getPopulationProvider();
+      const personas = await pop.load();
+      const score = await pop.score({
+        personas,
+        twin: context.twin,
+        question: parsed.question,
+        scenarioId: parsed.scenarioId ?? `analysis-${context.twin.version}`,
+        seed: context.populationSeed,
+      });
+      return {
+        analysis: parsed.analysis,
+        provider: score.provider,
+        citywide: score.citywide,
+        note: "Simulated acceptance readout.",
+      };
+    }
     default:
       throw new ToolDispatchError(`Unknown tool: "${name}"`);
   }

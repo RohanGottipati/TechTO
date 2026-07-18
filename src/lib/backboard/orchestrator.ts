@@ -425,7 +425,7 @@ function buildCitizenReactionContext(
 
 // ---------------------------------------------------------------------------
 // Policy candidate generation (with a deterministic fallback so a run never
-// stalls with zero candidates, e.g. in mock mode with no scripted response).
+// stalls with zero candidates).
 // ---------------------------------------------------------------------------
 
 const policyCandidatesSchema = z
@@ -614,7 +614,8 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
   const scenario = requireScenario(input.scenarioId);
   const context = createRunContext(input.scenarioId, adapter, undefined, runId);
   const declaredBundle = selectAssistantBundle(input.scenarioId);
-  const includesConcertBundle = declaredBundle.includes("events-incidents-agent");
+  const includesConcertBundle = input.scenarioId === "departure-406-412";
+  void declaredBundle;
 
   emit({ type: "run.started", runId, scenarioId: input.scenarioId });
 
@@ -658,12 +659,10 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
     // -- Parallel context gathering -------------------------------------------
     emit({ type: "context.started", runId });
     const contextRoles: AssistantRoleKey[] = [
-      "demand-mobility-analyst",
-      "transit-network-planner",
-      "reliability-safety-agent",
-      "accessibility-equity-agent",
-      "cost-infrastructure-agent",
-      "carbon-traffic-agent",
+      "geospatial-twin",
+      "scenario-designer",
+      "feasibility",
+      "equity-impact",
     ];
     const contextOutcomes = await Promise.all(
       contextRoles.map((role) =>
@@ -686,8 +685,8 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
     });
 
     // -- Policy candidate generation -------------------------------------------
-    const policyResolved = await resolveAssistant("transit-network-planner", adapter);
-    emit({ type: "agent.started", runId, role: "transit-network-planner", name: policyResolved.role.name });
+    const policyResolved = await resolveAssistant("scenario-designer", adapter);
+    emit({ type: "agent.started", runId, role: "scenario-designer", name: policyResolved.role.name });
     let candidates: TransitIntervention[];
     try {
       const policyTurn = await runStructuredTurn({
@@ -708,12 +707,12 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
         context,
         schema: policyCandidatesSchema,
         onToolCallStart: (call) =>
-          emit({ type: "tool.requested", runId, role: "transit-network-planner", toolName: call.name }),
+          emit({ type: "tool.requested", runId, role: "scenario-designer", toolName: call.name }),
         onToolCallEnd: (outcome) =>
           emit({
             type: "tool.completed",
             runId,
-            role: "transit-network-planner",
+            role: "scenario-designer",
             toolName: outcome.toolName,
             ok: outcome.ok,
           }),
@@ -722,23 +721,23 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
       emit({
         type: "agent.completed",
         runId,
-        role: "transit-network-planner",
+        role: "scenario-designer",
         name: policyResolved.role.name,
         summary: `Proposed ${candidates.length} candidate(s).`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      emit({ type: "agent.failed", runId, role: "transit-network-planner", name: policyResolved.role.name, error: message });
+      emit({ type: "agent.failed", runId, role: "scenario-designer", name: policyResolved.role.name, error: message });
       candidates = synthesizeFallbackCandidates(scenario);
       emit({
         type: "agent.completed",
         runId,
-        role: "transit-network-planner",
+        role: "scenario-designer",
         name: policyResolved.role.name,
         summary: `Fell back to ${candidates.length} deterministic candidate(s) after a structured-output failure.`,
       });
     }
-    recordParticipant("transit-network-planner");
+    recordParticipant("scenario-designer");
     for (const candidate of candidates) {
       const state = context.simulationsByCandidateId.get(candidate.id) ?? { intervention: candidate };
       state.intervention = candidate;
@@ -749,7 +748,7 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
     // -- Simulation (deterministic authority; agent turns add narration) -----
     emit({ type: "simulation.started", runId });
     const simulationNarrationOutcomes = await Promise.all(
-      (["transit-network-planner", "adversarial-reviewer"] as AssistantRoleKey[]).map((role) =>
+      (["scenario-designer", "adversarial-reviewer"] as AssistantRoleKey[]).map((role) =>
         runFindingAgent({
           adapter,
           context,
@@ -825,11 +824,11 @@ Respond with ONLY JSON matching:
 {"summary": string, "processedCandidateIds": string[]}
 `.trim();
 
-    const citizenRoles: AssistantRoleKey[] = ["citizen-response-agent", "accessibility-equity-agent"];
+    const citizenRoles: AssistantRoleKey[] = ["citizen-response", "equity-impact"];
     const [citizenCoordinatorOutcome, ...citizenAuxOutcomes] = await Promise.all([
       (async () => {
-        const resolved = await resolveAssistant("citizen-response-agent", adapter);
-        emit({ type: "agent.started", runId, role: "citizen-response-agent", name: resolved.role.name });
+        const resolved = await resolveAssistant("citizen-response", adapter);
+        emit({ type: "agent.started", runId, role: "citizen-response", name: resolved.role.name });
         try {
           const turn = await runStructuredTurn({
             adapter,
@@ -844,25 +843,25 @@ Respond with ONLY JSON matching:
             context,
             schema: citizenResponseSchema,
             maxRounds: 10,
-            onToolCallStart: (call) => emit({ type: "tool.requested", runId, role: "citizen-response-agent", toolName: call.name }),
+            onToolCallStart: (call) => emit({ type: "tool.requested", runId, role: "citizen-response", toolName: call.name }),
             onToolCallEnd: (outcome) =>
-              emit({ type: "tool.completed", runId, role: "citizen-response-agent", toolName: outcome.toolName, ok: outcome.ok }),
+              emit({ type: "tool.completed", runId, role: "citizen-response", toolName: outcome.toolName, ok: outcome.ok }),
           });
-          emit({ type: "agent.completed", runId, role: "citizen-response-agent", name: resolved.role.name, summary: turn.value.summary });
+          emit({ type: "agent.completed", runId, role: "citizen-response", name: resolved.role.name, summary: turn.value.summary });
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          emit({ type: "agent.failed", runId, role: "citizen-response-agent", name: resolved.role.name, error: message });
+          emit({ type: "agent.failed", runId, role: "citizen-response", name: resolved.role.name, error: message });
           emit({
             type: "agent.completed",
             runId,
-            role: "citizen-response-agent",
+            role: "citizen-response",
             name: resolved.role.name,
             summary: "Citizen reactions computed via local deterministic fallback.",
           });
         }
       })(),
       ...citizenRoles
-        .filter((role) => role !== "citizen-response-agent")
+        .filter((role) => role !== "citizen-response")
         .map((role) =>
           runFindingAgent({
             adapter,
@@ -876,7 +875,7 @@ Respond with ONLY JSON matching:
         ),
     ]);
     void citizenCoordinatorOutcome;
-    recordParticipant("citizen-response-agent");
+    recordParticipant("citizen-response");
     for (const outcome of citizenAuxOutcomes) recordParticipant(outcome.role);
 
     const citizenProvider = getCitizenReactionProvider();
@@ -912,11 +911,9 @@ Respond with ONLY JSON matching:
       ranking.find((entry) => !entry.disqualified)?.interventionId ?? ranking[0]?.interventionId ?? evaluations[0]?.candidateId;
     const topEvaluation = evaluations.find((evaluation) => evaluation.candidateId === topCandidateId) ?? evaluations[0];
     const impactRoles: AssistantRoleKey[] = [
-      "reliability-safety-agent",
-      "simulation-optimization-agent",
-      "accessibility-equity-agent",
-      "cost-infrastructure-agent",
-      "carbon-traffic-agent",
+      "feasibility",
+      "equity-impact",
+      "citizen-response",
     ];
     const impactOutcomes = await Promise.all(
       impactRoles.map((role) =>
@@ -966,7 +963,7 @@ Respond with ONLY JSON matching:
     }
 
     const stressAgentRoles: AssistantRoleKey[] = includesConcertBundle
-      ? ["adversarial-reviewer", "evidence-auditor", "events-incidents-agent", "reliability-safety-agent", "carbon-traffic-agent"]
+      ? ["adversarial-reviewer", "evidence-auditor", "feasibility"]
       : ["adversarial-reviewer", "evidence-auditor"];
     const stressOutcomes = await Promise.all(
       stressAgentRoles.map((role) =>

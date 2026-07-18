@@ -30,10 +30,10 @@ describe("intent activation", () => {
     ]);
   });
 
-  it("schedule questions do not force event analysis", () => {
+  it("schedule questions still activate feasibility (ops tools), not a niche events agent", () => {
     const bundle = selectAssistantsForIntent("SCHEDULE_CHANGE");
-    expect(bundle).not.toContain("events-incidents-agent");
-    expect(bundle).toContain("simulation-optimization-agent");
+    expect(bundle).toContain("feasibility");
+    expect(bundle).toContain("scenario-designer");
   });
 
   it("selectAssistantBundle remains deterministic for the flagship scenario", () => {

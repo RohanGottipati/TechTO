@@ -37,15 +37,15 @@ export function selectChatAgentForTask(input: {
   placeScoped: boolean;
 }): TwinTOAssistantKey {
   if (input.placeScoped) {
-    if (input.intent === "SCHEDULE_CHANGE") return "demand-mobility-analyst";
-    if (input.intent === "EVENT_RESPONSE") return "events-incidents-agent";
-    if (input.intent === "COMPARE_EXISTING_CANDIDATES") return "explanation-map-action-agent";
-    return "geospatial-planning-agent";
+    if (input.intent === "SCHEDULE_CHANGE") return "geospatial-twin";
+    if (input.intent === "EVENT_RESPONSE") return "adversarial-reviewer";
+    if (input.intent === "COMPARE_EXISTING_CANDIDATES") return "explanation-map";
+    return "geospatial-twin";
   }
-  if (input.intent === "COMPARE_EXISTING_CANDIDATES") return "explanation-map-action-agent";
-  if (input.intent === "EVENT_RESPONSE") return "events-incidents-agent";
+  if (input.intent === "COMPARE_EXISTING_CANDIDATES") return "explanation-map";
+  if (input.intent === "EVENT_RESPONSE") return "adversarial-reviewer";
   if (input.intent === "SCHEDULE_CHANGE") return "city-copilot";
-  if (input.intent === "NEW_STATION_LOCATION") return "geospatial-planning-agent";
+  if (input.intent === "NEW_STATION_LOCATION") return "geospatial-twin";
   return "city-copilot";
 }
 

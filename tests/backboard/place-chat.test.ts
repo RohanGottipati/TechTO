@@ -12,13 +12,13 @@ describe("selectChatAgentForTask", () => {
   it("routes place-scoped questions to geospatial by default", () => {
     expect(
       selectChatAgentForTask({ intent: "SIMPLE_EXPLANATION", placeScoped: true }),
-    ).toBe("geospatial-planning-agent");
+    ).toBe("geospatial-twin");
   });
 
-  it("routes schedule questions near a place to demand-mobility", () => {
+  it("routes schedule questions near a place to geospatial-twin", () => {
     expect(
       selectChatAgentForTask({ intent: "SCHEDULE_CHANGE", placeScoped: true }),
-    ).toBe("demand-mobility-analyst");
+    ).toBe("geospatial-twin");
   });
 
   it("keeps citywide chat on city-copilot for simple intents", () => {

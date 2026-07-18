@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { GlassPanel } from "@/components/primitives/GlassPanel";
 
 type TopNavigationProps = {
-  /** Right-aligned status badges, e.g. mock-mode or data-mode pills. */
+  /** Right-aligned status badges, e.g. data-mode pills. */
   statusSlot?: ReactNode;
   /** Center-aligned scenario/context label, hidden on small screens. */
   contextSlot?: ReactNode;

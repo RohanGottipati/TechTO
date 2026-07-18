@@ -1,16 +1,14 @@
 import type { BackboardAdapter } from "@/lib/backboard/client";
 import { RestBackboardAdapter } from "@/lib/backboard/client";
-import { isBackboardMockMode } from "@/lib/backboard/env";
-import { MockBackboardAdapter } from "@/lib/backboard/mock-adapter";
+import { requireBackboardApiKey } from "@/lib/backboard/env";
 
 let cached: BackboardAdapter | null = null;
 
-/** Process-wide singleton so in-memory mock state (assistants, memories) is stable across requests. */
+/** Live Backboard only. Requires BACKBOARD_API_KEY. */
 export function getBackboardAdapter(): BackboardAdapter {
   if (!cached) {
-    cached = isBackboardMockMode()
-      ? new MockBackboardAdapter({ streamingDelayMs: 12 })
-      : new RestBackboardAdapter();
+    requireBackboardApiKey();
+    cached = new RestBackboardAdapter();
   }
   return cached;
 }

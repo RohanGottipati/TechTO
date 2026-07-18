@@ -4,8 +4,8 @@ import { selectAssistantsForIntent } from "@/lib/backboard/assistants";
 import { classifyPlanningIntent } from "@/lib/twinto/intent";
 
 describe("classifyPlanningIntent", () => {
-  it("falls back safely for unknown free text to a planning path", () => {
-    expect(classifyPlanningIntent("tell me something useful about transit")).toBe("SCHEDULE_CHANGE");
+  it("falls back safely for unknown free text to an open city planning path", () => {
+    expect(classifyPlanningIntent("tell me something useful about transit")).toBe("OPEN_CITY_ASK");
   });
 
   it("keeps simple explanation bundles small", () => {

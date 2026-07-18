@@ -52,10 +52,10 @@ async function buildManifest(adapter: BackboardAdapter): Promise<Manifest> {
 }
 
 /**
- * Resolves the full assistant roster against Backboard (or the mock
- * adapter): find-or-create each assistant by name, keep its system prompt and
- * tools in sync, and pick a model per role. Cached for the lifetime of the
- * server process so this network round trip happens at most once.
+ * Resolves the full assistant roster against live Backboard: find-or-create
+ * each assistant by name, keep its system prompt and tools in sync, and pick
+ * a model per role. Cached for the lifetime of the server process so this
+ * network round trip happens at most once.
  */
 export async function getAssistantManifest(adapter: BackboardAdapter = getBackboardAdapter()): Promise<Manifest> {
   if (manifestCache) return manifestCache;

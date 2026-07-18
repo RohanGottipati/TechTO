@@ -1,14 +1,7 @@
 /**
- * Prints the resolved TwinTO/Backboard capabilities: mode (mock/live),
- * base URL, the 54-role assistant roster with its tools/memory/model
- * selection, and each role's configured knowledge documents. Never prints
- * BACKBOARD_API_KEY or any other secret; only reports whether one is
- * configured.
- *
- * This performs the same read-only resolution as
- * `GET /api/backboard/capabilities`, as a standalone CLI, so it works
- * without a running dev server. It never uploads documents or mutates
- * anything (see `backboard-bootstrap.ts` for that).
+ * Prints the resolved TwinTO/Backboard capabilities: live mode, base URL,
+ * assistant roster with tools/memory/model selection. Never prints
+ * BACKBOARD_API_KEY; only reports whether one is configured.
  *
  * Usage: npm run backboard:status
  */
@@ -44,18 +37,15 @@ const repoRoot = path.resolve(__dirname, "..");
 loadDotEnv(repoRoot);
 
 async function main(): Promise<void> {
-  const { isBackboardMockMode, getBackboardApiKey, getBackboardBaseUrl } = await import(
-    "@/lib/backboard/env"
-  );
+  const { getBackboardApiKey, getBackboardBaseUrl } = await import("@/lib/backboard/env");
   const { getBackboardAdapter } = await import("@/lib/backboard/adapter");
   const { getAssistantManifest } = await import("@/lib/backboard/assistant-manifest");
 
-  const mock = isBackboardMockMode();
   const hasKey = getBackboardApiKey().length > 0;
 
   console.log("TwinTO / Backboard status");
   console.log("==========================");
-  console.log(`Mode:              ${mock ? "MOCK (offline)" : "LIVE"}`);
+  console.log(`Mode:              LIVE`);
   console.log(`Base URL:          ${getBackboardBaseUrl()}`);
   console.log(`API key present:   ${hasKey ? "yes" : "no"} (value never printed)`);
   console.log("");

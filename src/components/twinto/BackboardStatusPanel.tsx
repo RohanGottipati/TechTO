@@ -16,7 +16,7 @@ interface CapabilitiesAssistant {
 }
 
 export interface CapabilitiesResponse {
-  mode: "live" | "mock";
+  mode: "live";
   product?: string;
   rosterVersion?: string;
   expectedAssistants?: number;
@@ -69,8 +69,8 @@ export function BackboardStatusPanel({ onCapabilitiesLoaded }: BackboardStatusPa
           <h3 className="text-sm font-semibold text-twinto-text">Backboard Status</h3>
         </div>
         {capabilities && (
-          <StatusPill tone={capabilities.mode === "mock" ? "warning" : "ready"}>
-            {capabilities.mode === "mock" ? "Mock Backboard" : "Live"}
+          <StatusPill tone="ready">
+            Live
           </StatusPill>
         )}
       </div>

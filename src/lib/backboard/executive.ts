@@ -76,8 +76,8 @@ function findStress(result: TwinTORunResult): CandidateEvaluation["stress"] | nu
 
 /**
  * Deterministic fallback narrative built directly from run data, no model
- * call involved. Used in mock mode and whenever a live narrative request
- * fails or comes back malformed, so buildExecutiveSummary always succeeds.
+ * call involved. Used whenever a live narrative request fails or comes
+ * back malformed, so buildExecutiveSummary always succeeds.
  */
 function buildLocalNarrative(result: TwinTORunResult): ExecutiveNarrative {
   const stress = findStress(result);
@@ -135,11 +135,10 @@ function parseNarrative(raw: string | null): ExecutiveNarrative | null {
 }
 
 /**
- * Produces the TransitExecutiveSummary for one completed TwinTORunResult. In
- * mock mode (or on any failure talking to a live model) the narrative is
- * built deterministically from run data; live mode asks the Executive
- * Summary Agent, on a fresh thread, for the four prose fields only. All
- * numbers and safetyResult are computed here, never from model output.
+ * Produces the TransitExecutiveSummary for one completed TwinTORunResult.
+ * Asks the Explanation Map agent for the four prose fields; on any failure
+ * falls back to a deterministic local narrative. Numbers and safetyResult
+ * are always computed here, never from model output.
  */
 export async function buildExecutiveSummary(input: BuildExecutiveSummaryInput): Promise<TransitExecutiveSummary> {
   const { result } = input;
@@ -152,12 +151,8 @@ export async function buildExecutiveSummary(input: BuildExecutiveSummaryInput): 
   };
   const localNarrative = buildLocalNarrative(result);
 
-  if (adapter.mode === "mock") {
-    return transitExecutiveSummarySchema.parse({ ...baseFields, ...localNarrative });
-  }
-
   try {
-    const resolved = await resolveAssistant("explanation-map-action-agent", adapter);
+    const resolved = await resolveAssistant("explanation-map", adapter);
     const context = createRunContext(result.scenarioId, adapter);
     const loop = await runToolLoop({
       adapter,

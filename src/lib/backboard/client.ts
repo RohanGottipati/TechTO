@@ -170,13 +170,11 @@ export interface MemoryRecord {
 }
 
 /**
- * Ergonomic, camelCase interface every part of the app codes against. Two
- * implementations exist: RestBackboardAdapter (live) and MockBackboardAdapter
- * (deterministic, offline). The orchestrator and tool loop never know which
- * one they are talking to.
+ * Ergonomic, camelCase interface every part of the app codes against.
+ * Live RestBackboardAdapter only; requires BACKBOARD_API_KEY.
  */
 export interface BackboardAdapter {
-  readonly mode: "live" | "mock";
+  readonly mode: "live";
   sendMessage(options: SendMessageOptions, onEvent?: StreamEventHandler): Promise<ChatRunResult>;
   submitToolOutputs(
     options: SubmitToolOutputsOptions,

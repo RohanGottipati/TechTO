@@ -149,7 +149,7 @@ export type CitizenReactionAggregate = z.output<typeof citizenReactionAggregateS
 
 export const citizenReactionBatchResultSchema = z
   .object({
-    provider: z.enum(["mock", "live"]),
+    provider: z.enum(["live"]),
     scenarioId: z.string().min(1).max(80),
     generatedAt: z.string().min(1),
     reactions: z.array(citizenReactionSchema).min(1),
@@ -160,14 +160,14 @@ export const citizenReactionBatchResultSchema = z
 export type CitizenReactionBatchResult = z.output<typeof citizenReactionBatchResultSchema>;
 
 /**
- * Surfaced in UI so a planner always knows whether a run used the mock
- * heuristic provider or a live population simulator (AGENTS.md 2: never let
- * a synthetic reading be mistaken for real public opinion).
+ * Surfaced in UI so a planner always knows the citizen-reaction path is live
+ * FreeSolo (AGENTS.md 2: never let a synthetic reading be mistaken for real
+ * public opinion).
  */
 export const providerStatusSchema = z
   .object({
     provider: z.string().min(1).max(80),
-    mode: z.enum(["mock", "live"]),
+    mode: z.enum(["live"]),
     label: z.string().min(1).max(300),
     ready: z.boolean(),
   })

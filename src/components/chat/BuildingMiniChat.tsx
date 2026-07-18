@@ -8,6 +8,7 @@ import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { useMapStore } from "@/store/useMapStore";
 import { useTwinTOStore } from "@/store/useTwinTOStore";
 import { cn } from "@/lib/utils/cn";
+import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 
 interface MiniMessage {
   id: string;
@@ -213,10 +214,14 @@ export function BuildingMiniChat() {
             className={
               message.role === "user"
                 ? "ml-6 rounded-2xl bg-white/20 px-2.5 py-1.5 text-white"
-                : "mr-4 rounded-2xl bg-white/10 px-2.5 py-1.5 text-white/90 whitespace-pre-wrap"
+                : "mr-4 rounded-2xl bg-white/10 px-2.5 py-1.5 text-white/90"
             }
           >
-            {message.content || (busy ? "…" : "")}
+            {message.role === "user" ? (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            ) : (
+              <ChatMarkdown content={message.content || (busy ? "…" : "")} />
+            )}
             {message.citedEvidence && message.citedEvidence.length > 0 && (
               <p className="mt-1 text-[10px] text-white/45">
                 Sources: {message.citedEvidence.slice(0, 3).join(" · ")}

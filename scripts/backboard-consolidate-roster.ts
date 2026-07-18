@@ -38,7 +38,7 @@ type Classification = "KEEP" | "CREATE" | "UPDATE" | "REMOVE_OLD_TWINTO" | "REMO
 
 async function main(): Promise<void> {
   const confirm = process.argv.includes("--confirm");
-  const { isBackboardMockMode, getBackboardBaseUrl } = await import("@/lib/backboard/env");
+  const { getBackboardBaseUrl } = await import("@/lib/backboard/env");
   const { getBackboardAdapter } = await import("@/lib/backboard/adapter");
   const { ASSISTANT_ROSTER, TWINTO_ASSISTANT_KEYS } = await import("@/lib/backboard/assistants");
   const { getAssistantManifest } = await import("@/lib/backboard/assistant-manifest");
@@ -46,8 +46,7 @@ async function main(): Promise<void> {
     "@/lib/backboard/manifest-schema"
   );
 
-  const mock = isBackboardMockMode();
-  console.log(`Backboard mode: ${mock ? "MOCK" : "LIVE"}`);
+  console.log(`Backboard mode: LIVE`);
   console.log(`Base URL: ${getBackboardBaseUrl()}`);
   console.log(`Mode: ${confirm ? "CONFIRM DELETE" : "DRY RUN"}`);
   console.log(`Target roster: ${MANIFEST_ROSTER_VERSION} (${TWINTO_ASSISTANT_KEYS.length} assistants)`);
@@ -99,7 +98,7 @@ async function main(): Promise<void> {
     `# Roster reconciliation (${confirm ? "confirm" : "dry-run"})`,
     "",
     `- When: ${new Date().toISOString()}`,
-    `- Mode: ${mock ? "mock" : "live"}`,
+    `- Mode: live`,
     `- Roster: ${MANIFEST_ROSTER_VERSION}`,
     "",
     ...rows.map((row) => `- **${row.classification}**: ${row.name} (\`${row.id}\`)`),
@@ -112,12 +111,6 @@ async function main(): Promise<void> {
 
   if (!confirm) {
     console.log("Dry run only. Re-run with --confirm after bootstrap + smoke succeed.");
-    return;
-  }
-
-  if (mock) {
-    console.error("Refusing --confirm in mock mode. Set a live BACKBOARD_API_KEY first.");
-    process.exitCode = 1;
     return;
   }
 

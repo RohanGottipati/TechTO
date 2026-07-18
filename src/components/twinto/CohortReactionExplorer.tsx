@@ -23,8 +23,8 @@ export function CohortReactionExplorer({ result, selectedCandidateId }: CohortRe
           <h3 className="text-sm font-semibold text-twinto-text">Cohort Reactions</h3>
         </div>
         {entry && (
-          <StatusPill tone={entry.result.provider === "mock" ? "warning" : "ready"}>
-            {entry.result.provider === "mock" ? "Mock CitizenReactionLM" : "CitizenReactionLM"}
+          <StatusPill tone="ready">
+            CitizenReactionLM
           </StatusPill>
         )}
       </div>

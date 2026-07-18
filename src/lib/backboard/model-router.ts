@@ -37,9 +37,9 @@ export function clearModelRouterCacheForTests(): void {
 
 /**
  * Picks the best available model for a requirement by querying Backboard's
- * /models capability catalog (or the mock catalog) rather than hard-coding a
- * model name. Falls back through a provider preference order and prefers
- * larger context windows among ties.
+ * /models capability catalog rather than hard-coding a model name. Falls
+ * back through a provider preference order and prefers larger context
+ * windows among ties.
  */
 export async function selectModel(
   adapter: BackboardAdapter,

@@ -4,13 +4,13 @@ import type { ResolvedAssistant } from "@/lib/backboard/assistant-manifest";
 
 /**
  * Schema version for `.backboard/assistant-manifest.local.json`.
- * v3 introduces rosterVersion consolidated-16 and a keyed assistants map.
+ * v4: principled-11 city planning roster (replaces consolidated-16).
  */
-export const MANIFEST_SCHEMA_VERSION = 3;
+export const MANIFEST_SCHEMA_VERSION = 4;
 
-export const MANIFEST_PRODUCT = "twinto";
+export const MANIFEST_PRODUCT = "torontwin";
 
-export const MANIFEST_ROSTER_VERSION = "consolidated-16";
+export const MANIFEST_ROSTER_VERSION = "principled-11";
 
 export interface AssistantManifestEntry {
   role: TwinTOAssistantKey;

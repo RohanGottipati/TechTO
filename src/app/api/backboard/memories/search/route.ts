@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const searchSchema = z.object({
-  assistantRole: z.string().min(1).default("explanation-map-action-agent"),
+  assistantRole: z.string().min(1).default("explanation-map"),
   query: z.string().min(1),
   limit: z.number().int().positive().max(50).optional(),
 });

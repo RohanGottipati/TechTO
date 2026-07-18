@@ -13,7 +13,7 @@ interface RouteParams {
 }
 
 const updateSchema = z.object({
-  assistantRole: z.string().min(1).default("explanation-map-action-agent"),
+  assistantRole: z.string().min(1).default("explanation-map"),
   content: z.string().min(1).max(2000),
 });
 
@@ -41,7 +41,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
 export async function DELETE(request: Request, { params }: RouteParams) {
   const url = new URL(request.url);
-  const assistantRole = url.searchParams.get("assistantRole") ?? "explanation-map-action-agent";
+  const assistantRole = url.searchParams.get("assistantRole") ?? "explanation-map";
   if (!isAssistantRoleKey(assistantRole)) {
     return jsonError(`Unknown assistantRole "${assistantRole}".`, 400);
   }

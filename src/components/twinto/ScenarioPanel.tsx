@@ -13,7 +13,6 @@ export interface ScenarioPanelProps {
   onCancel: () => void;
   includeWebSearch: boolean;
   onIncludeWebSearchChange: (checked: boolean) => void;
-  mockBackboard: boolean;
 }
 
 /** Scenario framing plus the run's start/cancel controls; the entry point into a planning run. */
@@ -24,7 +23,6 @@ export function ScenarioPanel({
   onCancel,
   includeWebSearch,
   onIncludeWebSearchChange,
-  mockBackboard,
 }: ScenarioPanelProps) {
   return (
     <GlassPanel className="flex flex-col gap-3 p-4" data-testid="scenario-panel">
@@ -56,12 +54,6 @@ export function ScenarioPanel({
         onChange={onIncludeWebSearchChange}
         disabled={isRunning}
       />
-
-      {mockBackboard && (
-        <StatusPill tone="warning" className="self-start" data-testid="mock-backboard-badge">
-          Mock Backboard
-        </StatusPill>
-      )}
 
       <button
         type="button"

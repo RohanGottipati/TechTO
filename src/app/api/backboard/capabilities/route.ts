@@ -48,7 +48,7 @@ export async function GET() {
       configuredAssistants: assistants.length,
       missingAssistants,
       mode: adapter.mode,
-      citizenReactionProvider: process.env.TWINTO_CITIZEN_REACTION_PROVIDER?.trim() || "mock",
+      citizenReactionProvider: process.env.TWINTO_CITIZEN_REACTION_PROVIDER?.trim() || "freesolo",
       repositoryProvider: process.env.TWINTO_REPOSITORY_PROVIDER?.trim() || "fixture",
       mongoConfigured: Boolean(process.env.MONGODB_URI?.trim()),
       mongoDatabase: process.env.MONGODB_DATABASE?.trim() || "twinto",

@@ -2,8 +2,6 @@ import { z } from "zod";
 
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
 import type { WebSearchMode } from "@/lib/backboard/client";
-import { prepareMockPlaceChatAnswer } from "@/lib/backboard/mock-demo-run";
-import type { MockBackboardAdapter } from "@/lib/backboard/mock-adapter";
 import { askPlaceChat } from "@/lib/backboard/place-chat";
 import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 import { createSseResponse, createSseStream } from "@/lib/backboard/sse";
@@ -94,9 +92,6 @@ export async function POST(request: Request) {
   }
 
   const adapter = getBackboardAdapter();
-  if (adapter.mode === "mock") {
-    prepareMockPlaceChatAnswer(adapter as MockBackboardAdapter, question, place?.label);
-  }
 
   const questionId = generateQuestionId();
   let sequence = 0;

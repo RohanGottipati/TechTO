@@ -2,7 +2,7 @@ import type { PlanningIntent } from "@/lib/backboard/assistants";
 
 /**
  * Lightweight deterministic intent classifier for City Copilot routing.
- * Prefer this over LLM classification in mock mode and as a safe fallback.
+ * Prefer this over LLM classification as a safe deterministic fallback.
  */
 export function classifyPlanningIntent(message: string): PlanningIntent {
   const text = message.trim().toLowerCase();
@@ -38,5 +38,13 @@ export function classifyPlanningIntent(message: string): PlanningIntent {
     return "NEW_STATION_LOCATION";
   }
 
-  return "SCHEDULE_CHANGE";
+  if (
+    /\b(nuclear|power plant|stadium|alderwood|where should|where to put|what would happen if|close the|build a)\b/.test(
+      text,
+    )
+  ) {
+    return "OPEN_CITY_ASK";
+  }
+
+  return "OPEN_CITY_ASK";
 }

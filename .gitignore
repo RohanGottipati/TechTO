@@ -6,6 +6,7 @@
 *.txt
 CES/
 StatCan/
+public/cesium/
 
 # dependencies
 /node_modules

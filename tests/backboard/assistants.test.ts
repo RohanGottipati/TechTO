@@ -6,6 +6,7 @@ import {
   ASSISTANT_ROSTER,
   INTENT_BUNDLES,
   MODEL_PROFILES,
+  PRINCIPLED_CITY_BUNDLE,
   TWINTO_ASSISTANT_KEYS,
   getAssistantRole,
   listAssistantRoles,
@@ -21,32 +22,33 @@ const OLD_SPECIALIST_KEYS = [
   "subway-scheduling",
   "mode-shift",
   "concert-event",
-  "adversarial-stress",
-  "memory-curator",
-  "devils-advocate",
+  "demand-mobility-analyst",
+  "transit-network-planner",
+  "events-incidents-agent",
+  "simulation-optimization-agent",
 ];
 
-describe("ASSISTANT_ROSTER consolidated-16", () => {
-  it("has exactly 16 unique role keys matching TWINTO_ASSISTANT_KEYS", () => {
-    expect(TWINTO_ASSISTANT_KEYS).toHaveLength(16);
-    expect(Object.keys(ASSISTANT_ROSTER)).toHaveLength(16);
-    expect(new Set(Object.keys(ASSISTANT_ROSTER)).size).toBe(16);
+describe("ASSISTANT_ROSTER principled city department", () => {
+  it("has exactly 11 unique principled role keys", () => {
+    expect(TWINTO_ASSISTANT_KEYS).toHaveLength(11);
+    expect(Object.keys(ASSISTANT_ROSTER)).toHaveLength(11);
+    expect(new Set(Object.keys(ASSISTANT_ROSTER)).size).toBe(11);
     for (const key of TWINTO_ASSISTANT_KEYS) {
       expect(ASSISTANT_ROSTER[key]).toBeDefined();
     }
   });
 
-  it("has unique TwinTO names and no GridTwin or battery roles", () => {
+  it("has unique ToronTwin names and no GridTwin or battery roles", () => {
     const names = Object.values(ASSISTANT_ROSTER).map((role) => role.name);
-    expect(new Set(names).size).toBe(16);
+    expect(new Set(names).size).toBe(11);
     for (const role of Object.values(ASSISTANT_ROSTER)) {
-      expect(role.name).toMatch(/^TwinTO —/);
+      expect(role.name).toMatch(/^ToronTwin —/);
       expect(role.name).not.toMatch(/gridtwin/i);
       expect(role.name).not.toMatch(/battery/i);
     }
   });
 
-  it("does not keep any old 54-agent specialist keys active", () => {
+  it("does not keep niche one-use-case specialist keys", () => {
     for (const key of OLD_SPECIALIST_KEYS) {
       expect(ASSISTANT_ROSTER[key as keyof typeof ASSISTANT_ROSTER]).toBeUndefined();
     }
@@ -75,7 +77,11 @@ describe("ASSISTANT_ROSTER consolidated-16", () => {
     expect(ASSISTANT_ROSTER["city-copilot"].memory).toBe("Readonly");
     expect(ASSISTANT_ROSTER["final-policy-judge"].modelRequirement).toEqual(MODEL_PROFILES.RISK_REASONING);
     expect(getAssistantRole("final-policy-judge").name).toContain("Final Policy Judge");
-    expect(listAssistantRoles()).toHaveLength(16);
+    expect(listAssistantRoles()).toHaveLength(11);
+  });
+
+  it("OPEN_CITY_ASK uses the full principled bundle", () => {
+    expect(selectAssistantsForIntent("OPEN_CITY_ASK")).toEqual([...PRINCIPLED_CITY_BUNDLE]);
   });
 });
 
@@ -84,20 +90,19 @@ describe("intent bundles", () => {
     expect(selectAssistantsForIntent("SIMPLE_MAP_NAVIGATION").length).toBeLessThanOrEqual(3);
   });
 
-  it("activates Events and Incident Agent for EVENT_RESPONSE only when needed", () => {
-    expect(selectAssistantsForIntent("EVENT_RESPONSE")).toContain("events-incidents-agent");
-    expect(selectAssistantsForIntent("SCHEDULE_CHANGE")).not.toContain("events-incidents-agent");
-    expect(selectAssistantsForIntent("NEW_STATION_LOCATION")).not.toContain("events-incidents-agent");
-    expect(selectAssistantsForIntent("NEW_STATION_LOCATION", { includeEvents: true })).toContain(
-      "events-incidents-agent",
+  it("open city and station asks share the same principled agents", () => {
+    expect(selectAssistantsForIntent("OPEN_CITY_ASK")).toEqual(
+      selectAssistantsForIntent("NEW_STATION_LOCATION"),
     );
+    expect(selectAssistantsForIntent("OPEN_CITY_ASK")).toContain("scenario-designer");
+    expect(selectAssistantsForIntent("OPEN_CITY_ASK")).toContain("citizen-response");
   });
 
-  it("maps the flagship scenario to an event-aware planning bundle", () => {
+  it("maps the flagship scenario to a full planning bundle", () => {
     const bundle = selectAssistantBundle(FLAGSHIP_SCENARIO_ID);
-    expect(bundle.length).toBeGreaterThanOrEqual(13);
+    expect(bundle.length).toBeGreaterThanOrEqual(11);
     expect(bundle).toContain("final-policy-judge");
-    expect(bundle).toContain("events-incidents-agent");
+    expect(bundle).toContain("adversarial-reviewer");
   });
 
   it("exposes every intent bundle as unique keys from the roster", () => {

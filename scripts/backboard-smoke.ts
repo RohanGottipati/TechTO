@@ -10,9 +10,8 @@
  *   5. One read-only memory list call (never a write).
  *
  * Skips itself cleanly (exit code 0) when no BACKBOARD_API_KEY is
- * configured, or when BACKBOARD_MOCK_MODE is explicitly true, since there
- * is nothing live to smoke-test in that case. Never prints the API key or
- * any other secret; only reports whether one is configured.
+ * configured, since there is nothing live to smoke-test. Never prints the
+ * API key; only reports whether one is configured.
  *
  * Usage: npm run backboard:smoke
  */
@@ -50,13 +49,12 @@ loadDotEnv(repoRoot);
 const SMOKE_TEST_SCENARIO_ID = "departure-406-412";
 
 async function main(): Promise<void> {
-  const { isBackboardMockMode, getBackboardApiKey } = await import("@/lib/backboard/env");
+  const { getBackboardApiKey } = await import("@/lib/backboard/env");
 
   const hasKey = getBackboardApiKey().length > 0;
-  if (!hasKey || isBackboardMockMode()) {
+  if (!hasKey) {
     console.log(
-      "Skipping live smoke test: no BACKBOARD_API_KEY configured, or BACKBOARD_MOCK_MODE " +
-        "is explicitly true. Set BACKBOARD_API_KEY and unset/disable BACKBOARD_MOCK_MODE to run this live.",
+      "Skipping live smoke test: no BACKBOARD_API_KEY configured. Set BACKBOARD_API_KEY to run this live.",
     );
     return;
   }

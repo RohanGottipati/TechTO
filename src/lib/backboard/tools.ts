@@ -49,6 +49,15 @@ export const TOOL_NAMES = {
   COMPOSE_MAP_ACTIONS: "compose_map_actions",
   WRITE_MEMORY: "write_approved_memory",
   CREATE_TRAINING: "create_training_examples",
+  // general city twin verbs (Claude-Code-for-cities)
+  QUERY_TWIN: "query_twin",
+  PATCH_TWIN: "patch_twin",
+  RUN_TWIN_ANALYSIS: "run_twin_analysis",
+  SNAPSHOT_TWIN: "snapshot_twin",
+  DIFF_TWIN: "diff_twin",
+  PROPOSE_SCENARIOS: "propose_scenarios",
+  SCORE_POPULATION: "score_population",
+  INVOKE_ASSISTANT: "invoke_assistant",
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];
@@ -683,6 +692,121 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
         label: { type: "string", description: "Short label for this training example set, e.g. 'flagship-approved-hold-plus-boost'." },
       },
       required: ["scenarioId", "interventionId", "label"],
+    },
+  },
+  [TOOL_NAMES.QUERY_TWIN]: {
+    name: TOOL_NAMES.QUERY_TWIN,
+    description:
+      "Query the in-memory city twin snapshot (pois, corridors, closed routes, policies, land use). General verb; not domain-specific.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          description: "Optional slice: pois | corridors | closed_routes | policies | land_use | summary",
+        },
+        neighbourhoodCode: { type: "string", description: "Optional neighbourhood code for land_use queries." },
+      },
+    },
+  },
+  [TOOL_NAMES.PATCH_TWIN]: {
+    name: TOOL_NAMES.PATCH_TWIN,
+    description:
+      "Apply a ScenarioPatch (edits: add_poi, close_route, add_corridor, set_policy, set_land_use) to the in-memory twin. Returns the new snapshot version and a diff.",
+    parameters: {
+      type: "object",
+      properties: {
+        patch: {
+          type: "object",
+          description: "ScenarioPatch with id, title, rationale, edits[].",
+        },
+      },
+      required: ["patch"],
+    },
+  },
+  [TOOL_NAMES.RUN_TWIN_ANALYSIS]: {
+    name: TOOL_NAMES.RUN_TWIN_ANALYSIS,
+    description:
+      "Run a named twin analysis (currently: population_score) against the current twin snapshot.",
+    parameters: {
+      type: "object",
+      properties: {
+        analysis: {
+          type: "string",
+          enum: ["population_score"],
+          description: "Which analysis to run.",
+        },
+        question: { type: "string", description: "Planner question conditioning the score." },
+        scenarioId: { type: "string", description: "Label for this analysis run." },
+      },
+      required: ["analysis", "question"],
+    },
+  },
+  [TOOL_NAMES.SNAPSHOT_TWIN]: {
+    name: TOOL_NAMES.SNAPSHOT_TWIN,
+    description: "Return the current twin snapshot (versioned document).",
+    parameters: { type: "object", properties: {} },
+  },
+  [TOOL_NAMES.DIFF_TWIN]: {
+    name: TOOL_NAMES.DIFF_TWIN,
+    description:
+      "Diff the current twin against the baseline empty snapshot, or against a previously stored snapshot id in this run.",
+    parameters: {
+      type: "object",
+      properties: {
+        against: {
+          type: "string",
+          description: "baseline (default) or a snapshot key stored earlier in this run.",
+        },
+      },
+    },
+  },
+  [TOOL_NAMES.PROPOSE_SCENARIOS]: {
+    name: TOOL_NAMES.PROPOSE_SCENARIOS,
+    description:
+      "Register N ScenarioPatches as candidates for this planning run (stations, stadiums, energy sites, policy trades, etc.). General propose verb.",
+    parameters: {
+      type: "object",
+      properties: {
+        patches: {
+          type: "array",
+          description: "Array of ScenarioPatch objects.",
+          items: { type: "object" },
+        },
+        question: { type: "string", description: "User question these patches answer." },
+      },
+      required: ["patches"],
+    },
+  },
+  [TOOL_NAMES.SCORE_POPULATION]: {
+    name: TOOL_NAMES.SCORE_POPULATION,
+    description:
+      "Score day-one citizen acceptance for a ScenarioPatch (or the current twin) via the PopulationProvider. Simulated; not real opinion.",
+    parameters: {
+      type: "object",
+      properties: {
+        patch: { type: "object", description: "Optional ScenarioPatch; if omitted, scores current twin." },
+        question: { type: "string", description: "Planner question." },
+        scenarioId: { type: "string", description: "Candidate id label." },
+      },
+      required: ["question"],
+    },
+  },
+  [TOOL_NAMES.INVOKE_ASSISTANT]: {
+    name: TOOL_NAMES.INVOKE_ASSISTANT,
+    description:
+      "Ask another ToronTwin Backboard assistant to do one focused task with its tools. Use when you need a specialist lens; do not invent niche one-off agents. Pass a clear task string.",
+    parameters: {
+      type: "object",
+      properties: {
+        role: {
+          type: "string",
+          description:
+            "Assistant key, e.g. geospatial-twin | scenario-designer | citizen-response | equity-impact | feasibility | adversarial-reviewer | evidence-auditor | final-policy-judge | explanation-map",
+        },
+        task: { type: "string", description: "What you want that assistant to do or answer." },
+      },
+      required: ["role", "task"],
     },
   },
 };

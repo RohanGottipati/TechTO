@@ -15,7 +15,6 @@ import { useBackboardRun } from "@/lib/twinto/use-backboard-run";
 import type { StoredTwinTORun } from "@/lib/twinto/run-history";
 import { FLAGSHIP_SCENARIO_ID, requireScenario } from "@/data/transit/scenarios";
 import { simulateTransit } from "@/lib/transit/simulator";
-import type { CapabilitiesResponse } from "@/components/twinto/BackboardStatusPanel";
 
 import { ScenarioPanel } from "@/components/twinto/ScenarioPanel";
 import { PlaybackControls } from "@/components/twinto/PlaybackControls";
@@ -65,19 +64,11 @@ export function TwinTOAppShell() {
   const run = useBackboardRun();
   const [includeWebSearch, setIncludeWebSearch] = useState(false);
   const [viewedRun, setViewedRun] = useState<StoredTwinTORun | null>(null);
-  const [capabilities, setCapabilities] = useState<CapabilitiesResponse | null>(null);
   const [mobileSheet, setMobileSheet] = useState<"scenario" | "council" | null>(null);
 
   useEffect(() => {
     setSelectedScenario(scenario.id);
   }, [scenario.id, setSelectedScenario]);
-
-  useEffect(() => {
-    fetch("/api/backboard/capabilities")
-      .then((response) => (response.ok ? (response.json() as Promise<CapabilitiesResponse>) : null))
-      .then((data) => data && setCapabilities(data))
-      .catch(() => undefined);
-  }, []);
 
   const events = viewedRun ? viewedRun.events : run.events;
   const result = viewedRun ? viewedRun.result : run.result;
@@ -119,8 +110,6 @@ export function TwinTOAppShell() {
     const avgLoad = loads.reduce((sum, load) => sum + load.loadFactor, 0) / loads.length;
     return [{ stationId: scenario.stationId, loadFactor: avgLoad }];
   }, [result, selectedCandidateId, scenario]);
-
-  const mockBackboard = capabilities?.mode === "mock";
 
   const rightPanelContent = (
     <div className="flex h-full flex-col gap-2">
@@ -165,7 +154,7 @@ export function TwinTOAppShell() {
         {panelFocus === "history" && (
           <div className="grid h-full grid-rows-2 gap-2">
             <PreviousRunsPanel scenarioId={scenario.id} onSelectRun={handleSelectRun} activeRunId={activeRunId} />
-            <BackboardStatusPanel onCapabilitiesLoaded={setCapabilities} />
+            <BackboardStatusPanel />
           </div>
         )}
         {panelFocus === "map" && null}
@@ -182,7 +171,6 @@ export function TwinTOAppShell() {
         onCancel={run.cancel}
         includeWebSearch={includeWebSearch}
         onIncludeWebSearchChange={setIncludeWebSearch}
-        mockBackboard={mockBackboard}
       />
       {run.error && !viewedRun && (
         <div className="flex items-start gap-2 rounded-xl border border-twinto-error/30 bg-twinto-error/[0.08] px-3 py-2 text-xs text-twinto-error">
@@ -216,11 +204,6 @@ export function TwinTOAppShell() {
           }
           statusSlot={
             <>
-              {mockBackboard && (
-                <StatusPill tone="warning" data-testid="mock-backboard-badge">
-                  Mock Backboard
-                </StatusPill>
-              )}
               <StatusPill tone={isRunning ? "loading" : "ready"}>{isRunning ? "Run in progress" : "Idle"}</StatusPill>
             </>
           }

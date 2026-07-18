@@ -1,8 +1,6 @@
 import { z } from "zod";
 
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
-import { prepareMockDemoRun } from "@/lib/backboard/mock-demo-run";
-import type { MockBackboardAdapter } from "@/lib/backboard/mock-adapter";
 import { runTwinTOOrchestration, type TwinTORunEvent } from "@/lib/backboard/orchestrator";
 import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 import { clientKeyFor, isRunRateLimited } from "@/lib/backboard/run-rate-limit";
@@ -65,14 +63,7 @@ export async function POST(request: Request) {
     aborted = true;
   });
 
-  // Offline UI runs use the mock adapter with no per-request metadata hook, so
-  // script a deterministic demo pipeline (baseline finding, 3 candidates
-  // including one intentionally unsafe, citizen reactions via a real tool
-  // call, final judge recommendation) before the tool loop starts.
   const adapter = getBackboardAdapter();
-  if (adapter.mode === "mock") {
-    prepareMockDemoRun(adapter as MockBackboardAdapter, scenarioId);
-  }
 
   let sequence = 0;
   const stream = createSseStream(async (writer) => {

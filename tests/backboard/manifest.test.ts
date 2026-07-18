@@ -28,21 +28,21 @@ function fakeResolved(): ResolvedAssistant[] {
   }));
 }
 
-describe("manifest schema v3", () => {
-  it("builds a consolidated-16 keyed manifest", () => {
+describe("manifest schema v4 principled-11", () => {
+  it("builds a principled-11 keyed manifest", () => {
     const file = buildAssistantManifestFile(fakeResolved());
     expect(file.schemaVersion).toBe(MANIFEST_SCHEMA_VERSION);
-    expect(file.schemaVersion).toBe(3);
+    expect(file.schemaVersion).toBe(4);
     expect(file.product).toBe(MANIFEST_PRODUCT);
     expect(file.rosterVersion).toBe(MANIFEST_ROSTER_VERSION);
-    expect(file.assistantCount).toBe(16);
-    expect(Object.keys(file.assistants)).toHaveLength(16);
+    expect(file.assistantCount).toBe(11);
+    expect(Object.keys(file.assistants)).toHaveLength(11);
     expect(file.assistants["final-policy-judge"].assistantId).toBe("mock-final-policy-judge");
     expect(file.createdAt).toMatch(/^\d{4}-/);
   });
 
   it("rejects manifests missing a required key", () => {
-    const partial = fakeResolved().slice(0, 15);
+    const partial = fakeResolved().slice(0, 10);
     expect(() => buildAssistantManifestFile(partial)).toThrow(/missing required assistant key/);
   });
 });

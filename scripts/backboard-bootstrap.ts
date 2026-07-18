@@ -40,14 +40,13 @@ const repoRoot = path.resolve(__dirname, "..");
 loadDotEnv(repoRoot);
 
 async function main(): Promise<void> {
-  const { isBackboardMockMode, getBackboardBaseUrl } = await import("@/lib/backboard/env");
+  const { getBackboardBaseUrl } = await import("@/lib/backboard/env");
   const { getBackboardAdapter } = await import("@/lib/backboard/adapter");
   const { getAssistantManifest } = await import("@/lib/backboard/assistant-manifest");
   const { uploadKnowledgeDocuments } = await import("@/lib/backboard/knowledge-upload");
   const { buildAssistantManifestFile } = await import("@/lib/backboard/manifest-schema");
 
-  const mock = isBackboardMockMode();
-  console.log(`Backboard mode: ${mock ? "MOCK (offline)" : "LIVE"}`);
+  console.log(`Backboard mode: LIVE`);
   console.log(`Base URL: ${getBackboardBaseUrl()}`);
   console.log("");
 

@@ -48,11 +48,10 @@ const GRIDTWIN_NAME_PREFIX = "GridTwin";
 async function main(): Promise<void> {
   const confirm = process.argv.includes("--confirm");
 
-  const { isBackboardMockMode, getBackboardBaseUrl } = await import("@/lib/backboard/env");
+  const { getBackboardBaseUrl } = await import("@/lib/backboard/env");
   const { getBackboardAdapter } = await import("@/lib/backboard/adapter");
 
-  const mock = isBackboardMockMode();
-  console.log(`Backboard mode: ${mock ? "MOCK (offline)" : "LIVE"}`);
+  console.log(`Backboard mode: LIVE`);
   console.log(`Base URL: ${getBackboardBaseUrl()}`);
   console.log(`Mode: ${confirm ? "DELETE (--confirm passed)" : "DRY RUN (pass --confirm to actually delete)"}`);
   console.log("");
