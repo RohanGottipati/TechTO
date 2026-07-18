@@ -1,12 +1,8 @@
 {
-  "name": "skyline-world-explorer",
+  "name": "torontwin-dashboard",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "cesium:copy": "node scripts/copy-cesium-assets.mjs",
-    "postinstall": "npm run cesium:copy",
-    "predev": "npm run cesium:copy",
-    "prebuild": "npm run cesium:copy",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -17,15 +13,10 @@
     "test:e2e": "playwright test",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
-  "overrides": {
-    "@cesium/engine": "11.0.0",
-    "@cesium/widgets": "8.0.0",
-    "@zip.js/zip.js": "2.7.62"
-  },
   "dependencies": {
-    "cesium": "1.121.0",
     "framer-motion": "11.5.4",
     "lucide-react": "0.441.0",
+    "maplibre-gl": "^5.6.0",
     "next": "^14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
