@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSimStore } from "@/store/useSimStore";
@@ -13,6 +13,7 @@ import {
   placeFromNeighbourhoodArea,
   polygonCentroid,
 } from "@/lib/twinto/place-context";
+import { buildTrainRouteConfigs, trainCollection } from "@/lib/map/trains";
 import type {
   NeighbourhoodCollection,
   Persona,
@@ -39,6 +40,10 @@ function buildingLayerIds(map: maplibregl.Map): string[] {
     .map((layer) => layer.id)
     .filter((id) => map.getLayer(id));
 }
+const TRAIN_ICON_ID = "ttc-subway-car";
+const TRAIN_ICON_URL = "/icons/ttc-subway-car.png";
+const STREETCAR_ICON_ID = "ttc-streetcar";
+const STREETCAR_ICON_URL = "/icons/ttc-streetcar.png";
 
 // Free CARTO "Dark Matter" vector style over real OpenStreetMap data.
 const BASEMAP_STYLE =
@@ -151,6 +156,15 @@ export function MapCanvas({
   reducedMotionRef.current = reducedMotion;
   const walkParamsRef = useRef<WalkParams | null>(null);
   const walkStartRef = useRef(0);
+  const trainsLayerReadyRef = useRef(false);
+  const trainsStartRef = useRef(0);
+  const trainConfigs = useMemo(() => buildTrainRouteConfigs(routes), [routes]);
+  const streetcarsLayerReadyRef = useRef(false);
+  const streetcarsStartRef = useRef(0);
+  const streetcarConfigs = useMemo(
+    () => buildTrainRouteConfigs(routes, ["streetcar"]),
+    [routes]
+  );
 
   const result = useSimStore((s) => s.result);
   const layers = useSimStore((s) => s.layers);
@@ -377,6 +391,91 @@ export function MapCanvas({
         },
         firstSymbol
       );
+      map.addSource("trains", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      trainsStartRef.current = performance.now();
+      map
+        .loadImage(TRAIN_ICON_URL)
+        .then(({ data: image }) => {
+          if (!mapRef.current || mapRef.current.getLayer("trains")) return;
+          if (!map.hasImage(TRAIN_ICON_ID)) map.addImage(TRAIN_ICON_ID, image);
+          map.addLayer({
+            id: "trains",
+            type: "symbol",
+            source: "trains",
+            layout: {
+              "icon-image": TRAIN_ICON_ID,
+              "icon-size": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                10,
+                0.05,
+                14,
+                0.12,
+                16,
+                0.22,
+              ],
+              // The source sprite's long axis runs horizontally (bearing 0 = due
+              // north), so rotate 90° further to point it along the direction
+              // of travel.
+              "icon-rotate": ["+", ["get", "bearing"], 90],
+              "icon-rotation-alignment": "map",
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+              visibility: layersRef.current.rail ? "visible" : "none",
+            },
+          });
+          trainsLayerReadyRef.current = true;
+        })
+        .catch(() => {
+          // Missing icon asset shouldn't break the rest of the map.
+        });
+      map.addSource("streetcars", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      streetcarsStartRef.current = performance.now();
+      map
+        .loadImage(STREETCAR_ICON_URL)
+        .then(({ data: image }) => {
+          if (!mapRef.current || mapRef.current.getLayer("streetcars")) return;
+          if (!map.hasImage(STREETCAR_ICON_ID))
+            map.addImage(STREETCAR_ICON_ID, image);
+          map.addLayer({
+            id: "streetcars",
+            type: "symbol",
+            source: "streetcars",
+            layout: {
+              "icon-image": STREETCAR_ICON_ID,
+              "icon-size": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                10,
+                0.05,
+                14,
+                0.12,
+                16,
+                0.22,
+              ],
+              // Same convention as the subway car sprite: long axis runs
+              // horizontally (bearing 0 = due north), so rotate 90° further
+              // to point it along the direction of travel.
+              "icon-rotate": ["+", ["get", "bearing"], 90],
+              "icon-rotation-alignment": "map",
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+              visibility: layersRef.current.streetcar ? "visible" : "none",
+            },
+          });
+          streetcarsLayerReadyRef.current = true;
+        })
+        .catch(() => {
+          // Missing icon asset shouldn't break the rest of the map.
+        });
       map.addLayer({
         id: "scenario-casing",
         type: "line",
@@ -625,8 +724,14 @@ export function MapCanvas({
     for (const id of ["rail-line", "rail-glow"]) {
       map.setLayoutProperty(id, "visibility", vis(layers.rail));
     }
+    if (map.getLayer("trains")) {
+      map.setLayoutProperty("trains", "visibility", vis(layers.rail));
+    }
     for (const id of ["streetcar-line", "streetcar-glow"]) {
       map.setLayoutProperty(id, "visibility", vis(layers.streetcar));
+    }
+    if (map.getLayer("streetcars")) {
+      map.setLayoutProperty("streetcars", "visibility", vis(layers.streetcar));
     }
     for (const id of ["bus-line", "bus-glow"]) {
       map.setLayoutProperty(id, "visibility", vis(layers.bus));
@@ -770,6 +875,62 @@ export function MapCanvas({
     // on every toggle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, personas]);
+
+  // ---- subway/LRT cars: multiple vehicles per line, shuttling end-to-end --
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || trainConfigs.length === 0) return;
+    let rafId: number | undefined;
+    let cancelled = false;
+
+    const tick = () => {
+      if (cancelled) return;
+      if (trainsLayerReadyRef.current && layersRef.current.rail) {
+        const source = map.getSource<maplibregl.GeoJSONSource>("trains");
+        if (source) {
+          const elapsedSeconds = reducedMotionRef.current
+            ? 0
+            : (performance.now() - trainsStartRef.current) / 1000;
+          source.setData(trainCollection(trainConfigs, elapsedSeconds));
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+  }, [ready, trainConfigs]);
+
+  // ---- streetcars: multiple vehicles per line, shuttling end-to-end ------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || streetcarConfigs.length === 0) return;
+    let rafId: number | undefined;
+    let cancelled = false;
+
+    const tick = () => {
+      if (cancelled) return;
+      if (streetcarsLayerReadyRef.current && layersRef.current.streetcar) {
+        const source = map.getSource<maplibregl.GeoJSONSource>("streetcars");
+        if (source) {
+          const elapsedSeconds = reducedMotionRef.current
+            ? 0
+            : (performance.now() - streetcarsStartRef.current) / 1000;
+          source.setData(trainCollection(streetcarConfigs, elapsedSeconds));
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+  }, [ready, streetcarConfigs]);
 
   return (
     <div className="absolute inset-0">
