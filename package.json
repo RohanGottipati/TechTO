@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "backboard:bootstrap": "tsx scripts/backboard-bootstrap.ts"
   },
   "overrides": {
     "@cesium/engine": "11.0.0",
