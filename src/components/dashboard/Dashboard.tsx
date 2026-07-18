@@ -18,6 +18,7 @@ import type {
   NeighbourhoodCollection,
   Persona,
   RouteCollection,
+  StreetCollection,
 } from "@/lib/sim/types";
 import { CANNED_CITY_ASKS } from "@/lib/planner/canned";
 
@@ -25,6 +26,7 @@ interface CityData {
   neighbourhoods: NeighbourhoodCollection;
   routes: RouteCollection;
   busRoutes: RouteCollection;
+  streets: StreetCollection;
   personas: Persona[];
 }
 
@@ -42,20 +44,22 @@ export function Dashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const [nbhdRes, routeRes, busRouteRes] = await Promise.all([
+        const [nbhdRes, routeRes, busRouteRes, streetRes] = await Promise.all([
           fetch("/data/neighbourhoods.geojson"),
           fetch("/data/ttc-routes.geojson"),
           fetch("/data/ttc-bus-routes.geojson"),
+          fetch("/data/streets.geojson"),
         ]);
-        if (!nbhdRes.ok || !routeRes.ok || !busRouteRes.ok)
+        if (!nbhdRes.ok || !routeRes.ok || !busRouteRes.ok || !streetRes.ok)
           throw new Error("geodata fetch failed");
         const neighbourhoods =
           (await nbhdRes.json()) as NeighbourhoodCollection;
         const routes = (await routeRes.json()) as RouteCollection;
         const busRoutes = (await busRouteRes.json()) as RouteCollection;
+        const streets = (await streetRes.json()) as StreetCollection;
         if (cancelled) return;
         const personas = buildPersonas(neighbourhoods);
-        const city = { neighbourhoods, routes, busRoutes, personas };
+        const city = { neighbourhoods, routes, busRoutes, streets, personas };
         dataRef.current = city;
         setData(city);
         useSimStore.getState().setPersonaCount(personas.length);
@@ -110,6 +114,7 @@ export function Dashboard() {
           neighbourhoods={data.neighbourhoods}
           routes={data.routes}
           busRoutes={data.busRoutes}
+          streets={data.streets}
           personas={data.personas}
           onReady={() => setMapReady(true)}
         />
