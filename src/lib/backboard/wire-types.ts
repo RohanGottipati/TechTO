@@ -211,6 +211,18 @@ export interface MemoryWire {
   updated_at?: string | null;
 }
 
+/**
+ * POST /assistants/{id}/memories responds with an acknowledgement shape, not
+ * a MemoryWire (confirmed live 2026-07-18): the id field is `memory_id`, and
+ * there is no score/created_at/metadata.
+ */
+export interface AddMemoryResponseWire {
+  success: boolean;
+  message: string;
+  memory_id: string;
+  content: string;
+}
+
 export interface MemoriesListResponseWire {
   memories: MemoryWire[];
   total_count: number;

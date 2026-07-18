@@ -1,5 +1,6 @@
 import { assertServerOnly, getBackboardBaseUrl, requireBackboardApiKey } from "@/lib/backboard/env";
 import type {
+  AddMemoryResponseWire,
   AssistantWire,
   BackboardMemoryModeWire,
   BackboardSseEventWire,
@@ -605,8 +606,13 @@ export class RestBackboardAdapter implements BackboardAdapter {
       headers: this.headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ content, metadata }),
     });
-    const wire = (await response.json()) as MemoryWire;
-    return mapMemory(wire);
+    const wire = (await response.json()) as AddMemoryResponseWire;
+    return {
+      id: wire.memory_id,
+      content: wire.content,
+      score: null,
+      createdAt: null,
+    };
   }
 
   async searchMemories(assistantId: string, query: string, limit = 10): Promise<MemoryRecord[]> {

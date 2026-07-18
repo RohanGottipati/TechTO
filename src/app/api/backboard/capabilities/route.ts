@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
 import { getAssistantManifest } from "@/lib/backboard/assistant-manifest";
+import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,12 +42,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Failed to resolve Backboard capabilities:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to resolve Backboard capabilities.",
-        detail: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    );
+    return jsonError("Failed to resolve Backboard capabilities.", 500, { detail: errorMessage(error) });
   }
 }
