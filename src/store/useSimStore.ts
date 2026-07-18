@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import type { ScenarioResult } from "@/lib/sim/types";
 
-export type LayerKey = "routes" | "personas" | "districts";
+export type LayerKey = "rail" | "streetcar" | "bus" | "personas" | "districts";
 
 interface SimState {
   status: "loading" | "ready" | "error";
@@ -23,7 +23,7 @@ interface SimState {
 export const useSimStore = create<SimState>((set) => ({
   status: "loading",
   scenarioId: "baseline",
-  layers: { routes: true, personas: true, districts: false },
+  layers: { rail: true, streetcar: true, bus: false, personas: true, districts: false },
   selectedCode: null,
   result: null,
   personaCount: 0,

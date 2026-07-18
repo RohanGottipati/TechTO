@@ -4,13 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapCanvas } from "./MapCanvas";
 import { ScenarioPanel } from "./ScenarioPanel";
 import { LayersPanel } from "./LayersPanel";
-import { DistributionPanel } from "./DistributionPanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { Legend } from "./Legend";
+import { MapChatBar } from "@/components/chat/MapChatBar";
+import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
 import { buildPersonas } from "@/lib/sim/personas";
 import { SCENARIOS } from "@/lib/sim/scenarios";
 import { runScenario } from "@/lib/sim/engine";
 import { useSimStore } from "@/store/useSimStore";
+import { useMapStore } from "@/store/useMapStore";
 import type {
   NeighbourhoodCollection,
   Persona,
@@ -20,6 +22,7 @@ import type {
 interface CityData {
   neighbourhoods: NeighbourhoodCollection;
   routes: RouteCollection;
+  busRoutes: RouteCollection;
   personas: Persona[];
 }
 
@@ -36,17 +39,20 @@ export function Dashboard() {
     let cancelled = false;
     (async () => {
       try {
-        const [nbhdRes, routeRes] = await Promise.all([
+        const [nbhdRes, routeRes, busRouteRes] = await Promise.all([
           fetch("/data/neighbourhoods.geojson"),
           fetch("/data/ttc-routes.geojson"),
+          fetch("/data/ttc-bus-routes.geojson"),
         ]);
-        if (!nbhdRes.ok || !routeRes.ok) throw new Error("geodata fetch failed");
+        if (!nbhdRes.ok || !routeRes.ok || !busRouteRes.ok)
+          throw new Error("geodata fetch failed");
         const neighbourhoods =
           (await nbhdRes.json()) as NeighbourhoodCollection;
         const routes = (await routeRes.json()) as RouteCollection;
+        const busRoutes = (await busRouteRes.json()) as RouteCollection;
         if (cancelled) return;
         const personas = buildPersonas(neighbourhoods);
-        const city = { neighbourhoods, routes, personas };
+        const city = { neighbourhoods, routes, busRoutes, personas };
         dataRef.current = city;
         setData(city);
         useSimStore.getState().setPersonaCount(personas.length);
@@ -74,7 +80,10 @@ export function Dashboard() {
   // Escape clears the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") useSimStore.getState().select(null);
+      if (e.key === "Escape") {
+        useSimStore.getState().select(null);
+        useMapStore.getState().clearPlaceSelection();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -97,6 +106,7 @@ export function Dashboard() {
         <MapCanvas
           neighbourhoods={data.neighbourhoods}
           routes={data.routes}
+          busRoutes={data.busRoutes}
           personas={data.personas}
           onReady={() => setMapReady(true)}
         />
@@ -117,21 +127,21 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom: citywide distribution */}
-      <div className="pointer-events-none absolute bottom-4 left-4 z-10 hidden md:left-[320px] md:block">
-        <DistributionPanel />
+      {/* Right: legend + neighbourhood inspector stacked */}
+      <div className="pointer-events-none absolute right-4 top-4 z-10 hidden flex-col items-end gap-2.5 lg:flex">
+        <Legend />
+        {data && selectedCode && (
+          <InspectorPanel index={nbhdIndex} personas={data.personas} />
+        )}
       </div>
 
-      {/* Right: neighbourhood inspector */}
-      {data && selectedCode && (
-        <div className="pointer-events-none absolute right-4 top-4 z-10">
-          <InspectorPanel index={nbhdIndex} personas={data.personas} />
-        </div>
-      )}
+      <BuildingMiniChat />
 
-      {/* Legend, clear of the maplibre controls */}
-      <div className="pointer-events-none absolute bottom-4 right-14 z-10 hidden lg:block">
-        <Legend />
+      {/* Bottom: liquid-glass City Copilot */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3 sm:p-4">
+        <div className="pointer-events-auto w-full max-w-3xl px-1 md:px-0">
+          <MapChatBar enablePlanningRun={false} />
+        </div>
       </div>
 
       {status === "loading" && (

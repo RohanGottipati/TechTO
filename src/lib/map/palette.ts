@@ -46,3 +46,8 @@ export const ROUTE_COLORS: Record<string, string> = {
 };
 
 export const ROUTE_FALLBACK = "#9aa0a6";
+
+// Buses run ~180 routes deep, so per-line hues would be noise, not signal.
+// One shared dark red keeps the bus network legible as a network, bold
+// enough to read clearly against the dark basemap despite the route count.
+export const BUS_COLOR = "#c0152f";

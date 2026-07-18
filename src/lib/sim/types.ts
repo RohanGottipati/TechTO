@@ -24,7 +24,7 @@ export interface NeighbourhoodCollection {
 export interface RouteProps {
   route: string;
   name: string;
-  mode: "subway" | "lrt" | "streetcar";
+  mode: "subway" | "lrt" | "streetcar" | "bus";
   gtfs_color: string;
 }
 

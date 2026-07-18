@@ -9,6 +9,26 @@ Read this file fully before writing code. It encodes decisions that were argued
 through deliberately. Do not silently re-litigate them; if you think one is
 wrong, say so explicitly and wait.
 
+**Note on TwinTO.** This repository also contains TwinTO, a separate,
+self-contained demo product (`src/lib/backboard`, `src/lib/transit`,
+`src/components/twinto`, `docs/twinto-implementation.md`): a simulated
+Toronto transit digital twin where a consolidated Backboard planning
+department of exactly 16 named assistants (`rosterVersion:
+consolidated-16`) proposes and stress-tests schedule and station options
+against census-weighted synthetic citizen cohorts. TwinTO uses Backboard
+only for its AI infrastructure; it does not require MongoDB or FreeSolo on
+this branch (provider boundaries exist for later swaps). TwinTO is a demo
+product, not an implementation of ToronTwin itself; do not read TwinTO's
+synthetic-fixture citizen reactions as satisfying this file's calibration
+or retrodiction requirements. GridTwin is archived under
+`docs/archive/gridtwin/`. See `docs/backboard/assistants.md` and
+`docs/twinto-implementation.md` for TwinTO's real design.
+
+**TwinTO geographic scope (hard):** City of Toronto only. Fixtures, map
+actions, chat assumptions, and every Backboard agent suggestion must stay
+inside Toronto (`src/lib/twinto/toronto-scope.ts`). Never propose locations,
+routes, or policies for other cities or regions.
+
 ---
 
 ## 1. What this project is

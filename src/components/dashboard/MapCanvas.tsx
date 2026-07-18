@@ -4,8 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSimStore } from "@/store/useSimStore";
+import { useMapStore } from "@/store/useMapStore";
 import { getScenario } from "@/lib/sim/scenarios";
 import { resolveAlignment } from "@/lib/sim/engine";
+import { buildWalkParams, walkOffset, type WalkParams } from "@/lib/sim/walk";
+import {
+  placeFromBuildingFeature,
+  placeFromNeighbourhoodArea,
+  polygonCentroid,
+} from "@/lib/twinto/place-context";
 import type {
   NeighbourhoodCollection,
   Persona,
@@ -15,9 +22,23 @@ import {
   ACCEPT_NEUTRAL,
   ACCEPT_OPPOSE,
   ACCEPT_SUPPORT,
+  BUS_COLOR,
   ROUTE_COLORS,
   ROUTE_FALLBACK,
 } from "@/lib/map/palette";
+
+const SELECTED_BUILDING_SOURCE = "torontwin-selected-building";
+const SELECTED_BUILDING_FILL = "torontwin-selected-building-fill";
+const SELECTED_BUILDING_LINE = "torontwin-selected-building-line";
+
+function buildingLayerIds(map: maplibregl.Map): string[] {
+  const style = map.getStyle();
+  if (!style?.layers) return [];
+  return style.layers
+    .filter((layer) => /building/i.test(layer.id) && (layer.type === "fill" || layer.type === "fill-extrusion"))
+    .map((layer) => layer.id)
+    .filter((id) => map.getLayer(id));
+}
 
 // Free CARTO "Dark Matter" vector style over real OpenStreetMap data.
 const BASEMAP_STYLE =
@@ -40,22 +61,38 @@ interface TooltipState {
 interface MapCanvasProps {
   neighbourhoods: NeighbourhoodCollection;
   routes: RouteCollection;
+  busRoutes: RouteCollection;
   personas: Persona[];
   onReady: () => void;
 }
 
+interface WalkContext {
+  params: WalkParams;
+  t: number;
+}
+
 function personaCollection(
   personas: Persona[],
-  acceptance: Float32Array | null
+  acceptance: Float32Array | null,
+  walk?: WalkContext
 ): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: personas.map((p) => ({
-      type: "Feature",
-      id: p.id,
-      properties: { a: acceptance ? acceptance[p.id] : 0.5 },
-      geometry: { type: "Point", coordinates: [p.lng, p.lat] },
-    })),
+    features: personas.map((p) => {
+      let lng = p.lng;
+      let lat = p.lat;
+      if (walk) {
+        const [dLng, dLat] = walkOffset(walk.params, p.id, walk.t);
+        lng += dLng;
+        lat += dLat;
+      }
+      return {
+        type: "Feature",
+        id: p.id,
+        properties: { a: acceptance ? acceptance[p.id] : 0.5 },
+        geometry: { type: "Point", coordinates: [lng, lat] },
+      };
+    }),
   };
 }
 
@@ -78,9 +115,24 @@ const routeColorExpr = [
   ROUTE_FALLBACK,
 ] as unknown as maplibregl.ExpressionSpecification;
 
+const RAIL_FILTER = [
+  "match",
+  ["get", "mode"],
+  ["subway", "lrt"],
+  true,
+  false,
+] as unknown as maplibregl.FilterSpecification;
+
+const STREETCAR_FILTER = [
+  "==",
+  ["get", "mode"],
+  "streetcar",
+] as unknown as maplibregl.FilterSpecification;
+
 export function MapCanvas({
   neighbourhoods,
   routes,
+  busRoutes,
   personas,
   onReady,
 }: MapCanvasProps) {
@@ -97,11 +149,23 @@ export function MapCanvas({
   const reducedMotion = useReducedMotion();
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
+  const walkParamsRef = useRef<WalkParams | null>(null);
+  const walkStartRef = useRef(0);
 
   const result = useSimStore((s) => s.result);
   const layers = useSimStore((s) => s.layers);
   const scenarioId = useSimStore((s) => s.scenarioId);
   const selectedCode = useSimStore((s) => s.selectedCode);
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+
+  // Current wander offset context, or undefined when motion should be still
+  // (reduced-motion preference, or before the walk params are built).
+  const currentWalk = (): WalkContext | undefined => {
+    const params = walkParamsRef.current;
+    if (!params || reducedMotionRef.current) return undefined;
+    return { params, t: performance.now() - walkStartRef.current };
+  };
 
   // ---- init -------------------------------------------------------------
   useEffect(() => {
@@ -141,13 +205,16 @@ export function MapCanvas({
 
       map.addSource("nbhd", { type: "geojson", data: neighbourhoods });
       map.addSource("routes", { type: "geojson", data: routes });
+      map.addSource("bus-routes", { type: "geojson", data: busRoutes });
       map.addSource("scenario", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      walkParamsRef.current = buildWalkParams(personas);
+      walkStartRef.current = performance.now();
       map.addSource("personas", {
         type: "geojson",
-        data: personaCollection(personas, null),
+        data: personaCollection(personas, null, currentWalk()),
       });
 
       map.addLayer(
@@ -173,9 +240,55 @@ export function MapCanvas({
       );
       map.addLayer(
         {
-          id: "route-glow",
+          id: "bus-glow",
+          type: "line",
+          source: "bus-routes",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": BUS_COLOR,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              9,
+              2.5,
+              14,
+              7,
+            ],
+            "line-opacity": 0.2,
+            "line-blur": 2,
+          },
+        },
+        firstSymbol
+      );
+      map.addLayer(
+        {
+          id: "bus-line",
+          type: "line",
+          source: "bus-routes",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": BUS_COLOR,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              9,
+              1.2,
+              14,
+              2.8,
+            ],
+            "line-opacity": 0.88,
+          },
+        },
+        firstSymbol
+      );
+      map.addLayer(
+        {
+          id: "streetcar-glow",
           type: "line",
           source: "routes",
+          filter: STREETCAR_FILTER,
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
             "line-color": routeColorExpr,
@@ -196,9 +309,10 @@ export function MapCanvas({
       );
       map.addLayer(
         {
-          id: "route-line",
+          id: "streetcar-line",
           type: "line",
           source: "routes",
+          filter: STREETCAR_FILTER,
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
             "line-color": routeColorExpr,
@@ -207,9 +321,56 @@ export function MapCanvas({
               ["linear"],
               ["zoom"],
               9,
-              ["match", ["get", "mode"], "subway", 2.2, 1.2],
+              1.2,
               14,
-              ["match", ["get", "mode"], "subway", 5, 3],
+              3,
+            ],
+            "line-opacity": 0.92,
+          },
+        },
+        firstSymbol
+      );
+      map.addLayer(
+        {
+          id: "rail-glow",
+          type: "line",
+          source: "routes",
+          filter: RAIL_FILTER,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": routeColorExpr,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              9,
+              4,
+              14,
+              11,
+            ],
+            "line-opacity": 0.14,
+            "line-blur": 3,
+          },
+        },
+        firstSymbol
+      );
+      map.addLayer(
+        {
+          id: "rail-line",
+          type: "line",
+          source: "routes",
+          filter: RAIL_FILTER,
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": routeColorExpr,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              9,
+              2.2,
+              14,
+              5,
             ],
             "line-opacity": 0.92,
           },
@@ -285,6 +446,30 @@ export function MapCanvas({
         filter: ["==", ["id"], -1],
       });
 
+      map.addSource(SELECTED_BUILDING_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: SELECTED_BUILDING_FILL,
+        type: "fill",
+        source: SELECTED_BUILDING_SOURCE,
+        paint: {
+          "fill-color": "#5BA3F5",
+          "fill-opacity": 0.32,
+        },
+      });
+      map.addLayer({
+        id: SELECTED_BUILDING_LINE,
+        type: "line",
+        source: SELECTED_BUILDING_SOURCE,
+        paint: {
+          "line-color": "#8EC5FF",
+          "line-width": 2,
+          "line-opacity": 0.95,
+        },
+      });
+
       loadedRef.current = true;
       setReady(true);
       onReady();
@@ -298,7 +483,14 @@ export function MapCanvas({
     map.on("mousemove", (e) => {
       if (!loadedRef.current) return;
       const routeHits = map.queryRenderedFeatures(e.point, {
-        layers: ["route-line", "route-glow"],
+        layers: [
+          "rail-line",
+          "rail-glow",
+          "streetcar-line",
+          "streetcar-glow",
+          "bus-line",
+          "bus-glow",
+        ],
       });
       const nbhdHits = map.queryRenderedFeatures(e.point, {
         layers: ["nbhd-fill"],
@@ -354,12 +546,63 @@ export function MapCanvas({
 
     map.on("click", (e) => {
       if (!loadedRef.current) return;
+
+      const buildingLayers = buildingLayerIds(map);
+      const buildingHits =
+        buildingLayers.length > 0
+          ? map.queryRenderedFeatures(e.point, { layers: buildingLayers })
+          : [];
+      if (buildingHits[0]?.geometry) {
+        const feature = buildingHits[0];
+        const coordinates = polygonCentroid(feature.geometry as GeoJSON.Geometry);
+        if (coordinates) {
+          const place = placeFromBuildingFeature({
+            featureId: feature.id,
+            coordinates,
+            properties: (feature.properties ?? {}) as Record<string, unknown>,
+          });
+          useMapStore.getState().selectPlace(place);
+          const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+          source?.setData({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: feature.geometry as GeoJSON.Geometry,
+              },
+            ],
+          });
+          return;
+        }
+      }
+
       const hits = map.queryRenderedFeatures(e.point, {
         layers: ["nbhd-fill"],
       });
       if (hits.length > 0) {
-        useSimStore.getState().select(String(hits[0].properties.code));
+        const feature = hits[0];
+        const code = String(feature.properties?.code ?? "");
+        const props = nbhdByCode.get(code);
+        const coordinates =
+          polygonCentroid(feature.geometry as GeoJSON.Geometry) ??
+          (e.lngLat ? ([e.lngLat.lng, e.lngLat.lat] as [number, number]) : null);
+        if (code && props && coordinates) {
+          useMapStore.getState().selectPlace(
+            placeFromNeighbourhoodArea({
+              code,
+              name: props.name,
+              coordinates,
+            }),
+          );
+        }
+        const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        source?.setData({ type: "FeatureCollection", features: [] });
+        useSimStore.getState().select(code || null);
       } else {
+        useMapStore.getState().clearPlaceSelection();
+        const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        source?.setData({ type: "FeatureCollection", features: [] });
         useSimStore.getState().select(null);
       }
     });
@@ -379,8 +622,14 @@ export function MapCanvas({
     const map = mapRef.current;
     if (!map || !ready) return;
     const vis = (on: boolean) => (on ? "visible" : "none");
-    for (const id of ["route-line", "route-glow"]) {
-      map.setLayoutProperty(id, "visibility", vis(layers.routes));
+    for (const id of ["rail-line", "rail-glow"]) {
+      map.setLayoutProperty(id, "visibility", vis(layers.rail));
+    }
+    for (const id of ["streetcar-line", "streetcar-glow"]) {
+      map.setLayoutProperty(id, "visibility", vis(layers.streetcar));
+    }
+    for (const id of ["bus-line", "bus-glow"]) {
+      map.setLayoutProperty(id, "visibility", vis(layers.bus));
     }
     map.setLayoutProperty("personas", "visibility", vis(layers.personas));
     // With the sentiment layer on, tint strength follows conviction: split
@@ -460,7 +709,7 @@ export function MapCanvas({
 
     if (reducedMotionRef.current) {
       current.set(target);
-      source.setData(personaCollection(personas, target));
+      source.setData(personaCollection(personas, target, currentWalk()));
       return;
     }
 
@@ -480,7 +729,7 @@ export function MapCanvas({
         if (sweep[i] <= threshold) current[i] = target[i];
       }
       if (t >= 1) current.set(target);
-      source.setData(personaCollection(personas, current));
+      source.setData(personaCollection(personas, current, currentWalk()));
       if (t < 1) {
         window.setTimeout(
           () => requestAnimationFrame(tick),
@@ -490,6 +739,37 @@ export function MapCanvas({
     };
     requestAnimationFrame(tick);
   }, [result, neighbourhoods, personas, ready]);
+
+  // ---- pedestrian wander: residents amble around their home block ---------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    let rafId: number | undefined;
+    let cancelled = false;
+
+    // Runs every animation frame (cheap at 2k dots) so the wander reads as
+    // continuous motion rather than discrete hops.
+    const tick = () => {
+      if (cancelled) return;
+      if (!reducedMotionRef.current && layersRef.current.personas) {
+        const source = map.getSource<maplibregl.GeoJSONSource>("personas");
+        const walk = currentWalk();
+        if (source && walk) {
+          source.setData(personaCollection(personas, displayedA.current, walk));
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+    // reducedMotion/layers are read live via refs so the loop doesn't restart
+    // on every toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, personas]);
 
   return (
     <div className="absolute inset-0">
