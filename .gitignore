@@ -1,3 +1,12 @@
+# Others
+.*
+OpinionQA/
+ANES/
+*.md
+*.jsonl
+*.json
+*.txt
+
 # dependencies
 /node_modules
 /.pnp
@@ -57,8 +66,6 @@ data/raw/
 # eval/output/phase1_gate_evidence/, a deliberately-committed snapshot of
 # the specific run cited as gate evidence in OVERNIGHT_LOG.md.
 eval/output/*
-!eval/output/phase1_gate_evidence/
-!eval/output/phase2_gate_evidence/
 
 # data/raw/opinionqa/ and data/raw/anes/ hold real Pew/ANES microdata the
 # user downloaded manually (CodaLab / ANES data center, both gated behind

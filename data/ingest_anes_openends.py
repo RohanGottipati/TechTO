@@ -41,10 +41,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 from pathlib import Path
 
 import pandas as pd
+
+from population.persona_text import render_persona
 
 ANES_DIR = Path("/home/acreo/tw/ANES")
 OPENENDS_FILE = ANES_DIR / "anes_timeseries_2020_redactedopenends_excel_20211118.xlsx"
@@ -117,24 +120,8 @@ def _age_label(code: int) -> str | None:
     return "75 and over"
 
 
-def _persona_text(row: dict) -> str:
-    parts = []
-    if row.get("age_band"):
-        parts.append(f"I am in the {row['age_band']} age group.")
-    if row.get("sex"):
-        parts.append(f"I identify as {row['sex']}.")
-    if row.get("race"):
-        parts.append(f"My racial/ethnic background is {row['race']}.")
-    if row.get("education"):
-        parts.append(f"My highest level of education is {row['education']}.")
-    if row.get("party"):
-        parts.append(f"In terms of party identification, I am: {row['party']}.")
-    if row.get("income"):
-        parts.append(f"My approximate annual household income is {row['income']}.")
-    return " ".join(parts) if parts else "I am a US survey respondent."
-
-
 def main(out_path: Path = DEFAULT_OUT) -> None:
+    rng = random.Random(2262)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not OPENENDS_FILE.exists():
@@ -205,7 +192,9 @@ def main(out_path: Path = DEFAULT_OUT) -> None:
                 continue
 
             demographics = demo_lookup.get(rid, {})
-            persona_str = _persona_text(demographics)
+            # filter nulls before dropout/verbalize
+            demo_clean = {k: v for k, v in demographics.items() if v}
+            persona_str, kept = render_persona(demo_clean, rng)
 
             all_rows.append({
                 "input": {
@@ -220,6 +209,8 @@ def main(out_path: Path = DEFAULT_OUT) -> None:
                     "respondent_id": rid,
                     "persona_provenance": "real",
                     "demographics": demographics,
+                    "persona_attrs_kept": kept,
+                    "persona_text_renderer": "persona_to_text_v2",
                 },
             })
 

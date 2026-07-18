@@ -33,7 +33,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-from population.persona_text import generate_synthetic_attributes
+from population.persona_text import generate_synthetic_attributes, render_persona
 
 CONVERSATIONS: dict[str, dict] = {
     "15-per-hour-seattle": {
@@ -116,11 +116,7 @@ def ingest_conversation(conversation_id: str, meta: dict, rng: random.Random) ->
         comment_id = int(row["comment-id"])
         comment_text = str(row["comment-body"]).strip()
         attrs = generate_synthetic_attributes(rng)
-        persona_text = (
-            f"I am a {attrs.get('age_band', 'adult')} year old "
-            f"who {attrs.get('tenure', 'rent')}s my home "
-            f"and usually commute by {attrs.get('commute_mode', 'transit')}."
-        )
+        persona_text, kept = render_persona(attrs, rng)
         vote_dist = _vote_distribution(votes, comment_id)
         rows.append({
             "input": {
@@ -139,6 +135,8 @@ def ingest_conversation(conversation_id: str, meta: dict, rng: random.Random) ->
                 "real_vote_distribution": vote_dist,
                 "persona_provenance": "synthetic",
                 "persona_attributes": attrs,
+                "persona_attrs_kept": kept,
+                "persona_text_renderer": "persona_to_text_v2",
             },
         })
     return rows

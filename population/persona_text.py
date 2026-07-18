@@ -34,13 +34,15 @@ import random
 
 from model.serving import complete_chat
 
+# Keep length + voice stable across ANES / Toronto / Polis so SFT doesn't
+# learn a source-specific persona style. Variance comes from attribute
+# dropout (which fields appear), not from format or length.
 _VERBALIZE_SYSTEM_PROMPT = (
-    "You turn a short list of demographic/situational attributes into a "
-    "brief, natural first-person-adjacent persona description (2-4 "
-    "sentences), as if introducing this person before they give an opinion. "
-    "Plain, neutral prose. Do not invent attributes beyond what is given. "
-    "Do not mention that this is a persona, a profile, or an AI-generated "
-    "description -- just write the description itself, nothing else."
+    "Write exactly two natural first-person sentences (~35-55 words). "
+    "Paraphrase the attributes into fluent speech "
+    "(e.g. age band '60-74' -> 'in my sixties'), but do not add any fact "
+    "that is not listed: no name, job, hobbies, personality, or extra places. "
+    "No labels or preamble -- output only the two sentences."
 )
 
 # A generic attribute pool for fully-synthetic personas (Polis rows, where
@@ -85,7 +87,7 @@ def attribute_dropout(attributes: dict[str, str], rng: random.Random, keep_prob:
     return {k: attributes[k] for k in kept}
 
 
-def persona_to_text(attributes: dict[str, str], *, temperature: float = 0.7, max_tokens: int = 120) -> str:
+def persona_to_text(attributes: dict[str, str], *, temperature: float = 0.8, max_tokens: int = 110) -> str:
     """Render an attribute dict as a short natural-language persona
     description via the configured LM backend (local vLLM by default, see
     model/serving.py). Raises NoLLMBackendAvailable if unreachable --
@@ -98,3 +100,25 @@ def persona_to_text(attributes: dict[str, str], *, temperature: float = 0.7, max
         {"role": "user", "content": f"Attributes:\n{attr_lines}"},
     ]
     return complete_chat(messages, temperature=temperature, max_tokens=max_tokens).strip()
+
+
+def render_persona(
+    attributes: dict[str, str],
+    rng: random.Random,
+    *,
+    keep_prob: float = 0.75,
+    min_keep: int = 3,
+    max_keep: int = 5,
+) -> tuple[str, dict[str, str]]:
+    """Dropout then verbalize. Single entry point for every SFT/inference
+    caller so Polis / ANES / Toronto all get the same length + voice, with
+    variance only in which attributes survive dropout."""
+    cleaned = {k: str(v) for k, v in attributes.items() if v is not None and str(v).strip()}
+    if not cleaned:
+        cleaned = {"note": "ordinary resident"}
+    kept = attribute_dropout(cleaned, rng, keep_prob=keep_prob, min_keep=min_keep)
+    if len(kept) > max_keep:
+        keys = rng.sample(list(kept.keys()), max_keep)
+        kept = {k: kept[k] for k in keys}
+    text = persona_to_text(kept)
+    return text, kept
