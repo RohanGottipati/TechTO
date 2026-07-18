@@ -1,13 +1,14 @@
 """Invariant checks for the city twin compiler (AGENTS.md 4.1).
 
-`check_all(state)` is the single entry point `twin/state.py:patch()` calls
-before committing any edit. It returns a list of human-readable violation
-strings; an empty list means the state is valid. Every check here operates
-on the *resulting* candidate TwinState only (no access to the pre-edit
-parent state is assumed), which keeps `patch()` simple: validate the
-candidate, commit or reject, never partially apply.
+`check_all(state, parent=None)` is the single entry point
+`twin/state.py:patch()` calls before committing any edit. It returns a list
+of human-readable violation strings; an empty list means the state is
+valid. Most checks operate on the *resulting* candidate TwinState only;
+`patch()` also passes the pre-edit `parent` state so checks that need a
+before/after comparison (e.g. "did this edit disconnect the network?") can
+do one without threading extra plumbing through every call site.
 
-Phase 0 first pass. Implemented:
+Phase 0/1 passes. Implemented:
   - transit stops must sit on (or very near) the street/transit network --
     this is the Phase 0 gate invariant.
   - policy values may only reference zoning parcels that exist.
@@ -16,20 +17,19 @@ Phase 0 first pass. Implemented:
   - a street segment introduced or modified by an edit must actually connect
     to the rest of the street network (no edit may splice in a segment with
     both endpoints floating in space).
+  - a street segment *removed* by an edit must not disconnect two parts of
+    the network that were only connected through it (a before/after
+    connected-component comparison, using `parent`). This was logged as a
+    documented gap after Phase 0 and is closed here.
 
-Deliberately NOT implemented yet (documented, not silently skipped):
-  - full before/after connected-component comparison to catch a `remove`
-    that severs previously-joined parts of the network. That needs the
-    parent TwinState threaded into the check, which `patch()` doesn't do
-    yet. Tracked as Phase 1 follow-up in OVERNIGHT_LOG.md; it is an
-    engineering gap, not one of the AGENTS.md section 9 open questions, so
-    it's safe to pick up without human sign-off.
+Deliberately NOT implemented yet:
   - derived-quantity recompute (commute times, accessibility) -- that's
     `twin/features/`, explicitly Phase 3 scope.
 """
 
 from __future__ import annotations
 
+import networkx as nx
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
@@ -159,16 +159,70 @@ def check_street_network_edits_connect(state: TwinState) -> list[str]:
     return violations
 
 
-CHECKS = (
+def _street_graph(state: TwinState) -> nx.Graph:
+    graph = nx.Graph()
+    for feat in state.all_features("streets"):
+        geom = shape(feat.geometry.model_dump())
+        lines = list(geom.geoms) if geom.geom_type == "MultiLineString" else [geom]
+        for line in lines:
+            coords = list(line.coords)
+            u, v = _snap(coords[0]), _snap(coords[-1])
+            graph.add_edge(u, v, feature_id=feat.id)
+    return graph
+
+
+def check_street_removal_preserves_connectivity(state: TwinState, parent: TwinState | None) -> list[str]:
+    """A street segment *removed* by this edit set must not disconnect two
+    parts of the network that were only connected through it. Needs the
+    pre-edit `parent` state to know what the network looked like before the
+    removal; a no-op (returns no violations) when no parent is given, e.g.
+    when a TwinState is validated standalone rather than via patch()."""
+    if parent is None:
+        return []
+    removed_street_ids = {
+        edit.feature_id for edit in state.edits_applied if edit.layer == "streets" and edit.op == "remove"
+    }
+    if not removed_street_ids:
+        return []
+
+    parent_graph = _street_graph(parent)
+    candidate_graph = _street_graph(state)
+
+    violations: list[str] = []
+    for feature_id in removed_street_ids:
+        # Find the removed segment's endpoints from the parent graph (the
+        # only place it still exists).
+        endpoints = [
+            (u, v) for u, v, data in parent_graph.edges(data=True) if data.get("feature_id") == feature_id
+        ]
+        for u, v in endpoints:
+            # If either endpoint no longer exists in the candidate network at
+            # all, there's nothing else that used to route through it --
+            # removing a dead-end is fine.
+            if u not in candidate_graph or v not in candidate_graph:
+                continue
+            if not nx.has_path(candidate_graph, u, v):
+                violations.append(
+                    f"streets:{feature_id} removal disconnects the network: no remaining path between "
+                    f"its former endpoints {u} and {v}"
+                )
+    return violations
+
+
+CHECKS_STATE_ONLY = (
     check_geometry_validity,
     check_transit_stops_on_network,
     check_policy_zone_references,
     check_street_network_edits_connect,
 )
 
+CHECKS_WITH_PARENT = (check_street_removal_preserves_connectivity,)
 
-def check_all(state: TwinState) -> list[str]:
+
+def check_all(state: TwinState, parent: TwinState | None = None) -> list[str]:
     violations: list[str] = []
-    for check in CHECKS:
+    for check in CHECKS_STATE_ONLY:
         violations.extend(check(state))
+    for check_with_parent in CHECKS_WITH_PARENT:
+        violations.extend(check_with_parent(state, parent))
     return violations

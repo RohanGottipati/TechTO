@@ -8,6 +8,7 @@ from twin.invariants import (
     check_geometry_validity,
     check_policy_zone_references,
     check_street_network_edits_connect,
+    check_street_removal_preserves_connectivity,
     check_transit_stops_on_network,
 )
 from twin.schema import Edit, PolicyValue, StreetSegment, TransitStop, ZoningParcel
@@ -191,3 +192,96 @@ def test_unedited_streets_are_not_checked():
         edits_applied=(Edit(op="add", layer="parks", feature_id="parks:1", feature={}),),
     )
     assert check_street_network_edits_connect(state) == []
+
+
+# ---- street removal connectivity (needs parent state) ----------------------
+
+
+def test_removing_a_bridge_segment_that_disconnects_the_network_fails():
+    # Two clusters (streets:1/2 and streets:4/5) joined only by the bridge
+    # segment streets:3. Removing streets:3 severs them.
+    parent = _empty_state(
+        layers={
+            "streets": {
+                "streets:1": _street("streets:1", [(0, 0), (100, 0)]),
+                "streets:2": _street("streets:2", [(100, 0), (200, 0)]),
+                "streets:3": _street("streets:3", [(200, 0), (300, 0)]),  # the bridge
+                "streets:4": _street("streets:4", [(300, 0), (400, 0)]),
+                "streets:5": _street("streets:5", [(400, 0), (500, 0)]),
+            }
+        }
+    )
+    edit = Edit(op="remove", layer="streets", feature_id="streets:3", feature=None)
+    candidate = parent._apply_edits_unchecked([edit])
+    violations = check_street_removal_preserves_connectivity(candidate, parent)
+    assert len(violations) == 1
+    assert "streets:3" in violations[0]
+
+
+def test_removing_a_redundant_segment_with_an_alternate_route_passes():
+    # A loop: 1-2-3-4 and a shortcut 1-4. Removing any one edge still leaves
+    # every node reachable via the rest of the loop.
+    parent = _empty_state(
+        layers={
+            "streets": {
+                "streets:1": _street("streets:1", [(0, 0), (100, 0)]),
+                "streets:2": _street("streets:2", [(100, 0), (100, 100)]),
+                "streets:3": _street("streets:3", [(100, 100), (0, 100)]),
+                "streets:4": _street("streets:4", [(0, 100), (0, 0)]),  # closes the loop
+            }
+        }
+    )
+    edit = Edit(op="remove", layer="streets", feature_id="streets:4", feature=None)
+    candidate = parent._apply_edits_unchecked([edit])
+    assert check_street_removal_preserves_connectivity(candidate, parent) == []
+
+
+def test_removing_a_dead_end_stub_passes():
+    # streets:2 is a dead-end stub hanging off streets:1; nothing else routed
+    # through its far endpoint, so removing it can't disconnect anything.
+    parent = _empty_state(
+        layers={
+            "streets": {
+                "streets:1": _street("streets:1", [(0, 0), (100, 0)]),
+                "streets:2": _street("streets:2", [(100, 0), (100, 50)]),  # dead end
+            }
+        }
+    )
+    edit = Edit(op="remove", layer="streets", feature_id="streets:2", feature=None)
+    candidate = parent._apply_edits_unchecked([edit])
+    assert check_street_removal_preserves_connectivity(candidate, parent) == []
+
+
+def test_no_parent_state_means_no_op():
+    parent = _empty_state(layers={"streets": {"streets:1": _street("streets:1", [(0, 0), (100, 0)])}})
+    edit = Edit(op="remove", layer="streets", feature_id="streets:1", feature=None)
+    candidate = parent._apply_edits_unchecked([edit])
+    assert check_street_removal_preserves_connectivity(candidate, None) == []
+
+
+def test_removal_check_against_the_real_ward_13_network(base_state: TwinState):
+    # Exercise the check against the real, large Ward 13 street graph rather
+    # than only tiny synthetic fixtures: build a guaranteed bridge (two
+    # segments floating far outside the real network, joined only to each
+    # other) on top of the real base state, then confirm removing the
+    # bridge segment is correctly flagged.
+    # Two spurs (each with an extra segment so they're not themselves mere
+    # dead ends) joined only by the bridge in the middle -- a genuine
+    # two-cluster topology, far from the real network so it can't
+    # accidentally touch it.
+    fixture_edits = [
+        Edit(op="add", layer="streets", feature_id="streets:test-spur-a1", feature={"geometry": {"type": "LineString", "coordinates": [[998800.0, 999000.0], [998900.0, 999000.0]]}}),
+        Edit(op="add", layer="streets", feature_id="streets:test-spur-a2", feature={"geometry": {"type": "LineString", "coordinates": [[998900.0, 999000.0], [999000.0, 999000.0]]}}),
+        Edit(op="add", layer="streets", feature_id="streets:test-bridge", feature={"geometry": {"type": "LineString", "coordinates": [[999000.0, 999000.0], [999100.0, 999000.0]]}}),
+        Edit(op="add", layer="streets", feature_id="streets:test-spur-b1", feature={"geometry": {"type": "LineString", "coordinates": [[999100.0, 999000.0], [999200.0, 999000.0]]}}),
+        Edit(op="add", layer="streets", feature_id="streets:test-spur-b2", feature={"geometry": {"type": "LineString", "coordinates": [[999200.0, 999000.0], [999300.0, 999000.0]]}}),
+    ]
+    with_bridge = base_state._apply_edits_unchecked(fixture_edits)
+    # Bypass patch() to build the fixture (these floating segments would
+    # themselves fail check_street_network_edits_connect); we only want to
+    # test the removal check in isolation here.
+    remove_bridge = Edit(op="remove", layer="streets", feature_id="streets:test-bridge", feature=None)
+    candidate = with_bridge._apply_edits_unchecked([remove_bridge])
+    violations = check_street_removal_preserves_connectivity(candidate, with_bridge)
+    assert len(violations) == 1
+    assert "streets:test-bridge" in violations[0]

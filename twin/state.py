@@ -184,7 +184,7 @@ def patch(state: TwinState, edits: list[Edit]) -> TwinState:
     from twin.invariants import check_all  # local import: avoids a cycle with state.py
 
     candidate = state._apply_edits_unchecked(edits)
-    violations = check_all(candidate)
+    violations = check_all(candidate, parent=state)
     if violations:
         raise TwinInvariantError(violations)
     return candidate
