@@ -17,6 +17,11 @@ interface CapabilitiesAssistant {
 
 export interface CapabilitiesResponse {
   mode: "live" | "mock";
+  product?: string;
+  rosterVersion?: string;
+  expectedAssistants?: number;
+  configuredAssistants?: number;
+  missingAssistants?: string[];
   modelCatalogSize: number;
   assistants: CapabilitiesAssistant[];
 }
@@ -25,7 +30,7 @@ export interface BackboardStatusPanelProps {
   onCapabilitiesLoaded?: (capabilities: CapabilitiesResponse) => void;
 }
 
-/** Introspects `/api/backboard/capabilities`: which of TwinTO's 54 assistants are configured and which model each resolved to. */
+/** Introspects `/api/backboard/capabilities` for the consolidated 16-assistant roster. */
 export function BackboardStatusPanel({ onCapabilitiesLoaded }: BackboardStatusPanelProps) {
   const [capabilities, setCapabilities] = useState<CapabilitiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,31 +83,36 @@ export function BackboardStatusPanel({ onCapabilitiesLoaded }: BackboardStatusPa
       )}
 
       {error && (
-        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-twinto-error">
-          <AlertCircle className="h-3.5 w-3.5" />
+        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-twinto-error">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {error}
         </p>
       )}
 
       {capabilities && (
-        <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1 twinto-scroll">
-          <p className="flex items-center gap-1.5 text-[11px] text-twinto-muted">
-            <Cpu className="h-3 w-3" />
-            {capabilities.modelCatalogSize} model(s) in catalog · {capabilities.assistants.length} assistant(s) configured
+        <div className="mt-3 space-y-2 text-xs text-twinto-muted">
+          <p className="inline-flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            Roster {capabilities.rosterVersion ?? "unknown"} ·{" "}
+            {capabilities.configuredAssistants ?? capabilities.assistants.length}/
+            {capabilities.expectedAssistants ?? 16} configured
           </p>
-          <ul className="space-y-1.5">
+          <p className="inline-flex items-center gap-1.5">
+            <Cpu className="h-3.5 w-3.5" />
+            {capabilities.modelCatalogSize} models in catalog
+          </p>
+          {(capabilities.missingAssistants?.length ?? 0) > 0 && (
+            <p className="text-twinto-amber">
+              Missing: {capabilities.missingAssistants?.join(", ")}
+            </p>
+          )}
+          <ul className="max-h-40 space-y-1 overflow-y-auto twinto-scroll pr-1">
             {capabilities.assistants.map((assistant) => (
-              <li key={assistant.role} className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-twinto-text">
-                    <Users className="h-3 w-3 text-twinto-muted" />
-                    {assistant.name}
-                  </span>
-                  <span className="text-[10px] text-twinto-muted">
-                    {assistant.model.provider}/{assistant.model.name}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] text-twinto-muted">{assistant.description}</p>
+              <li key={assistant.role} className="rounded border border-white/5 bg-white/[0.02] px-2 py-1.5">
+                <span className="font-medium text-twinto-text">{assistant.name.replace(/^TwinTO — /, "")}</span>
+                <span className="block text-[10px] text-twinto-muted">
+                  {assistant.model.provider}/{assistant.model.name} · {assistant.memory} · {assistant.toolNames.length} tools
+                </span>
               </li>
             ))}
           </ul>
