@@ -30,7 +30,6 @@ Run: `uv run python -m data.ingest`
 
 from __future__ import annotations
 
-import json
 import zipfile
 from pathlib import Path
 
