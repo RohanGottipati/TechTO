@@ -4,6 +4,7 @@ import {
   ACCEPT_NEUTRAL,
   ACCEPT_OPPOSE,
   ACCEPT_SUPPORT,
+  BUS_COLOR,
 } from "@/lib/map/palette";
 
 export function Legend() {
@@ -35,6 +36,16 @@ export function Legend() {
           <span aria-hidden className="h-[2px] w-[14px] rounded-full bg-[#7f6ff0]" />
           <span className="text-[9px] uppercase tracking-wider text-muted">
             streetcar
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="h-[2px] w-[14px] rounded-full"
+            style={{ background: BUS_COLOR }}
+          />
+          <span className="text-[9px] uppercase tracking-wider text-muted">
+            bus
           </span>
         </span>
         <span className="flex items-center gap-1.5">

@@ -4,7 +4,9 @@ import { useSimStore, type LayerKey } from "@/store/useSimStore";
 import { cn } from "@/lib/utils/cn";
 
 const LAYERS: Array<{ key: LayerKey; label: string; hint: string }> = [
-  { key: "routes", label: "TTC rail & streetcar", hint: "R" },
+  { key: "rail", label: "TTC rail", hint: "R" },
+  { key: "streetcar", label: "Streetcars", hint: "S" },
+  { key: "bus", label: "TTC buses", hint: "B" },
   { key: "personas", label: "Residents", hint: "P" },
   { key: "districts", label: "Neighbourhood sentiment", hint: "D" },
 ];

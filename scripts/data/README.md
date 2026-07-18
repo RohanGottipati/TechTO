@@ -12,6 +12,14 @@ lines 1/2/4, LRT lines 5/6, streetcars 501-512; the 300-series night routes
 duplicate the same streets), picks the shape serving the most trips per route,
 and simplifies it with Douglas-Peucker at ~6 m tolerance.
 
+## `public/data/ttc-bus-routes.geojson`
+
+Same GTFS package, `build_bus_routes.py`. Keeps bus routes (route_type 3),
+excluding the three-digit 300-series Blue Night routes that duplicate a
+daytime route's streets under a different number (night routes are
+distinguished from legitimate two-digit 30-39 daytime routes by requiring
+exactly three digits). Same shape-selection and simplification as above.
+
 ## `public/data/neighbourhoods.geojson`
 
 Sources, both from open.toronto.ca:

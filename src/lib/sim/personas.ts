@@ -8,7 +8,7 @@ import { hashString, mulberry32 } from "@/lib/random";
 import type { NeighbourhoodCollection, Persona } from "./types";
 
 /** Each dot on the map stands in for roughly this many census residents. */
-export const PERSONS_PER_DOT = 450;
+export const PERSONS_PER_DOT = 1382;
 
 /** Nathan Phillips Square; used as the "downtown" anchor for behaviour priors. */
 export const CITY_CENTER: LngLat = [-79.3832, 43.6532];
