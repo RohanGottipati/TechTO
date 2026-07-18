@@ -1,73 +1,67 @@
-# Skyline — World Explorer
+# TwinTO
 
-Skyline is a reusable, full-screen 3D world and city exploration interface built
-with [CesiumJS](https://cesium.com/), Next.js (App Router), and TypeScript. It
-opens on an interactive globe, lets you fly into configured cities, and inspect
-OpenStreetMap 3D buildings — all through a clean, city-agnostic architecture.
+TwinTO is a simulated Toronto transit digital twin. A 2D MapLibre map of
+downtown Toronto shows Line 1, the 501 Queen streetcar, and a feeder bus;
+census-weighted synthetic citizen cohorts react to candidate schedule
+changes; and a virtual Backboard planning department (54 named specialist
+assistants) proposes, simulates, stress-tests, and recommends interventions
+before a human planner ever sees them.
 
-Toronto is the only configured and enabled city today, but the app is
-architected so that additional cities can be added purely through configuration.
+The flagship demo scenario is the `departure-406-412` 4:06/4:12 PM load
+imbalance at Union station: see `docs/twinto-implementation.md` for the full
+product and engineering specification, and `AGENTS.md` for the research
+invariants this build must never violate.
+
+Nothing here is live TTC data or real public consultation. Every scenario,
+network fixture, cohort, and citizen reaction is explicitly labeled
+`synthetic-fixture` or "simulated" in the UI; see
+`src/lib/backboard/mock-adapter.ts` and `src/lib/citizen-reaction/mock-provider.ts`
+for the offline-first mock providers that make the whole product runnable
+with zero external credentials.
 
 ## Features
 
-- Full-screen interactive 3D globe with Cesium World Terrain.
-- World exploration mode with a slow, subtle globe auto-rotation.
-- Configurable city registry (Toronto is the first enabled city).
-- Smooth world-to-city and city-to-world camera transitions.
-- Toronto globe marker plus a searchable city explorer.
-- OpenStreetMap 3D Buildings with clickable, highlightable buildings.
-- Generic selected-building information drawer (no external enrichment).
-- Layer controls (terrain, buildings, markers, labels, atmosphere, lighting,
-  auto-rotate) and a custom camera control rail.
-- Loading, error, and empty states with a WebGL capability check.
-- Responsive desktop, tablet, and mobile layouts, keyboard shortcuts,
-  reduced-motion support, and accessible controls.
+- 2D MapLibre Toronto map (no 3D, no globe, no Cesium): transit routes and
+  stations, a citizen-density layer, a station crowding heatmap, and an
+  event/incident overlay.
+- A virtual Backboard planning department that frames the problem,
+  establishes a baseline, proposes 2-3 genuinely different schedule
+  candidates, runs a deterministic transit simulator, predicts simulated
+  citizen-cohort reactions, stress-tests the leading candidate against a
+  concert-surge scenario, debates, and reaches a final recommendation, live
+  over SSE.
+- A deterministic transit simulator and stress-tester that has final
+  authority: a Backboard recommendation that fails a hard safety,
+  accessibility, or evidence check is always overridden before it reaches
+  the UI.
+- Local, per-browser run history and an operator follow-up question panel.
+- A fully offline mock mode (`BACKBOARD_MOCK_MODE`, unset by default) so the
+  entire product runs with no API keys.
 
-## Technology stack
+## Development commands
 
-- Next.js (App Router) + React + TypeScript (strict mode)
-- Tailwind CSS
-- CesiumJS (installed via npm — no CDN)
-- Zustand (UI state)
-- Framer Motion (interface transitions)
-- Lucide React (icons)
-- Vitest + React Testing Library (unit tests)
-- Playwright (browser smoke test)
+```bash
+npm install
+npm run dev        # start the dev server (http://localhost:3000)
+npm run build      # production build
+npm run start      # serve the production build
+npm run lint       # eslint
+npm run typecheck  # tsc --noEmit
+npm run test       # vitest unit tests
+npm run test:e2e   # playwright smoke test
+npm run check      # lint + typecheck + test + build
+```
 
-## Cesium ion token setup
-
-Skyline reads a Cesium ion access token from the environment. Never commit a
-real token.
+## Backboard setup
 
 1. Copy the example env file:
    ```bash
    cp .env.example .env.local
    ```
-2. Set your token in `.env.local`:
-   ```
-   NEXT_PUBLIC_CESIUM_ION_TOKEN=your_cesium_ion_token
-   ```
-3. Get a token at <https://ion.cesium.com/tokens>.
-
-If the token is missing, the app renders a polished configuration-error overlay
-with instructions instead of crashing Cesium.
-
-## GridTwin / Backboard setup
-
-GridTwin is a simulated grid-battery control room subsystem that lives inside
-this repository (`src/lib/backboard`, `src/lib/grid`, `src/app/api/backboard`).
-It uses [Backboard](https://backboard.io) as its only AI infrastructure
-provider; see `docs/backboard/architecture.md` for the full design and
-`docs/backboard/knowledge/product-limitations.md` before treating any of its
-output as more than a demo.
-
-1. Copy the example env file if you have not already:
-   ```bash
-   cp .env.example .env.local
-   ```
-2. By default, no setup is required: with `BACKBOARD_API_KEY` unset, the app
-   runs GridTwin entirely offline against a deterministic mock adapter
-   (`BACKBOARD_MOCK_MODE` defaults to on whenever no key is configured).
+2. By default, no setup is required: with `BACKBOARD_API_KEY` unset, TwinTO
+   runs its entire planning department offline against a deterministic mock
+   adapter (`BACKBOARD_MOCK_MODE` defaults to on whenever no key is
+   configured).
 3. To use a real Backboard account, set in `.env.local`:
    ```
    BACKBOARD_API_KEY=your_backboard_api_key
@@ -78,150 +72,40 @@ output as more than a demo.
    ```bash
    npm run backboard:status
    ```
-5. (Live mode only, once) seed the assistant roster and its knowledge
+5. (Live mode only, once) seed the 54-assistant roster and its knowledge
    documents:
    ```bash
    npm run backboard:bootstrap
    ```
-6. (Live mode only, optional) run a real smoke test — key validation, model
-   list, one cheap message, one tool call, one read-only memory check. Skips
-   itself cleanly if no key is configured:
+6. (Live mode only, optional) run a real smoke test:
    ```bash
    npm run backboard:smoke
    ```
-
-See `docs/backboard/demo-script.md` for a full walkthrough, and
-`docs/backboard/` for the rest of the design and knowledge documentation.
-
-## Installation
-
-```bash
-npm install
-```
-
-`npm install` runs a `postinstall` hook that copies Cesium's static assets
-(`Workers`, `ThirdParty`, `Assets`, `Widgets`) into `public/cesium` so they are
-served locally (no CDN). The same copy runs automatically before `dev` and
-`build`.
-
-## Development commands
-
-```bash
-npm run dev        # start the dev server (http://localhost:3000)
-npm run build      # production build
-npm run start      # serve the production build
-npm run lint       # eslint
-npm run typecheck  # tsc --noEmit
-npm run test       # vitest unit tests
-npm run test:e2e   # playwright smoke test
-npm run check      # lint + typecheck + test + build
-npm run cesium:copy # manually copy Cesium static assets
-```
-
-## Production build
-
-```bash
-npm run build
-npm run start
-```
 
 ## Architecture
 
 ```
 src/
-  app/            # Next.js App Router entry (layout, page, error, globals)
-  components/     # UI: world scene, navigation, panels, feedback, mobile, primitives
-  config/cities/  # City config type, Toronto config, and registry
-  hooks/          # keyboard shortcuts, media queries, reduced motion
-  lib/cesium/     # reusable Cesium utilities (viewer, markers, buildings, camera, selection, cleanup)
-  lib/utils/      # cn + formatting helpers
-  store/          # Zustand UI store (serializable state only)
-  types/          # global type declarations
-tests/            # Vitest unit tests
-e2e/              # Playwright smoke test
-scripts/          # copy-cesium-assets.mjs
-public/cesium/    # copied Cesium static assets (generated)
+  app/                    Next.js App Router entry (layout, page, error, globals)
+  components/
+    map/                  MapLibre Toronto map + layers (TransitLayers, CitizenDensityLayer, CrowdHeatmapLayer, EventLayer, MapLegend)
+    twinto/                Product UI: scenario/policy panels, Backboard council, charts
+    navigation/, mobile/, feedback/, primitives/   Shared UI patterns
+  data/transit/           Synthetic fixture network, scenarios, cohorts, events (never live GTFS)
+  lib/
+    transit/               Deterministic transit simulator, metrics, candidate ranker, stress tests
+    citizen-reaction/       Population-simulator provider boundary (mock today)
+    backboard/              Backboard adapter, assistants, orchestrator, tools, SSE
+    twinto/                  Frontend-safe run types, run-history, useBackboardRun hook
+  store/                   Zustand UI stores (map layers/selection, TwinTO panel focus)
+tests/                     Vitest unit tests
+e2e/                       Playwright smoke test
+docs/
+  twinto-implementation.md  Full product and engineering specification
+  archive/gridtwin/         Archived prior GridTwin (battery control room) design docs
 ```
 
-Key design rules:
-
-- Cesium renders client-side only (`WorldScene` is dynamically imported with
-  `ssr: false`). `window.CESIUM_BASE_URL` is set before importing the Cesium
-  runtime, and only type-only imports of Cesium appear at module scope.
-- The Zustand store holds serializable UI state only — never the Viewer,
-  tilesets, handlers, or Cesium feature objects.
-- Reusable Cesium utilities contain no city-specific logic; all city
-  coordinates and camera presets come from `CityConfig`.
-
-## Adding a new city
-
-No renderer modification is required. To add a city:
-
-1. Create a `CityConfig` (e.g. `src/config/cities/vancouver.ts`) with
-   coordinates, `bounds`, and the three camera presets (`overview`, `city`,
-   `close`).
-2. Add it to `cityRegistry` in `src/config/cities/registry.ts`.
-3. Set `enabled: true`.
-
-The globe marker, city explorer entry, preview card, and camera flights are all
-driven by the registry.
-
-## Layer extension points
-
-The Layer panel includes a disabled "Custom data layers" section
-(`No additional data layers are connected.`) as an extension point. Real data
-layers can be added later without changing the core renderer — the Cesium
-utilities and store are intentionally generic.
-
-## Cesium attribution requirement
-
-Cesium's credit/attribution display is intentionally kept visible at all times
-(bottom of the globe). Do not hide or cover it — it is required by Cesium ion's
-terms of use.
-
-## Troubleshooting
-
-### Cesium static asset 404s (Workers / Assets / Widgets / ThirdParty)
-
-These assets are copied into `public/cesium` by `scripts/copy-cesium-assets.mjs`.
-If you see 404s:
-
-```bash
-npm run cesium:copy
-```
-
-Ensure `window.CESIUM_BASE_URL` is `"/cesium/"` (set in `WorldScene`) and that
-`public/cesium` exists after install/build.
-
-### WebGL unavailable
-
-Skyline requires WebGL. If the app shows *"Skyline requires WebGL to display
-the 3D world"*, enable hardware acceleration in your browser or try a different
-browser/device.
-
-## Testing commands
-
-```bash
-npm run test       # unit tests (Vitest + jsdom)
-npm run test:e2e   # Playwright smoke test (requires NEXT_PUBLIC_CESIUM_ION_TOKEN)
-```
-
-The Playwright smoke test opens the app, confirms Skyline branding and the
-Toronto city entry, selects Toronto, opens the preview card, explores the city,
-toggles a layer, and returns to world view. It does not depend on clicking a
-specific external 3D building tile.
-
-### GridTwin / Backboard testing
-
-```bash
-npm run test:backboard      # vitest run tests/backboard-*.test.ts tests/grid-*.test.ts
-npm run backboard:status    # offline-safe capability/roster introspection
-npm run backboard:smoke     # optional live smoke test; skips itself with no key
-npm run test:e2e:backboard  # playwright test e2e/backboard-control-room.spec.ts
-```
-
-`test:backboard` and `backboard:status` both run fully offline against the
-mock adapter by default. `test:e2e:backboard` targets a control-room UI page
-that does not exist yet in this repository; see `docs/backboard/testing.md`
-for the current, honest status of that command. See `docs/backboard/` for
-full GridTwin documentation.
+See `AGENTS.md` for the broader ToronTwin research program this demo sits
+next to, and the invariants (acceptance vs. consequence, distribution vs.
+oracle, opinion as mediator) that any future population-simulator work here
+must respect.

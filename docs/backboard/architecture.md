@@ -1,188 +1,98 @@
-# GridTwin / Backboard Architecture
+# TwinTO Backboard architecture
 
-GridTwin is a self-contained subsystem inside this repository: a simulated
-grid-battery control room that uses [Backboard](https://backboard.io) as its
-only AI infrastructure provider. It has no relationship to MongoDB, FreeSolo,
-or the broader ToronTwin population-simulator design described elsewhere in
-this repo's planning documents; see the note at the top of `AGENTS.md`.
+TwinTO is a 2D Toronto transit digital twin demo. A virtual planning
+department on Backboard proposes schedule interventions for a synthetic
+flagship scenario (16:06 / 16:12 load imbalance at Union Station), scores
+them with a labelled mock CitizenReactionLM, and evaluates them with a
+deterministic local simulator.
+
+This document describes the Backboard branch product. It is separate from
+the ToronTwin research spine in `AGENTS.md`. GridTwin battery docs live
+under `docs/archive/gridtwin/`.
 
 ## Layers
 
 ```
 +-----------------------------------------------------------+
-| src/components/grid/*, src/lib/gridtwin/*                  |
-| Control-room UI components (scenario selector, run          |
-| timeline, candidate comparison, executive summary, final    |
-| recommendation, operator Q&A, previous runs, status panel,  |
-| charts) and client-side run/history plumbing. Built against |
-| an expected page + API contract; see "UI status" below.     |
+| WEB UI (MapLibre 2D + TwinTOAppShell)                      |
+| Toronto map, scenario playback, agent council, policies   |
 +-----------------------------------------------------------+
-| src/app/api/backboard/*                                   |
-| capabilities (read-only introspection) + memory CRUD       |
-| routes only, today. See "UI status" below for what is      |
-| still missing before the control room is actually usable.  |
+| BACKBOARD VIRTUAL PLANNING DEPARTMENT                     |
+| 54 named assistants; flagship run activates ~19-24        |
 +-----------------------------------------------------------+
-| src/lib/backboard/orchestrator.ts                          |
-| runGridTwinOrchestration: drives the 5-role pipeline for   |
-| one asset/scenario run, emits a GridRunEvent stream, and   |
-| applies the deterministic safety override.                 |
+| LOCAL DETERMINISTIC TRANSIT SIMULATOR                     |
+| minute ticks, queues, boarding, stress tests              |
 +-----------------------------------------------------------+
-| src/lib/backboard/{assistant-manifest, model-router,       |
-| run-tool-loop, tool-dispatcher, tools, assistants}.ts       |
-| Resolves assistants by name, picks a model per role,        |
-| drives the tool-call loop, executes tool calls against the |
-| deterministic grid domain.                                  |
-+-----------------------------------------------------------+
-| src/lib/backboard/{client, adapter, wire-types,             |
-| mock-adapter, env}.ts                                       |
-| BackboardAdapter interface with two implementations:         |
-| RestBackboardAdapter (live HTTP+SSE) and                    |
-| MockBackboardAdapter (deterministic, offline, scripted).     |
-+-----------------------------------------------------------+
-| src/lib/grid/*                                              |
-| The deterministic "twin": fixtures, scenario resolution,    |
-| the physical validator, the financial simulator, metrics,   |
-| and the candidate ranker. Never calls Backboard.             |
-+-----------------------------------------------------------+
-| src/data/grid/*.json                                        |
-| Static fixture data: one asset, one baseline day, seven     |
-| scenarios, six similar-scenario records.                     |
+| PROVIDER BOUNDARIES (mock on this branch)                 |
+| CitizenReactionProvider | TransitRepository               |
 +-----------------------------------------------------------+
 ```
 
-Everything below `src/lib/grid` is pure, synchronous, and has no dependency on
-Backboard at all; everything in `src/lib/backboard` depends on `src/lib/grid`
-for ground truth but never the other way around. This is deliberate: the
-deterministic domain must remain independently testable and independently
-correct, whether or not any assistant ever runs.
+## What this branch requires
 
-## Request flow for one orchestration run
+- `BACKBOARD_API_KEY` for live mode; without it, mock mode is automatic
+- Local synthetic fixtures under `src/data/transit/`
+- No MongoDB, FreeSolo, or Cesium credentials
 
-`runGridTwinOrchestration(input)` in `src/lib/backboard/orchestrator.ts`:
+## Mock vs live
 
-1. Looks up the asset and scenario from `src/lib/grid/fixtures.ts`, and
-   resolves the scenario's visible/actual hourly conditions via
-   `src/lib/grid/scenarios.ts`.
-2. Runs the Market Analyst and Renewable Analyst in parallel
-   (`Promise.all`), each a structured turn against its own resolved
-   assistant, returning a strict-JSON `AnalystFinding`.
-3. Runs the Dispatch Planner once, given both findings, producing 2-3
-   candidate dispatch plans as strict JSON, validated against a
-   dynamically-built Zod schema that enforces the exact asset id, scenario
-   id, interval count, and timestamps for this run.
-4. Runs the Risk & Compliance Reviewer once. It calls
-   `validate_dispatch_plan`, `simulate_dispatch_plan`, and
-   `stress_test_dispatch_plan` for every candidate (tool calls execute
-   against the deterministic simulator, cached per-run in a `RunContext`),
-   then `rank_dispatch_candidates`, then returns one structured risk review
-   per candidate.
-5. The orchestrator re-runs `simulateDispatchPlan` locally for any candidate
-   the reviewer forgot to simulate or stress-test, so every candidate always
-   has real evidence (see "Evidence sourcing" below), then computes the
-   deterministic ranking itself via `rankCandidates` (never trusting a
-   ranking an assistant merely repeats back).
-6. Runs the Chief Dispatch Officer once, given both findings, every
-   candidate's simulation summary, the risk reviews, and the deterministic
-   ranking, producing one `FinalRecommendation`.
-7. Applies `applySafetyOverride`: if the Chief's chosen candidate was never
-   ranked or was disqualified by validation, the effective recommendation is
-   forced to `hold_for_operator`, with a stated reason and (when one exists)
-   a fallback to the top valid deterministically-ranked candidate. This is
-   the one piece of the pipeline that no assistant, and no knowledge
-   document, can override.
+| Concern | Mock | Live |
+| --- | --- | --- |
+| Backboard assistants | `MockBackboardAdapter` | Rest API |
+| Citizen reactions | `MockCitizenReactionProvider` | FreeSolo later |
+| Transit data | `FixtureTransitRepository` | Mongo later |
+| Simulation | Always local, deterministic | Always local |
 
-Every stage emits typed `GridRunEvent`s (`run.created`, `agent.started`,
-`tool.requested`, `candidate.simulated`, `recommendation.ready`, `run.completed`,
-etc.) through an `onEvent` callback, deliberately coarser than Backboard's raw
-token stream: only agent/tool lifecycle and grid-domain evidence cross that
-boundary, never raw reasoning text.
+UI badges must label mock Backboard, mock CitizenReactionLM, and
+`synthetic-fixture` data. Never present fixture numbers as real TTC
+measurements or mock reactions as real public opinion.
 
-## Evidence sourcing (`agent` vs `local_fallback`)
+## Orchestration stages
 
-Every `CandidateOutcome` records whether its visible simulation and its
-stress simulation came from a tool call the assistant actually made
-(`"agent"`) or from a local fallback the orchestrator ran itself because the
-assistant never called the tool for that candidate (`"local_fallback"`).
-Both sources run the identical deterministic function
-(`simulateDispatchPlan`); the distinction exists purely so a demo, a test, or
-an operator can see whether the Risk & Compliance Reviewer actually did its
-job for every candidate. See `tests/backboard-orchestrator.test.ts` for the
-fallback case exercised directly.
+```
+run.started
+problem -> baseline -> context (parallel)
+policy.generated
+citizens -> simulation -> impact (parallel)
+stress -> debate
+recommendation.ready -> operator.ready
+run.completed
+```
 
-## Structured output and retries
+Final authority is deterministic: unsafe platform crowding, impossible
+schedules, accessibility failures, infeasible capacity, malformed
+simulation, or missing evidence override the judge.
 
-`runStructuredTurn` (inside `orchestrator.ts`) sends one message expecting
-strict JSON matching a Zod schema. If parsing or validation fails, it feeds
-the exact issue list back on the same thread and retries once by default
-before giving up with an `OrchestrationError`. This is the only retry policy
-in the pipeline; tool-call rounds within one turn are bounded separately by
-`maxRounds` in `runToolLoop`.
+## Assistant bundles
 
-## UI status
+- `CORE_SCHEDULE_BUNDLE`: flagship schedule analysis (~19 roles)
+- `CONCERT_BUNDLE`: event / safety stress roles
+- `WEATHER_BUNDLE`: weather / surface-transit roles
 
-This section is unusually likely to go stale: the control-room UI landed in
-this repository over the course of the same work session that produced this
-documentation pass, so treat the file list below as a snapshot, not a
-promise, and re-verify against `src/app/control/`,
-`src/app/api/backboard/`, and `src/components/grid/` before trusting it.
+Do not call all 54 assistants on every run. Use `selectAssistantBundle`.
 
-As of this writing, the control room is substantially wired up:
+## Key paths
 
-- **`/control/[assetId]`** (`src/app/control/[assetId]/page.tsx`) renders
-  `GridControlRoom` (`src/components/grid/GridControlRoom.tsx`), which
-  assembles every grid component into one page: asset location + Backboard
-  status on the left, SOC/price/renewable charts + constraint status in the
-  center, scenario selection + run controls + the live agent timeline on the
-  right, and a bottom tab strip (Operator Q&A, Executive Summary, Evidence,
-  Previous Runs, Memory).
-- **`POST /api/backboard/run`** (`src/app/api/backboard/run/route.ts`) is a
-  real, working route: it validates the request, rate-limits by client,
-  then streams `runGridTwinOrchestration`'s `GridRunEvent`s as SSE frames
-  (via `src/lib/backboard/sse.ts`'s `createSseStream`/`toGridRunEventEnvelope`)
-  matching the `BackboardRunEventEnvelope` contract in `src/lib/grid/schemas.ts`.
-  `src/lib/gridtwin/use-backboard-run.ts` (the client hook `GridControlRoom`
-  uses) and `src/lib/backboard/stream-parser.ts` (a shared client/server-safe
-  SSE frame parser) both consume this contract.
-- **`POST /api/backboard/operator-question`**
-  (`src/app/api/backboard/operator-question/route.ts`) is also real and
-  working: it streams `src/lib/backboard/operator.ts`'s
-  `askOperatorQuestion` result as SSE (`operator.delta` / `operator.completed`
-  / `operator.failed` events).
-- **A known, current gap**: `OperatorQuestionPanel.tsx` (the component that
-  renders the "Operator Q&A" tab) still calls `POST /api/backboard/ask`, an
-  older placeholder path from before `/api/backboard/operator-question`
-  existed. That endpoint does not exist, so the panel currently falls back
-  to its "not available yet" inline error path even though the real route
-  it should call is now implemented. If you touch this area, point that
-  `fetch` call at `/api/backboard/operator-question` (and its
-  request/response shape) instead of leaving it stale.
-- `src/lib/backboard/executive.ts` and `src/lib/backboard/operator.ts` back
-  the Executive Summary tab and Operator Q&A respectively; see
-  `assistants.md`'s honest note for exactly how they reuse the Chief
-  Dispatch Officer's resolved assistant rather than adding new roster
-  entries.
-- The memory CRUD routes under `src/app/api/backboard/memories/` back the
-  "Memory" tab (`ApprovedMemoryPanel.tsx`), unchanged from
-  `rag-and-memory.md`.
-- `AssetDrawer` remains the entry point from the Skyline globe
-  (`WorldAppShell.tsx` renders it on marker selection); its "Open Control
-  Room" link goes to `/control/[assetId]`.
+| Path | Role |
+| --- | --- |
+| `src/lib/backboard/` | Adapter, roster, tools, orchestrator, SSE |
+| `src/lib/transit/` | Simulator, metrics, ranker, repository |
+| `src/lib/citizen-reaction/` | Provider boundary + mock |
+| `src/data/transit/` | Synthetic fixtures |
+| `src/components/map/` | MapLibre Toronto map |
+| `src/components/twinto/` | Product UI |
+| `docs/backboard/knowledge/` | Indexed transit knowledge docs |
+| `docs/archive/gridtwin/` | Archived battery product docs |
 
-## Server-only boundary
+## Scripts
 
-Every module in `src/lib/backboard` is server-only. `assertServerOnly()` in
-`env.ts` throws if any of them is ever evaluated in a browser context, as a
-defense-in-depth check alongside Next.js's own server/client module
-boundary. No Backboard credential, and no Backboard module, should ever be
-reachable from client-side code; a future UI must talk to
-`src/app/api/backboard/*` routes, never to `src/lib/backboard/*` directly.
+```bash
+npm run backboard:bootstrap          # create TwinTO assistants + upload docs
+npm run backboard:status             # roster / mode status
+npm run backboard:smoke              # live smoke (needs API key)
+npm run backboard:cleanup-gridtwin   # dry-run list of old GridTwin assistants
+npm run backboard:cleanup-gridtwin -- --confirm   # delete them
+```
 
-## Related documents
-
-- `assistants.md`: the actual 5-role roster, and an honest note on which
-  informal role names map onto which real roles or orchestrator stages.
-- `tools.md`: every tool definition and its dispatcher implementation.
-- `rag-and-memory.md`: knowledge documents versus assistant memory.
-- `model-routing.md`: how a model is chosen per role.
-- `testing.md`: how this is tested, offline and (optionally) live.
-- `demo-script.md`: how to actually run and narrate a demo today.
+Cleanup requires `--confirm`. Create TwinTO assistants and verify smoke
+before deleting GridTwin ones.

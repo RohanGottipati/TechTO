@@ -9,13 +9,23 @@ Read this file fully before writing code. It encodes decisions that were argued
 through deliberately. Do not silently re-litigate them; if you think one is
 wrong, say so explicitly and wait.
 
-**Note on GridTwin.** This repository also contains GridTwin, a separate,
-self-contained simulated grid-battery control room demo (`src/lib/backboard`,
-`src/lib/grid`, `docs/backboard/`). GridTwin uses Backboard only for its AI
-infrastructure; it does not use MongoDB or FreeSolo. Any mention of MongoDB,
-FreeSolo, or a Python backend elsewhere in this repo's planning documents
-(e.g. `implementation.md`) does not apply to GridTwin's actual implementation.
-See `docs/backboard/architecture.md` for GridTwin's real design.
+**Note on TwinTO.** This repository also contains TwinTO, a separate,
+self-contained demo product (`src/lib/backboard`, `src/lib/transit`,
+`src/components/twinto`, `docs/twinto-implementation.md`): a simulated
+Toronto transit digital twin where a virtual Backboard planning department
+proposes and stress-tests schedule changes against census-weighted synthetic
+citizen cohorts. TwinTO uses Backboard only for its AI infrastructure; it
+does not use MongoDB or a trained FreeSolo model today (see
+`src/lib/citizen-reaction/mock-provider.ts`). TwinTO is a demo product built
+on top of the same Backboard orchestration patterns this file's research
+program (population-simulator invariants in sections 3-5) targets, not an
+implementation of ToronTwin itself; do not read TwinTO's synthetic-fixture
+citizen reactions as satisfying this file's calibration or retrodiction
+requirements. GridTwin, an earlier grid-battery control room demo that
+predated TwinTO on this branch, has been retired; its design docs are
+archived under `docs/archive/gridtwin/` for reference only and no longer
+describe anything live in this repository. See
+`docs/twinto-implementation.md` for TwinTO's real design.
 
 ---
 

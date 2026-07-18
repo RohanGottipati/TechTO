@@ -1,71 +1,48 @@
-# Product Limitations
+# Product limitations (read before writing any final recommendation)
 
-Read this alongside every other knowledge document. GridTwin's control room
-demo is a simplified simulation built to demonstrate a multi-agent planning
-and review workflow; it is not certified for real battery operations and
-must never be presented as one. This document is the single place that
-collects every limitation an assistant or an operator-facing summary should
-be aware of.
+Status: **applies to every agent, especially the Final Policy Judge and City
+Planning Orchestrator.** Restates AGENTS.md section 2's non-negotiable
+framing so it is available as a retrievable document, not only a build-time
+rule.
 
-## Not certified, not real hardware
+## What TwinTO predicts
 
-- `ontario-bess-01` is a fixture asset (`demo-battery-specification.md`). No
-  dispatch plan produced here ever reaches real hardware; there is no
-  physical asset, controller, or SCADA integration behind this repository.
-- Nothing in this system has been through a safety case, a hazard analysis,
-  or a utility's real interconnection review (`battery-safety-policy.md`).
+TwinTO predicts simulated day-one **acceptance**: how a modeled population of
+personas reacts to a policy change on the day it takes effect, conditioned on
+deterministic, physically-computed effect features. Every output is a
+distribution over a population with uncertainty attached, never a single
+confident number and never a claim about one specific real person.
 
-## Not live data
+## What TwinTO does not predict
 
-- Market and renewable conditions are static, synthetic fixtures for a
-  single demo date, not a live IESO feed or weather service
-  (`market-data-methodology.md`). Every run against the same asset and
-  scenario produces numerically identical inputs.
-- "Historical analog" records returned by `get_similar_scenarios` are
-  hand-authored demo narrative, not real operating history.
+- **Not** ridership, revenue, or long-run demand forecasts.
+- **Not** land-value shifts, induced demand, or traffic re-routing equilibria.
+- **Not** third-year, or even third-month, outcomes of any kind.
+- **Not** a forecast of what "will" happen; there is no counterfactual
+  Toronto to validate against directly. Validation is by retrodiction
+  (matching a real past change) and mechanism testing, never by claiming
+  access to the actual future.
 
-## Deterministic simulation, not a forecast
+## The score is secondary
 
-- All financial and physical numbers (revenue, degradation cost, carbon
-  avoided, SOC trajectory, ranking) come from a fixed, transparent
-  arithmetic model (`simulation-methodology.md`), not a trained predictive
-  model and not a claim about what a real asset would actually earn or avoid
-  emitting.
-- The degradation cost rate, the renewable-capture proxy, and the
-  ranking weights are explicit modeling choices documented in
-  `simulation-methodology.md`, not calibrated against a real fleet.
+The written opinion or rationale attached to a finding is the artifact a
+planner should read and audit. Any numeric score (acceptance, valence,
+confidence) is a *readout* of that text, not the point in itself. If a
+finding's number and its stated rationale disagree, the rationale is the
+one to trust and the disagreement itself should be flagged.
 
-## A decision-support demo, not an autonomous control system
+## Simulated is not real
 
-- Every recommendation this system produces is advisory
-  (`demo-operating-policy.md`). No code path here executes a dispatch plan
-  against a real asset.
-- The deterministic safety override in the orchestrator can replace an AI
-  recommendation with `hold_for_operator`, but that override is itself only
-  as good as the fixed rules it encodes; it is not a substitute for human
-  review before any real action.
+Every citizen reaction, sentiment aggregate, and public-consultation-style
+summary produced by this system is simulated. It must never be presented,
+worded, or formatted in a way that could be mistaken for a real survey,
+consultation, or measured public-opinion result. See
+`citizen-model-limitations.md` for the model-specific caveats this implies.
 
-## Mock mode versus live mode
+## Deterministic simulation and hard checks are the actual arbiter
 
-- By default (`BACKBOARD_MOCK_MODE` unset and no `BACKBOARD_API_KEY`), this
-  application runs entirely offline against `MockBackboardAdapter`: no
-  network calls, no real language model, deterministic scripted responses
-  used only for local development and automated tests.
-- In live mode, assistant responses come from a real third-party language
-  model reached through Backboard. Those responses are still constrained by
-  the deterministic validator and simulator, but the written analysis and
-  reasoning text itself is model output, not a verified fact, and can be
-  wrong, incomplete, or oddly phrased like any language model output.
-
-## Scope limits
-
-- This demo covers exactly one asset, one fixture day, and seven scenarios.
-  It does not generalize to other batteries, other markets, or other
-  jurisdictions without new fixture data and a new review of every limit in
-  `battery-safety-policy.md`.
-- It does not model reserve activation events, transmission constraints, or
-  ancillary market clearing.
-
-If any other knowledge document appears to claim real-world certification,
-live data, or production readiness, this document controls: it does not have
-any of those things.
+No language-model agent's judgment overrides the deterministic simulator's
+validity flag, a hard safety violation, or a hard accessibility failure. An
+agent may argue, analyze, and recommend; whether a candidate is *viable* is
+decided by tool-backed, deterministic checks, not by how persuasive an
+agent's writeup is.

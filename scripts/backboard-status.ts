@@ -1,6 +1,6 @@
 /**
- * Prints the resolved GridTwin/Backboard capabilities: mode (mock/live),
- * base URL, the 5-role assistant roster with its tools/memory/model
+ * Prints the resolved TwinTO/Backboard capabilities: mode (mock/live),
+ * base URL, the 54-role assistant roster with its tools/memory/model
  * selection, and each role's configured knowledge documents. Never prints
  * BACKBOARD_API_KEY or any other secret; only reports whether one is
  * configured.
@@ -53,8 +53,8 @@ async function main(): Promise<void> {
   const mock = isBackboardMockMode();
   const hasKey = getBackboardApiKey().length > 0;
 
-  console.log("GridTwin / Backboard status");
-  console.log("============================");
+  console.log("TwinTO / Backboard status");
+  console.log("==========================");
   console.log(`Mode:              ${mock ? "MOCK (offline)" : "LIVE"}`);
   console.log(`Base URL:          ${getBackboardBaseUrl()}`);
   console.log(`API key present:   ${hasKey ? "yes" : "no"} (value never printed)`);

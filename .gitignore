@@ -16,9 +16,6 @@
 /playwright-report
 /playwright/.cache
 
-# cesium copied static assets (regenerated on install/build)
-/public/cesium
-
 # env
 .env
 .env.local

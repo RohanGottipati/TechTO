@@ -4,7 +4,7 @@
  *   2. Listing models (the same capability catalog model-routing.md
  *      describes).
  *   3. One short, cheap message to a resolved assistant (no tools).
- *   4. One real tool-call round trip (get_asset_spec via the normal
+ *   4. One real tool-call round trip (get_network_snapshot via the normal
  *      tool loop and dispatcher, so it exercises the same code path a real
  *      orchestration run uses).
  *   5. One read-only memory list call (never a write).
@@ -47,8 +47,7 @@ function loadDotEnv(repoRoot: string): void {
 const repoRoot = path.resolve(__dirname, "..");
 loadDotEnv(repoRoot);
 
-const SMOKE_TEST_ASSET_ID = "ontario-bess-01";
-const SMOKE_TEST_SCENARIO_ID = "normal-day";
+const SMOKE_TEST_SCENARIO_ID = "departure-406-412";
 
 async function main(): Promise<void> {
   const { isBackboardMockMode, getBackboardApiKey } = await import("@/lib/backboard/env");
@@ -77,9 +76,9 @@ async function main(): Promise<void> {
     const models = await adapter.listModels();
     console.log(`  ok: ${models.length} model(s) in the catalog.`);
 
-    step = "resolving one assistant (market-analyst)";
+    step = "resolving one assistant (problem-definition)";
     console.log(`[${step}]`);
-    const resolved = await resolveAssistant("market-analyst", adapter);
+    const resolved = await resolveAssistant("problem-definition", adapter);
     console.log(`  ok: assistantId=${resolved.record.assistantId}, model=${resolved.model.provider}/${resolved.model.modelName}`);
 
     step = "2/4 sending one cheap message (no tools)";
@@ -94,14 +93,14 @@ async function main(): Promise<void> {
     });
     console.log(`  ok: status=${messageResult.status}, content=${JSON.stringify(messageResult.content)}`);
 
-    step = "3/4 making one real tool-call round trip (get_asset_spec)";
+    step = "3/4 making one real tool-call round trip (get_network_snapshot)";
     console.log(`[${step}]`);
-    const context = createRunContext(SMOKE_TEST_ASSET_ID, SMOKE_TEST_SCENARIO_ID, adapter);
+    const context = createRunContext(SMOKE_TEST_SCENARIO_ID, adapter);
     const toolResult = await runToolLoop({
       adapter,
       assistantId: resolved.record.assistantId,
-      content: `Call get_asset_spec for assetId "${SMOKE_TEST_ASSET_ID}", then reply with exactly the asset's name and nothing else.`,
-      tools: getToolDefinitions([TOOL_NAMES.GET_ASSET_SPEC]),
+      content: `Call get_network_snapshot, then reply with exactly how many stations it returned and nothing else.`,
+      tools: getToolDefinitions([TOOL_NAMES.GET_NETWORK_SNAPSHOT]),
       modelName: resolved.model.modelName,
       llmProvider: resolved.model.provider,
       jsonOutput: false,

@@ -1,11 +1,6 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
-  "ignorePatterns": [
-    "node_modules/",
-    ".next/",
-    "public/cesium/",
-    "scripts/copy-cesium-assets.mjs"
-  ],
+  "ignorePatterns": ["node_modules/", ".next/"],
   "rules": {
     "@typescript-eslint/no-unused-vars": [
       "error",
