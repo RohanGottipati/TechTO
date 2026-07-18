@@ -12,6 +12,7 @@ import { CameraControlRail } from "@/components/navigation/CameraControlRail";
 import { CameraStatus } from "@/components/navigation/CameraStatus";
 import { LayerPanel } from "@/components/panels/LayerPanel";
 import { BuildingDrawer } from "@/components/panels/BuildingDrawer";
+import { AssetDrawer } from "@/components/grid/AssetDrawer";
 import { HelpPanel } from "@/components/panels/HelpPanel";
 import { SceneLoadingScreen } from "@/components/feedback/SceneLoadingScreen";
 import { SceneErrorOverlay } from "@/components/feedback/SceneErrorOverlay";
@@ -28,12 +29,16 @@ export function WorldAppShell() {
   const loadingStage = useWorldStore((s) => s.loadingStage);
   const sceneError = useWorldStore((s) => s.sceneError);
   const selectedBuilding = useWorldStore((s) => s.selectedBuilding);
+  const selectedGridAssetId = useWorldStore((s) => s.selectedGridAssetId);
   const previewCityId = useWorldStore((s) => s.previewCityId);
   const isLayerPanelOpen = useWorldStore((s) => s.isLayerPanelOpen);
   const isHelpPanelOpen = useWorldStore((s) => s.isHelpPanelOpen);
 
   const clearSelectedBuilding = useWorldStore(
     (s) => s.clearSelectedBuilding
+  );
+  const clearSelectedGridAsset = useWorldStore(
+    (s) => s.clearSelectedGridAsset
   );
   const setPreviewCity = useWorldStore((s) => s.setPreviewCity);
   const toggleLayerPanel = useWorldStore((s) => s.toggleLayerPanel);
@@ -44,6 +49,10 @@ export function WorldAppShell() {
   const handleEscape = useCallback(() => {
     if (selectedBuilding) {
       clearSelectedBuilding();
+      return;
+    }
+    if (selectedGridAssetId) {
+      clearSelectedGridAsset();
       return;
     }
     if (isHelpPanelOpen) {
@@ -67,12 +76,14 @@ export function WorldAppShell() {
     }
   }, [
     selectedBuilding,
+    selectedGridAssetId,
     isHelpPanelOpen,
     isLayerPanelOpen,
     previewCityId,
     mobileExplorerOpen,
     mode,
     clearSelectedBuilding,
+    clearSelectedGridAsset,
     toggleHelpPanel,
     toggleLayerPanel,
     setPreviewCity,
@@ -153,6 +164,17 @@ export function WorldAppShell() {
       ) : (
         <div className="pointer-events-none absolute inset-x-0 bottom-0">
           <BuildingDrawer />
+        </div>
+      )}
+
+      {/* Grid asset (battery) drawer */}
+      {isDesktop ? (
+        <div className="pointer-events-none absolute right-4 top-24 flex justify-end">
+          <AssetDrawer />
+        </div>
+      ) : (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0">
+          <AssetDrawer />
         </div>
       )}
 

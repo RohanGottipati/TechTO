@@ -48,4 +48,5 @@ export function cleanupScene(
 
   refs.buildingTileset = null;
   refs.markerEntities = [];
+  refs.batteryMarkerEntities = [];
 }

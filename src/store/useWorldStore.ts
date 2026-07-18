@@ -34,6 +34,7 @@ type WorldState = {
   activeCityId: string | null;
   previewCityId: string | null;
   selectedBuilding: SelectedBuilding | null;
+  selectedGridAssetId: string | null;
   isSceneReady: boolean;
   isSceneLoading: boolean;
   loadingStage: LoadingStage;
@@ -59,6 +60,8 @@ type WorldActions = {
   setPreviewCity: (cityId: string | null) => void;
   setSelectedBuilding: (building: SelectedBuilding | null) => void;
   clearSelectedBuilding: () => void;
+  setSelectedGridAsset: (assetId: string | null) => void;
+  clearSelectedGridAsset: () => void;
   setSceneReady: (ready: boolean) => void;
   setSceneLoading: (loading: boolean) => void;
   setLoadingStage: (stage: LoadingStage) => void;
@@ -88,6 +91,7 @@ const initialState: WorldState = {
   activeCityId: null,
   previewCityId: null,
   selectedBuilding: null,
+  selectedGridAssetId: null,
   isSceneReady: false,
   isSceneLoading: true,
   loadingStage: "engine",
@@ -115,6 +119,8 @@ export const useWorldStore = create<WorldStore>((set) => ({
   setPreviewCity: (previewCityId) => set({ previewCityId }),
   setSelectedBuilding: (selectedBuilding) => set({ selectedBuilding }),
   clearSelectedBuilding: () => set({ selectedBuilding: null }),
+  setSelectedGridAsset: (selectedGridAssetId) => set({ selectedGridAssetId }),
+  clearSelectedGridAsset: () => set({ selectedGridAssetId: null }),
   setSceneReady: (isSceneReady) => set({ isSceneReady }),
   setSceneLoading: (isSceneLoading) => set({ isSceneLoading }),
   setLoadingStage: (loadingStage) => set({ loadingStage }),

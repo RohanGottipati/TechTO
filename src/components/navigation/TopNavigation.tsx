@@ -65,6 +65,13 @@ export function TopNavigation() {
             Loading
           </StatusPill>
         )}
+        <a
+          href="/control/ontario-bess-01"
+          data-testid="open-gridtwin-control-room"
+          className="hidden rounded-lg border border-[#6287FF]/40 bg-[#6287FF]/10 px-2.5 py-1.5 text-xs font-medium text-[#6287FF] transition-colors hover:bg-[#6287FF]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#55D8E6] sm:inline-flex"
+        >
+          GridTwin
+        </a>
         <IconButton
           label="Toggle help"
           icon={<HelpCircle className="h-5 w-5" />}

@@ -14,6 +14,7 @@ export type SceneRefs = {
   viewer: Viewer | null;
   buildingTileset: Cesium3DTileset | null;
   markerEntities: Entity[];
+  batteryMarkerEntities: Entity[];
   selectionHandler: ScreenSpaceEventHandler | null;
   selectedFeature: Cesium3DTileFeature | null;
   selectedFeatureOriginalColor: unknown;
@@ -24,6 +25,7 @@ export function createSceneRefs(): SceneRefs {
     viewer: null,
     buildingTileset: null,
     markerEntities: [],
+    batteryMarkerEntities: [],
     selectionHandler: null,
     selectedFeature: null,
     selectedFeatureOriginalColor: null,

@@ -24,9 +24,16 @@ import {
   setMarkersVisible,
 } from "@/lib/cesium/createCityMarkers";
 import {
+  createBatteryMarkers,
+  getGridAssetIdFromEntity,
+  isGridAssetMarkerEntity,
+  setBatteryMarkersVisible,
+} from "@/lib/cesium/createBatteryMarkers";
+import {
   createBuildingLayer,
   setBuildingsVisible,
 } from "@/lib/cesium/createBuildingLayer";
+import { listAssets } from "@/lib/grid/fixtures";
 import {
   flyToCity,
   flyToCityClose,
@@ -184,14 +191,28 @@ export default function WorldScene() {
           cities: getEnabledCities(),
         });
 
+        // Simulated grid asset (battery) markers, shown once a city is
+        // entered. Hidden at world scale alongside city markers.
+        localRefs.batteryMarkerEntities = createBatteryMarkers({
+          Cesium,
+          viewer,
+          assets: listAssets(),
+        });
+        setBatteryMarkersVisible(
+          localRefs.batteryMarkerEntities,
+          store.getState().mode !== "world"
+        );
+
         // Building selection handler.
         attachBuildingSelection(
           Cesium,
           viewer,
           localRefs,
           {
-            onSelect: (building) =>
-              store.getState().setSelectedBuilding(building),
+            onSelect: (building) => {
+              store.getState().clearSelectedGridAsset();
+              store.getState().setSelectedBuilding(building);
+            },
             onClear: () => store.getState().clearSelectedBuilding(),
           },
           () => {
@@ -207,16 +228,24 @@ export default function WorldScene() {
         markerHandler.setInputAction(
           (movement: { position: Cartesian2Type }) => {
             const picked = viewer.scene.pick(movement.position);
-            if (
-              Cesium.defined(picked) &&
-              picked.id &&
-              picked.id.entity &&
-              isCityMarkerEntity(picked.id.entity)
-            ) {
-              const cityId = getCityIdFromEntity(picked.id.entity);
+            if (!Cesium.defined(picked) || !picked.id || !picked.id.entity) {
+              return;
+            }
+            const entity = picked.id.entity;
+
+            if (isCityMarkerEntity(entity)) {
+              const cityId = getCityIdFromEntity(entity);
               if (cityId && store.getState().mode === "world") {
                 autoRotateSuspendedRef.current = true;
                 store.getState().setPreviewCity(cityId);
+              }
+              return;
+            }
+
+            if (isGridAssetMarkerEntity(entity)) {
+              const assetId = getGridAssetIdFromEntity(entity);
+              if (assetId && store.getState().mode !== "world") {
+                store.getState().setSelectedGridAsset(assetId);
               }
             }
           },
@@ -370,6 +399,10 @@ export default function WorldScene() {
   }, [mode, cityMarkersEnabled]);
 
   useEffect(() => {
+    setBatteryMarkersVisible(refs.current.batteryMarkerEntities, mode !== "world");
+  }, [mode]);
+
+  useEffect(() => {
     const Cesium = cesiumRef.current;
     if (!Cesium) {
       return;
@@ -472,6 +505,7 @@ export default function WorldScene() {
           restoreSelectedFeatureColor(cesiumRef.current, refs.current);
         }
         s.clearSelectedBuilding();
+        s.clearSelectedGridAsset();
         s.setPreviewCity(null);
         s.setMode("world");
         setBuildingsVisible(refs.current.buildingTileset, false);
