@@ -1,20 +1,14 @@
-@import "cesium/Build/Cesium/Widgets/widgets.css";
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
 
 html,
 body {
   margin: 0;
   padding: 0;
-  background-color: #070a0f;
-  color: #f5f7fa;
-  font-family: var(--font-sans);
+  background-color: #0c0f10;
+  color: #cfd8d0;
+  font-family: var(--font-ui), system-ui, sans-serif;
 }
 
 body {
@@ -23,21 +17,37 @@ body {
   overflow: hidden;
 }
 
-/* Keep the Cesium credit / attribution visible and legible. */
-.cesium-widget-credits {
-  color: rgba(245, 247, 250, 0.7) !important;
-  font-size: 11px !important;
+/* MapLibre chrome, restyled for the dark surface. */
+.maplibregl-ctrl-attrib {
+  background: rgba(18, 22, 21, 0.85) !important;
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px !important;
 }
 
-.cesium-credit-logoContainer,
-.cesium-credit-textContainer {
-  color: rgba(245, 247, 250, 0.7) !important;
+.maplibregl-ctrl-attrib a {
+  color: rgba(152, 162, 155, 0.9) !important;
 }
 
-/* Remove the default focus outline only when we provide our own ring. */
-.cesium-viewer,
-.cesium-widget,
-.cesium-widget canvas {
+.maplibregl-ctrl-group {
+  background: rgba(18, 22, 21, 0.92) !important;
+  border: 1px solid rgba(226, 236, 228, 0.08);
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(226, 236, 228, 0.08) !important;
+}
+
+.maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(0.85);
+}
+
+.maplibregl-canvas:focus {
   outline: none;
 }
 

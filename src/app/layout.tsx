@@ -1,11 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import "cesium/Build/Cesium/Widgets/widgets.css";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
+const archivo = Archivo({
+  subsets: ["latin"],
+  variable: "--font-ui",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Skyline | World Explorer",
+  title: "ToronTwin | Toronto simulation dashboard",
   description:
-    "Explore a reusable 3D world interface with Toronto as the first configured city.",
+    "Interactive 2D geospatial dashboard for Toronto: real neighbourhoods, real TTC routes, and a synthetic resident population reacting to policy scenarios.",
 };
 
 export const viewport: Viewport = {
@@ -13,7 +27,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#070A0F",
+  themeColor: "#0c0f10",
 };
 
 export default function RootLayout({
@@ -22,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${archivo.variable} ${plexMono.variable}`}>
       <body>{children}</body>
     </html>
   );

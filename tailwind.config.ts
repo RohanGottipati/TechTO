@@ -5,20 +5,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        skyline: {
-          base: "#070A0F",
-          panel: "rgba(8, 13, 21, 0.78)",
-          border: "rgba(255, 255, 255, 0.10)",
-          cyan: "#55D8E6",
-          blue: "#6287FF",
-          text: "#F5F7FA",
-          muted: "#9AA7B5",
-          warning: "#F4B860",
-          error: "#FF6B6B",
-        },
+        // Charcoal tinted toward the acceptance green, so panels and map
+        // read as one surface.
+        ink: "#0c0f10",
+        "ink-bright": "#e8ede9",
+        "ink-dim": "#cfd8d0",
+        muted: "#98a29b",
+        panel: "rgba(18, 22, 21, 0.92)",
+        hairline: "rgba(226, 236, 228, 0.09)",
+        oppose: "#db6055",
+        support: "#38ad6b",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        ui: ["var(--font-ui)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
     },
   },
