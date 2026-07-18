@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import { useMapStore } from "@/store/useMapStore";
 import { listRoutes, listStations, listStops } from "@/data/transit/network";
+import { placeFromStation } from "@/lib/twinto/place-context";
 
 const ROUTES_SOURCE_ID = "twinto-routes";
 const ROUTES_LINE_LAYER_ID = "twinto-routes-line";
@@ -49,7 +50,7 @@ function stationsGeoJson(): GeoJSON.FeatureCollection<GeoJSON.Point> {
  */
 export function TransitLayers({ map }: { map: MapLibreMap | null }) {
   const selectedStationId = useMapStore((s) => s.selectedStationId);
-  const setSelectedStation = useMapStore((s) => s.setSelectedStation);
+  const selectPlace = useMapStore((s) => s.selectPlace);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -110,10 +111,12 @@ export function TransitLayers({ map }: { map: MapLibreMap | null }) {
     });
 
     const onStationClick = (event: MapLayerMouseEvent) => {
+      event.preventDefault();
       const feature = event.features?.[0];
       const stationId = feature?.properties?.stationId;
       if (typeof stationId === "string") {
-        setSelectedStation(stationId);
+        const place = placeFromStation(stationId);
+        if (place) selectPlace(place);
       }
     };
     map.on("click", STATIONS_CIRCLE_LAYER_ID, onStationClick);
@@ -136,7 +139,7 @@ export function TransitLayers({ map }: { map: MapLibreMap | null }) {
         if (map.getSource(id)) map.removeSource(id);
       }
     };
-  }, [map, setSelectedStation]);
+  }, [map, selectPlace]);
 
   useEffect(() => {
     if (!map || !mountedRef.current || !map.getLayer(SELECTED_LAYER_ID)) return;

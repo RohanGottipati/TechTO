@@ -4,13 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapCanvas } from "./MapCanvas";
 import { ScenarioPanel } from "./ScenarioPanel";
 import { LayersPanel } from "./LayersPanel";
-import { DistributionPanel } from "./DistributionPanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { Legend } from "./Legend";
+import { MapChatBar } from "@/components/chat/MapChatBar";
+import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
 import { buildPersonas } from "@/lib/sim/personas";
 import { SCENARIOS } from "@/lib/sim/scenarios";
 import { runScenario } from "@/lib/sim/engine";
 import { useSimStore } from "@/store/useSimStore";
+import { useMapStore } from "@/store/useMapStore";
 import type {
   NeighbourhoodCollection,
   Persona,
@@ -78,7 +80,10 @@ export function Dashboard() {
   // Escape clears the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") useSimStore.getState().select(null);
+      if (e.key === "Escape") {
+        useSimStore.getState().select(null);
+        useMapStore.getState().clearPlaceSelection();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -122,11 +127,6 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom: citywide distribution */}
-      <div className="pointer-events-none absolute bottom-4 left-4 z-10 hidden md:left-[320px] md:block">
-        <DistributionPanel />
-      </div>
-
       {/* Right: neighbourhood inspector */}
       {data && selectedCode && (
         <div className="pointer-events-none absolute right-4 top-4 z-10">
@@ -134,9 +134,18 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Legend, clear of the maplibre controls */}
-      <div className="pointer-events-none absolute bottom-4 right-14 z-10 hidden lg:block">
+      {/* Legend, clear of the maplibre controls and chat bar */}
+      <div className="pointer-events-none absolute bottom-28 right-14 z-10 hidden lg:block">
         <Legend />
+      </div>
+
+      <BuildingMiniChat />
+
+      {/* Bottom: liquid-glass City Copilot */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3 sm:p-4">
+        <div className="pointer-events-auto w-full max-w-3xl px-1 md:px-0">
+          <MapChatBar enablePlanningRun={false} />
+        </div>
       </div>
 
       {status === "loading" && (

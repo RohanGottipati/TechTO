@@ -202,3 +202,32 @@ export function prepareMockOperatorAnswer(adapter: MockBackboardAdapter, questio
     },
   ]);
 }
+
+/**
+ * Scripts a deterministic place / building mini-chat answer for mock mode.
+ * Scripts every conversational specialist that selectChatAgentForTask may pick.
+ */
+export function prepareMockPlaceChatAnswer(
+  adapter: MockBackboardAdapter,
+  question: string,
+  placeLabel?: string | null,
+): void {
+  const answer = {
+    answer:
+      `Mock Backboard Mode place answer for: "${question.slice(0, 120)}"` +
+      (placeLabel ? ` (near ${placeLabel})` : "") +
+      ". Grounded in TwinTO synthetic neighbourhood and station fixtures from the database layer. " +
+      "This is decision support only; not a live TTC feed.",
+    citedEvidence: ["tool:get_land_use_context", "tool:get_transit_accessibility", "storage:places"],
+    mapActions: [],
+  };
+  for (const key of [
+    "city-copilot",
+    "geospatial-planning-agent",
+    "demand-mobility-analyst",
+    "events-incidents-agent",
+    "explanation-map-action-agent",
+  ] as const) {
+    adapter.scriptAssistantResponses(roleAssistantId(key), [{ mockJsonResponse: answer }]);
+  }
+}

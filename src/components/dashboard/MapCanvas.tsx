@@ -4,9 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSimStore } from "@/store/useSimStore";
+import { useMapStore } from "@/store/useMapStore";
 import { getScenario } from "@/lib/sim/scenarios";
 import { resolveAlignment } from "@/lib/sim/engine";
 import { buildWalkParams, walkOffset, type WalkParams } from "@/lib/sim/walk";
+import {
+  placeFromBuildingFeature,
+  placeFromNeighbourhoodArea,
+  polygonCentroid,
+} from "@/lib/twinto/place-context";
 import type {
   NeighbourhoodCollection,
   Persona,
@@ -20,6 +26,19 @@ import {
   ROUTE_COLORS,
   ROUTE_FALLBACK,
 } from "@/lib/map/palette";
+
+const SELECTED_BUILDING_SOURCE = "torontwin-selected-building";
+const SELECTED_BUILDING_FILL = "torontwin-selected-building-fill";
+const SELECTED_BUILDING_LINE = "torontwin-selected-building-line";
+
+function buildingLayerIds(map: maplibregl.Map): string[] {
+  const style = map.getStyle();
+  if (!style?.layers) return [];
+  return style.layers
+    .filter((layer) => /building/i.test(layer.id) && (layer.type === "fill" || layer.type === "fill-extrusion"))
+    .map((layer) => layer.id)
+    .filter((id) => map.getLayer(id));
+}
 
 // Free CARTO "Dark Matter" vector style over real OpenStreetMap data.
 const BASEMAP_STYLE =
@@ -427,6 +446,30 @@ export function MapCanvas({
         filter: ["==", ["id"], -1],
       });
 
+      map.addSource(SELECTED_BUILDING_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: SELECTED_BUILDING_FILL,
+        type: "fill",
+        source: SELECTED_BUILDING_SOURCE,
+        paint: {
+          "fill-color": "#5BA3F5",
+          "fill-opacity": 0.32,
+        },
+      });
+      map.addLayer({
+        id: SELECTED_BUILDING_LINE,
+        type: "line",
+        source: SELECTED_BUILDING_SOURCE,
+        paint: {
+          "line-color": "#8EC5FF",
+          "line-width": 2,
+          "line-opacity": 0.95,
+        },
+      });
+
       loadedRef.current = true;
       setReady(true);
       onReady();
@@ -503,12 +546,63 @@ export function MapCanvas({
 
     map.on("click", (e) => {
       if (!loadedRef.current) return;
+
+      const buildingLayers = buildingLayerIds(map);
+      const buildingHits =
+        buildingLayers.length > 0
+          ? map.queryRenderedFeatures(e.point, { layers: buildingLayers })
+          : [];
+      if (buildingHits[0]?.geometry) {
+        const feature = buildingHits[0];
+        const coordinates = polygonCentroid(feature.geometry as GeoJSON.Geometry);
+        if (coordinates) {
+          const place = placeFromBuildingFeature({
+            featureId: feature.id,
+            coordinates,
+            properties: (feature.properties ?? {}) as Record<string, unknown>,
+          });
+          useMapStore.getState().selectPlace(place);
+          const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+          source?.setData({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: feature.geometry as GeoJSON.Geometry,
+              },
+            ],
+          });
+          return;
+        }
+      }
+
       const hits = map.queryRenderedFeatures(e.point, {
         layers: ["nbhd-fill"],
       });
       if (hits.length > 0) {
-        useSimStore.getState().select(String(hits[0].properties.code));
+        const feature = hits[0];
+        const code = String(feature.properties?.code ?? "");
+        const props = nbhdByCode.get(code);
+        const coordinates =
+          polygonCentroid(feature.geometry as GeoJSON.Geometry) ??
+          (e.lngLat ? ([e.lngLat.lng, e.lngLat.lat] as [number, number]) : null);
+        if (code && props && coordinates) {
+          useMapStore.getState().selectPlace(
+            placeFromNeighbourhoodArea({
+              code,
+              name: props.name,
+              coordinates,
+            }),
+          );
+        }
+        const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        source?.setData({ type: "FeatureCollection", features: [] });
+        useSimStore.getState().select(code || null);
       } else {
+        useMapStore.getState().clearPlaceSelection();
+        const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+        source?.setData({ type: "FeatureCollection", features: [] });
         useSimStore.getState().select(null);
       }
     });

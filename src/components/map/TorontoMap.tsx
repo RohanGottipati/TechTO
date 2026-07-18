@@ -13,8 +13,14 @@ import { NeighbourhoodHighlightLayer } from "@/components/map/NeighbourhoodHighl
 import { InterventionDiffLayer } from "@/components/map/InterventionDiffLayer";
 import { MapLegend } from "@/components/map/MapLegend";
 import { DEFAULT_MAP_STYLE_URL, TORONTO_VIEW } from "@/lib/map/map-config";
+import { placeFromBuildingFeature, polygonCentroid } from "@/lib/twinto/place-context";
 
 export { DEFAULT_MAP_STYLE_URL, TORONTO_VIEW };
+
+const BUILDING_LAYER_ID = "building";
+const SELECTED_BUILDING_SOURCE = "twinto-selected-building";
+const SELECTED_BUILDING_FILL = "twinto-selected-building-fill";
+const SELECTED_BUILDING_LINE = "twinto-selected-building-line";
 
 export interface StationCrowdLevel {
   stationId: string;
@@ -38,7 +44,9 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
   const mapRef = useRef<MapLibreMap | null>(null);
   const [map, setMap] = useState<MapLibreMap | null>(null);
 
-  const setSelectedStation = useMapStore((s) => s.setSelectedStation);
+  const clearPlaceSelection = useMapStore((s) => s.clearPlaceSelection);
+  const selectPlace = useMapStore((s) => s.selectPlace);
+  const selectedPlace = useMapStore((s) => s.selectedPlace);
   const layers = useMapStore((s) => s.layers);
   const cameraTarget = useMapStore((s) => s.cameraTarget);
 
@@ -58,16 +66,96 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
 
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
-    instance.on("load", () => setMap(instance));
-    instance.on("click", () => {
-      // Clicks on empty map area (not swallowed by a layer's own handler
-      // in TransitLayers) clear the current station selection.
-      setSelectedStation(null);
+    const applyBuildingSelection = (feature: maplibregl.MapGeoJSONFeature) => {
+      if (!feature.geometry) return;
+      const coordinates = polygonCentroid(feature.geometry as GeoJSON.Geometry);
+      if (!coordinates) return;
+      const place = placeFromBuildingFeature({
+        featureId: feature.id,
+        coordinates,
+        properties: (feature.properties ?? {}) as Record<string, unknown>,
+      });
+      selectPlace(place);
+
+      const source = instance.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      if (source) {
+        source.setData({
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: {},
+              geometry: feature.geometry as GeoJSON.Geometry,
+            },
+          ],
+        });
+      }
+    };
+
+    const onMapClick = (event: maplibregl.MapMouseEvent) => {
+      if (event.defaultPrevented) return;
+
+      const stationLayerIds = ["twinto-stations-circle"].filter((id) => Boolean(instance.getLayer(id)));
+      const stationHits =
+        stationLayerIds.length > 0 ? instance.queryRenderedFeatures(event.point, { layers: stationLayerIds }) : [];
+      if (stationHits.length > 0) return;
+
+      // Query the basemap building layer even when TwinTO overlays sit above it.
+      const buildingHits = instance.getLayer(BUILDING_LAYER_ID)
+        ? instance.queryRenderedFeatures(event.point, { layers: [BUILDING_LAYER_ID] })
+        : [];
+      if (buildingHits[0]) {
+        applyBuildingSelection(buildingHits[0]);
+        return;
+      }
+
+      clearPlaceSelection();
+      const source = instance.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+      if (source) {
+        source.setData({ type: "FeatureCollection", features: [] });
+      }
+    };
+
+    instance.on("load", () => {
+      if (!instance.getSource(SELECTED_BUILDING_SOURCE)) {
+        instance.addSource(SELECTED_BUILDING_SOURCE, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+      }
+      if (!instance.getLayer(SELECTED_BUILDING_FILL)) {
+        instance.addLayer({
+          id: SELECTED_BUILDING_FILL,
+          type: "fill",
+          source: SELECTED_BUILDING_SOURCE,
+          paint: {
+            "fill-color": "#3B82F6",
+            "fill-opacity": 0.28,
+          },
+        });
+      }
+      if (!instance.getLayer(SELECTED_BUILDING_LINE)) {
+        instance.addLayer({
+          id: SELECTED_BUILDING_LINE,
+          type: "line",
+          source: SELECTED_BUILDING_SOURCE,
+          paint: {
+            "line-color": "#2563EB",
+            "line-width": 2,
+            "line-opacity": 0.9,
+          },
+        });
+      }
+
+      setMap(instance);
     });
+
+    instance.on("click", onMapClick);
 
     mapRef.current = instance;
 
     return () => {
+      instance.off("click", onMapClick);
       instance.remove();
       mapRef.current = null;
       setMap(null);
@@ -84,6 +172,15 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
       essential: true,
     });
   }, [map, cameraTarget]);
+
+  useEffect(() => {
+    if (!map) return;
+    const source = map.getSource(SELECTED_BUILDING_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    if (!selectedPlace || selectedPlace.kind !== "building") {
+      source.setData({ type: "FeatureCollection", features: [] });
+    }
+  }, [map, selectedPlace]);
 
   return (
     <div className="relative h-full w-full">

@@ -246,6 +246,66 @@ export async function persistOperatorThreadTurn(input: {
   }
 }
 
+/** Persist one place / building mini-chat turn (kind: place-chat). */
+export async function persistPlaceChatThreadTurn(input: {
+  threadId: string;
+  scenarioId: string;
+  question: string;
+  answer: string;
+  questionId: string;
+  assistantKey: string;
+  placeId?: string | null;
+}): Promise<{ persisted: boolean; threadId: string }> {
+  if (!isMongoConfigured()) return { persisted: false, threadId: input.threadId };
+
+  const now = new Date().toISOString();
+  const threadId = input.threadId || `thread-${randomUUID()}`;
+
+  try {
+    const db = await getMongoDb();
+    const newMessages = [
+      {
+        messageId: `${input.questionId}:user`,
+        role: "user",
+        content: input.question,
+        recordedAt: now,
+      },
+      {
+        messageId: `${input.questionId}:assistant`,
+        role: "assistant",
+        content: input.answer,
+        recordedAt: now,
+        assistantKey: input.assistantKey,
+      },
+    ];
+
+    const existing = await db.collection(COLLECTIONS.backboardThreads).findOne({ threadId });
+    const priorMessages = Array.isArray(existing?.messages) ? existing.messages : [];
+
+    await db.collection(COLLECTIONS.backboardThreads).updateOne(
+      { threadId },
+      {
+        $set: {
+          threadId,
+          kind: "place-chat",
+          scenarioId: input.scenarioId,
+          placeId: input.placeId ?? null,
+          assistantKey: input.assistantKey,
+          status: "active",
+          messages: [...priorMessages, ...newMessages],
+          updatedAt: now,
+          provenance: DEMO_PROVENANCE,
+          createdAt: existing?.createdAt ?? now,
+        },
+      },
+      { upsert: true },
+    );
+    return { persisted: true, threadId };
+  } catch {
+    return { persisted: false, threadId };
+  }
+}
+
 export async function getPlanningRun(runId: string): Promise<Record<string, unknown> | null> {
   if (!isMongoConfigured()) return null;
   const db = await getMongoDb();

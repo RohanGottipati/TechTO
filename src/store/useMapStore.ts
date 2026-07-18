@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import type { SelectedMapPlace } from "@/lib/twinto/place-context";
+
 export interface MapLayerVisibility {
   transit: boolean;
   parcels: boolean;
@@ -23,6 +25,9 @@ interface MapState {
   cameraTarget: { center: [number, number]; zoom: number } | null;
   highlightedNeighbourhoodIds: string[];
   candidateMarkers: CandidateMarker[];
+  /** Place selected for the floating mini chat (building footprint or station). */
+  selectedPlace: SelectedMapPlace | null;
+  buildingMiniChatOpen: boolean;
 }
 
 interface MapActions {
@@ -34,6 +39,9 @@ interface MapActions {
   setCameraTarget: (target: { center: [number, number]; zoom: number } | null) => void;
   setHighlightedNeighbourhoods: (ids: string[]) => void;
   setCandidateMarkers: (markers: CandidateMarker[]) => void;
+  selectPlace: (place: SelectedMapPlace) => void;
+  clearPlaceSelection: () => void;
+  setBuildingMiniChatOpen: (open: boolean) => void;
   reset: () => void;
 }
 
@@ -55,6 +63,8 @@ const initialState: MapState = {
   cameraTarget: null,
   highlightedNeighbourhoodIds: [],
   candidateMarkers: [],
+  selectedPlace: null,
+  buildingMiniChatOpen: false,
 };
 
 export const useMapStore = create<MapStore>((set) => ({
@@ -76,6 +86,20 @@ export const useMapStore = create<MapStore>((set) => ({
   setCameraTarget: (cameraTarget) => set({ cameraTarget }),
   setHighlightedNeighbourhoods: (highlightedNeighbourhoodIds) => set({ highlightedNeighbourhoodIds }),
   setCandidateMarkers: (candidateMarkers) => set({ candidateMarkers }),
+
+  selectPlace: (place) =>
+    set({
+      selectedPlace: place,
+      buildingMiniChatOpen: true,
+      selectedStationId: place.stationId,
+    }),
+  clearPlaceSelection: () =>
+    set({
+      selectedPlace: null,
+      buildingMiniChatOpen: false,
+      selectedStationId: null,
+    }),
+  setBuildingMiniChatOpen: (buildingMiniChatOpen) => set({ buildingMiniChatOpen }),
 
   reset: () => set({ ...initialState, layers: DEFAULT_LAYERS }),
 }));
