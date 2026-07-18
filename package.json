@@ -14,6 +14,7 @@
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "backboard:bootstrap": "tsx scripts/backboard-bootstrap.ts",
     "backboard:cleanup-gridtwin": "tsx scripts/backboard-cleanup-gridtwin.ts",
+    "backboard:consolidate-roster": "tsx scripts/backboard-consolidate-roster.ts",
     "backboard:status": "tsx scripts/backboard-status.ts",
     "backboard:smoke": "tsx scripts/backboard-smoke.ts",
     "test:backboard": "vitest run tests/backboard",

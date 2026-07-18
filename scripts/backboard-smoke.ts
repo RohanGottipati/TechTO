@@ -76,9 +76,9 @@ async function main(): Promise<void> {
     const models = await adapter.listModels();
     console.log(`  ok: ${models.length} model(s) in the catalog.`);
 
-    step = "resolving one assistant (problem-definition)";
+    step = "resolving one assistant (planning-orchestrator)";
     console.log(`[${step}]`);
-    const resolved = await resolveAssistant("problem-definition", adapter);
+    const resolved = await resolveAssistant("planning-orchestrator", adapter);
     console.log(`  ok: assistantId=${resolved.record.assistantId}, model=${resolved.model.provider}/${resolved.model.modelName}`);
 
     step = "2/4 sending one cheap message (no tools)";

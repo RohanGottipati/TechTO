@@ -77,7 +77,9 @@ async function main(): Promise<void> {
   const manifestPath = path.join(manifestDir, "assistant-manifest.local.json");
   mkdirSync(manifestDir, { recursive: true });
   writeFileSync(manifestPath, `${JSON.stringify(manifestFile, null, 2)}\n`, "utf-8");
-  console.log(`Wrote local manifest snapshot (schemaVersion=${manifestFile.schemaVersion}, product=${manifestFile.product}) to ${manifestPath}`);
+  console.log(
+    `Wrote local manifest snapshot (schemaVersion=${manifestFile.schemaVersion}, rosterVersion=${manifestFile.rosterVersion}, product=${manifestFile.product}, assistants=${manifestFile.assistantCount}) to ${manifestPath}`,
+  );
 }
 
 main().catch((error: unknown) => {

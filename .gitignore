@@ -34,3 +34,6 @@ next-env.d.ts
 
 # Backboard local manifests (contain assistant IDs; never commit)
 .backboard/
+
+# Roster reconciliation reports may include remote assistant IDs
+docs/backboard/roster-reconciliation/

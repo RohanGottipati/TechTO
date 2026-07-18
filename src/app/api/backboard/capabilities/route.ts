@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
 import { getAssistantManifest } from "@/lib/backboard/assistant-manifest";
+import { TWINTO_ASSISTANT_KEYS } from "@/lib/backboard/assistants";
+import { MANIFEST_ROSTER_VERSION, MANIFEST_SCHEMA_VERSION } from "@/lib/backboard/manifest-schema";
 import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 
 export const runtime = "nodejs";
@@ -35,8 +37,16 @@ export async function GET() {
       },
     }));
 
+    const configuredKeys = new Set(assistants.map((assistant) => assistant.role));
+    const missingAssistants = TWINTO_ASSISTANT_KEYS.filter((key) => !configuredKeys.has(key));
+
     return NextResponse.json({
       product: "twinto",
+      rosterVersion: MANIFEST_ROSTER_VERSION,
+      schemaVersion: MANIFEST_SCHEMA_VERSION,
+      expectedAssistants: TWINTO_ASSISTANT_KEYS.length,
+      configuredAssistants: assistants.length,
+      missingAssistants,
       mode: adapter.mode,
       citizenReactionProvider: process.env.TWINTO_CITIZEN_REACTION_PROVIDER?.trim() || "mock",
       repositoryProvider: process.env.TWINTO_REPOSITORY_PROVIDER?.trim() || "fixture",
