@@ -9,6 +9,14 @@ Read this file fully before writing code. It encodes decisions that were argued
 through deliberately. Do not silently re-litigate them; if you think one is
 wrong, say so explicitly and wait.
 
+**Note on GridTwin.** This repository also contains GridTwin, a separate,
+self-contained simulated grid-battery control room demo (`src/lib/backboard`,
+`src/lib/grid`, `docs/backboard/`). GridTwin uses Backboard only for its AI
+infrastructure; it does not use MongoDB or FreeSolo. Any mention of MongoDB,
+FreeSolo, or a Python backend elsewhere in this repo's planning documents
+(e.g. `implementation.md`) does not apply to GridTwin's actual implementation.
+See `docs/backboard/architecture.md` for GridTwin's real design.
+
 ---
 
 ## 1. What this project is

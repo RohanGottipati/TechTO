@@ -52,6 +52,47 @@ real token.
 If the token is missing, the app renders a polished configuration-error overlay
 with instructions instead of crashing Cesium.
 
+## GridTwin / Backboard setup
+
+GridTwin is a simulated grid-battery control room subsystem that lives inside
+this repository (`src/lib/backboard`, `src/lib/grid`, `src/app/api/backboard`).
+It uses [Backboard](https://backboard.io) as its only AI infrastructure
+provider; see `docs/backboard/architecture.md` for the full design and
+`docs/backboard/knowledge/product-limitations.md` before treating any of its
+output as more than a demo.
+
+1. Copy the example env file if you have not already:
+   ```bash
+   cp .env.example .env.local
+   ```
+2. By default, no setup is required: with `BACKBOARD_API_KEY` unset, the app
+   runs GridTwin entirely offline against a deterministic mock adapter
+   (`BACKBOARD_MOCK_MODE` defaults to on whenever no key is configured).
+3. To use a real Backboard account, set in `.env.local`:
+   ```
+   BACKBOARD_API_KEY=your_backboard_api_key
+   BACKBOARD_API_BASE_URL=https://app.backboard.io/api
+   BACKBOARD_MOCK_MODE=false
+   ```
+4. Check the resolved setup any time, without printing any secret:
+   ```bash
+   npm run backboard:status
+   ```
+5. (Live mode only, once) seed the assistant roster and its knowledge
+   documents:
+   ```bash
+   npm run backboard:bootstrap
+   ```
+6. (Live mode only, optional) run a real smoke test — key validation, model
+   list, one cheap message, one tool call, one read-only memory check. Skips
+   itself cleanly if no key is configured:
+   ```bash
+   npm run backboard:smoke
+   ```
+
+See `docs/backboard/demo-script.md` for a full walkthrough, and
+`docs/backboard/` for the rest of the design and knowledge documentation.
+
 ## Installation
 
 ```bash
@@ -169,3 +210,18 @@ The Playwright smoke test opens the app, confirms Skyline branding and the
 Toronto city entry, selects Toronto, opens the preview card, explores the city,
 toggles a layer, and returns to world view. It does not depend on clicking a
 specific external 3D building tile.
+
+### GridTwin / Backboard testing
+
+```bash
+npm run test:backboard      # vitest run tests/backboard-*.test.ts tests/grid-*.test.ts
+npm run backboard:status    # offline-safe capability/roster introspection
+npm run backboard:smoke     # optional live smoke test; skips itself with no key
+npm run test:e2e:backboard  # playwright test e2e/backboard-control-room.spec.ts
+```
+
+`test:backboard` and `backboard:status` both run fully offline against the
+mock adapter by default. `test:e2e:backboard` targets a control-room UI page
+that does not exist yet in this repository; see `docs/backboard/testing.md`
+for the current, honest status of that command. See `docs/backboard/` for
+full GridTwin documentation.
