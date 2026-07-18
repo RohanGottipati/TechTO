@@ -16,7 +16,7 @@ describe("GET /api/backboard/capabilities", () => {
 
     const body = await response.json();
     expect(body.mode).toBe("mock");
-    expect(body.assistants).toHaveLength(54);
+    expect(body.assistants).toHaveLength(16);
     expect(body.modelCatalogSize).toBeGreaterThan(0);
 
     const judge = body.assistants.find((a: { role: string }) => a.role === "final-policy-judge");

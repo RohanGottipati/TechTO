@@ -1,138 +1,111 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
 import {
   ASSISTANT_ROSTER,
-  CONCERT_BUNDLE,
-  CORE_SCHEDULE_BUNDLE,
-  WEATHER_BUNDLE,
+  INTENT_BUNDLES,
+  MODEL_PROFILES,
+  TWINTO_ASSISTANT_KEYS,
   getAssistantRole,
   listAssistantRoles,
+  selectAssistantsForIntent,
   selectAssistantBundle,
-  type AssistantRoleKey,
 } from "@/lib/backboard/assistants";
+import { TOOL_DEFINITIONS } from "@/lib/backboard/tools";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 
-describe("ASSISTANT_ROSTER", () => {
-  it("has exactly 54 unique role keys", () => {
-    const keys = Object.keys(ASSISTANT_ROSTER);
-    expect(keys.length).toBe(54);
-    expect(new Set(keys).size).toBe(54);
-  });
+const OLD_SPECIALIST_KEYS = [
+  "problem-definition",
+  "passenger-arrival",
+  "subway-scheduling",
+  "mode-shift",
+  "concert-event",
+  "adversarial-stress",
+  "memory-curator",
+  "devils-advocate",
+];
 
-  it("has a unique assistant name for every role", () => {
-    const names = Object.values(ASSISTANT_ROSTER).map((role) => role.name);
-    expect(new Set(names).size).toBe(names.length);
-  });
-
-  it("never mentions GridTwin, the retired battery-control-room demo, in any active roster name", () => {
-    for (const role of Object.values(ASSISTANT_ROSTER)) {
-      expect(role.name).not.toMatch(/gridtwin/i);
-      expect(role.shortDescription).not.toMatch(/gridtwin/i);
+describe("ASSISTANT_ROSTER consolidated-16", () => {
+  it("has exactly 16 unique role keys matching TWINTO_ASSISTANT_KEYS", () => {
+    expect(TWINTO_ASSISTANT_KEYS).toHaveLength(16);
+    expect(Object.keys(ASSISTANT_ROSTER)).toHaveLength(16);
+    expect(new Set(Object.keys(ASSISTANT_ROSTER)).size).toBe(16);
+    for (const key of TWINTO_ASSISTANT_KEYS) {
+      expect(ASSISTANT_ROSTER[key]).toBeDefined();
     }
   });
 
-  it("every role name identifies it as part of TwinTO", () => {
+  it("has unique TwinTO names and no GridTwin or battery roles", () => {
+    const names = Object.values(ASSISTANT_ROSTER).map((role) => role.name);
+    expect(new Set(names).size).toBe(16);
     for (const role of Object.values(ASSISTANT_ROSTER)) {
       expect(role.name).toMatch(/^TwinTO —/);
+      expect(role.name).not.toMatch(/gridtwin/i);
+      expect(role.name).not.toMatch(/battery/i);
     }
   });
 
-  it("every system prompt carries the shared non-negotiable guard", () => {
+  it("does not keep any old 54-agent specialist keys active", () => {
+    for (const key of OLD_SPECIALIST_KEYS) {
+      expect(ASSISTANT_ROSTER[key as keyof typeof ASSISTANT_ROSTER]).toBeUndefined();
+    }
+  });
+
+  it("every system prompt carries the shared guard", () => {
     for (const role of Object.values(ASSISTANT_ROSTER)) {
       expect(role.systemPrompt).toContain("You must never represent simulated citizen reactions as real public opinion.");
       expect(role.systemPrompt).toContain("You must never reveal private chain-of-thought.");
     }
   });
 
-  it("every role's key matches its own record's key field", () => {
-    for (const [key, role] of Object.entries(ASSISTANT_ROSTER)) {
-      expect(role.key).toBe(key);
+  it("assigns only valid tools and existing knowledge documents", () => {
+    for (const role of Object.values(ASSISTANT_ROSTER)) {
+      for (const tool of role.toolNames) {
+        expect(TOOL_DEFINITIONS[tool]).toBeDefined();
+      }
+      for (const doc of role.knowledgeDocuments) {
+        expect(existsSync(path.join(process.cwd(), doc.repoPath))).toBe(true);
+      }
     }
   });
 
-  it("getAssistantRole resolves a role by key", () => {
-    const role = getAssistantRole("final-policy-judge");
-    expect(role.key).toBe("final-policy-judge");
-    expect(role.name).toContain("Final Policy Judge");
-  });
-
-  it("listAssistantRoles returns every roster entry", () => {
-    expect(listAssistantRoles()).toHaveLength(54);
-  });
-
-  it("only the Memory Curator has non-Readonly memory access other than the adversarial stress agent's off", () => {
-    const nonReadonly = Object.values(ASSISTANT_ROSTER).filter((role) => role.memory !== "Readonly");
-    const byKey = new Map(nonReadonly.map((role) => [role.key, role.memory]));
-    expect(byKey.get("memory-curator")).toBe("Auto");
-    expect(byKey.get("adversarial-stress")).toBe("off");
+  it("uses valid model profiles and memory policies", () => {
+    expect(ASSISTANT_ROSTER["adversarial-reviewer"].memory).toBe("off");
+    expect(ASSISTANT_ROSTER["city-copilot"].memory).toBe("Readonly");
+    expect(ASSISTANT_ROSTER["final-policy-judge"].modelRequirement).toEqual(MODEL_PROFILES.RISK_REASONING);
+    expect(getAssistantRole("final-policy-judge").name).toContain("Final Policy Judge");
+    expect(listAssistantRoles()).toHaveLength(16);
   });
 });
 
-describe("CORE_SCHEDULE_BUNDLE", () => {
-  it("has 19 unique roles that all exist in the roster", () => {
-    expect(CORE_SCHEDULE_BUNDLE.length).toBe(19);
-    expect(new Set(CORE_SCHEDULE_BUNDLE).size).toBe(CORE_SCHEDULE_BUNDLE.length);
-    for (const key of CORE_SCHEDULE_BUNDLE) {
-      expect(ASSISTANT_ROSTER[key]).toBeDefined();
-    }
+describe("intent bundles", () => {
+  it("keeps simple navigation to 3 or fewer assistants", () => {
+    expect(selectAssistantsForIntent("SIMPLE_MAP_NAVIGATION").length).toBeLessThanOrEqual(3);
   });
 
-  it("always includes the final policy judge and evidence auditor", () => {
-    expect(CORE_SCHEDULE_BUNDLE).toContain("final-policy-judge");
-    expect(CORE_SCHEDULE_BUNDLE).toContain("evidence-auditor");
+  it("activates Events and Incident Agent for EVENT_RESPONSE only when needed", () => {
+    expect(selectAssistantsForIntent("EVENT_RESPONSE")).toContain("events-incidents-agent");
+    expect(selectAssistantsForIntent("SCHEDULE_CHANGE")).not.toContain("events-incidents-agent");
+    expect(selectAssistantsForIntent("NEW_STATION_LOCATION")).not.toContain("events-incidents-agent");
+    expect(selectAssistantsForIntent("NEW_STATION_LOCATION", { includeEvents: true })).toContain(
+      "events-incidents-agent",
+    );
   });
-});
 
-describe("selectAssistantBundle", () => {
-  it("returns at least 18 unique roles for the flagship scenario departure-406-412", () => {
+  it("maps the flagship scenario to an event-aware planning bundle", () => {
     const bundle = selectAssistantBundle(FLAGSHIP_SCENARIO_ID);
-    expect(bundle.length).toBeGreaterThanOrEqual(18);
-    expect(new Set(bundle).size).toBe(bundle.length);
+    expect(bundle.length).toBeGreaterThanOrEqual(13);
+    expect(bundle).toContain("final-policy-judge");
+    expect(bundle).toContain("events-incidents-agent");
   });
 
-  it("always includes the concert bundle for the flagship scenario, even without an explicit flag", () => {
-    const bundle = selectAssistantBundle(FLAGSHIP_SCENARIO_ID);
-    for (const key of CONCERT_BUNDLE) {
-      expect(bundle).toContain(key);
-    }
-  });
-
-  it("does not include the concert bundle for a non-flagship scenario by default", () => {
-    const bundle = selectAssistantBundle("streetcar-midday-queen");
-    for (const key of CONCERT_BUNDLE) {
-      expect(bundle).not.toContain(key);
-    }
-  });
-
-  it("adds the concert bundle to a non-flagship scenario when includeConcert is set", () => {
-    const bundle = selectAssistantBundle("streetcar-midday-queen", { includeConcert: true });
-    for (const key of CONCERT_BUNDLE) {
-      expect(bundle).toContain(key);
-    }
-  });
-
-  it("adds the weather bundle only when includeWeather is set", () => {
-    const without = selectAssistantBundle("streetcar-midday-queen");
-    const withWeather = selectAssistantBundle("streetcar-midday-queen", { includeWeather: true });
-    const notAlreadyInCore = WEATHER_BUNDLE.filter((key) => !(CORE_SCHEDULE_BUNDLE as readonly string[]).includes(key));
-    expect(notAlreadyInCore.length).toBeGreaterThan(0);
-    for (const key of notAlreadyInCore) {
-      expect(without).not.toContain(key);
-    }
-    for (const key of WEATHER_BUNDLE) {
-      expect(withWeather).toContain(key);
-    }
-  });
-
-  it("deduplicates roles shared across the core, concert, and weather bundles", () => {
-    const bundle = selectAssistantBundle(FLAGSHIP_SCENARIO_ID, { includeWeather: true });
-    expect(new Set(bundle).size).toBe(bundle.length);
-  });
-
-  it("only returns roles that exist in the roster", () => {
-    const bundle = selectAssistantBundle(FLAGSHIP_SCENARIO_ID, { includeWeather: true });
-    for (const key of bundle as AssistantRoleKey[]) {
-      expect(ASSISTANT_ROSTER[key]).toBeDefined();
+  it("exposes every intent bundle as unique keys from the roster", () => {
+    for (const [intent, bundle] of Object.entries(INTENT_BUNDLES)) {
+      expect(new Set(bundle).size).toBe(bundle.length);
+      for (const key of bundle) {
+        expect(ASSISTANT_ROSTER[key], intent).toBeDefined();
+      }
     }
   });
 });

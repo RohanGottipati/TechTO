@@ -25,7 +25,7 @@ test.describe("TwinTO", () => {
     await expect(page.getByTestId("synthetic-fixture-badge")).toBeVisible();
   });
 
-  test("has no battery, GridTwin, or Cesium text anywhere on the page", async ({ page }) => {
+  test("has no battery, GridTwin, Cesium, or 54-agent roster text on the page", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("twinto-app")).toBeVisible();
 
@@ -34,6 +34,16 @@ test.describe("TwinTO", () => {
     expect(bodyText).not.toMatch(/cesium/i);
     expect(bodyText).not.toMatch(/battery/i);
     expect(bodyText).not.toMatch(/dispatch plan/i);
+    expect(bodyText).not.toMatch(/54 assistant/i);
+  });
+
+  test("shows City Copilot chat and consolidated roster messaging", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("city-copilot-chat")).toBeVisible();
+    await expect(page.getByTestId("city-copilot-input")).toBeVisible();
+    await page.getByTestId("city-copilot-input").fill("Show Liberty Village on the map");
+    await page.getByTestId("city-copilot-send").click();
+    await expect(page.getByText(/SIMPLE_MAP_NAVIGATION/i)).toBeVisible({ timeout: 15_000 });
   });
 
   test("plays the baseline scrubber", async ({ page }) => {

@@ -17,12 +17,12 @@ describe("Backboard memory routes", () => {
     resetAssistantManifestForTests();
   });
 
-  it("lists an empty memory set for the default assistant role (memory-curator)", async () => {
+  it("lists an empty memory set for the default assistant role (explanation-map-action-agent)", async () => {
     const { GET } = await import("@/app/api/backboard/memories/route");
     const response = await GET(new Request("http://localhost/api/backboard/memories"));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.assistantRole).toBe("memory-curator");
+    expect(body.assistantRole).toBe("explanation-map-action-agent");
     expect(body.memories).toEqual([]);
   });
 
@@ -37,7 +37,7 @@ describe("Backboard memory routes", () => {
 
     const addResponse = await POST(
       jsonRequest("http://localhost/api/backboard/memories", "POST", {
-        assistantRole: "memory-curator",
+        assistantRole: "explanation-map-action-agent",
         content: "Operator approved retiming both flagship departures for this scenario.",
       }),
     );

@@ -1,67 +1,48 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { MANIFEST_PRODUCT, MANIFEST_SCHEMA_VERSION, buildAssistantManifestFile } from "@/lib/backboard/manifest-schema";
-import { getAssistantManifest, resetAssistantManifestForTests } from "@/lib/backboard/assistant-manifest";
-import { getBackboardAdapter, resetBackboardAdapterForTests } from "@/lib/backboard/adapter";
-import { clearModelRouterCacheForTests } from "@/lib/backboard/model-router";
-import { ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
+import { ASSISTANT_ROSTER, TWINTO_ASSISTANT_KEYS } from "@/lib/backboard/assistants";
+import {
+  MANIFEST_PRODUCT,
+  MANIFEST_ROSTER_VERSION,
+  MANIFEST_SCHEMA_VERSION,
+  buildAssistantManifestFile,
+} from "@/lib/backboard/manifest-schema";
+import type { ResolvedAssistant } from "@/lib/backboard/assistant-manifest";
 
-describe("manifest-schema constants", () => {
-  it("declares schemaVersion 2 for the twinto product", () => {
-    expect(MANIFEST_SCHEMA_VERSION).toBe(2);
-    expect(MANIFEST_PRODUCT).toBe("twinto");
-  });
-});
+function fakeResolved(): ResolvedAssistant[] {
+  return TWINTO_ASSISTANT_KEYS.map((key, index) => ({
+    role: ASSISTANT_ROSTER[key],
+    record: {
+      assistantId: `mock-${key}`,
+      name: ASSISTANT_ROSTER[key].name,
+      systemPrompt: ASSISTANT_ROSTER[key].systemPrompt,
+      tools: [],
+      createdAt: "2026-07-18T00:00:00.000Z",
+    },
+    model: {
+      provider: "mock",
+      modelName: `model-${index}`,
+      contextLimit: 128000,
+      reason: "test",
+    },
+  }));
+}
 
-describe("buildAssistantManifestFile", () => {
-  beforeEach(() => {
-    process.env.BACKBOARD_MOCK_MODE = "true";
-    resetBackboardAdapterForTests();
-    resetAssistantManifestForTests();
-    clearModelRouterCacheForTests();
-  });
-
-  it("builds a schemaVersion 2 / product twinto snapshot from the resolved assistant manifest", async () => {
-    const adapter = getBackboardAdapter();
-    const manifest = await getAssistantManifest(adapter);
-    const file = buildAssistantManifestFile(manifest);
-
-    expect(file.schemaVersion).toBe(2);
-    expect(file.product).toBe("twinto");
-    expect(file.assistantCount).toBe(Object.keys(ASSISTANT_ROSTER).length);
-    expect(file.assistants).toHaveLength(Object.keys(ASSISTANT_ROSTER).length);
-    expect(typeof file.generatedAt).toBe("string");
-    expect(new Date(file.generatedAt).toString()).not.toBe("Invalid Date");
-  });
-
-  it("includes assistantId, tool count, memory, and model for every entry", async () => {
-    const adapter = getBackboardAdapter();
-    const manifest = await getAssistantManifest(adapter);
-    const file = buildAssistantManifestFile(manifest);
-
-    const judge = file.assistants.find((entry) => entry.role === "final-policy-judge");
-    expect(judge).toBeDefined();
-    expect(judge!.assistantId).toBeTruthy();
-    expect(judge!.toolCount).toBeGreaterThan(0);
-    expect(judge!.memory).toBe("Readonly");
-    expect(judge!.model.provider).toBeTruthy();
-    expect(judge!.model.name).toBeTruthy();
+describe("manifest schema v3", () => {
+  it("builds a consolidated-16 keyed manifest", () => {
+    const file = buildAssistantManifestFile(fakeResolved());
+    expect(file.schemaVersion).toBe(MANIFEST_SCHEMA_VERSION);
+    expect(file.schemaVersion).toBe(3);
+    expect(file.product).toBe(MANIFEST_PRODUCT);
+    expect(file.rosterVersion).toBe(MANIFEST_ROSTER_VERSION);
+    expect(file.assistantCount).toBe(16);
+    expect(Object.keys(file.assistants)).toHaveLength(16);
+    expect(file.assistants["final-policy-judge"].assistantId).toBe("mock-final-policy-judge");
+    expect(file.createdAt).toMatch(/^\d{4}-/);
   });
 
-  it("sorts assistants by role key for a stable diff-friendly file", async () => {
-    const adapter = getBackboardAdapter();
-    const manifest = await getAssistantManifest(adapter);
-    const file = buildAssistantManifestFile(manifest);
-    const roles = file.assistants.map((entry) => entry.role);
-    expect(roles).toEqual([...roles].sort());
-  });
-
-  it("also accepts a plain array of resolved assistants, not just a Map", async () => {
-    const adapter = getBackboardAdapter();
-    const manifest = await getAssistantManifest(adapter);
-    const asArray = Array.from(manifest.values());
-    const fileFromArray = buildAssistantManifestFile(asArray);
-    const fileFromMap = buildAssistantManifestFile(manifest);
-    expect(fileFromArray.assistants).toEqual(fileFromMap.assistants);
+  it("rejects manifests missing a required key", () => {
+    const partial = fakeResolved().slice(0, 15);
+    expect(() => buildAssistantManifestFile(partial)).toThrow(/missing required assistant key/);
   });
 });

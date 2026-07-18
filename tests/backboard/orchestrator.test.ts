@@ -31,7 +31,7 @@ describe("runTwinTOOrchestration (MockBackboardAdapter + prepareMockDemoRun)", (
     expect(result.ranking.length).toBe(result.candidates.length);
     expect(result.aiRecommendation).toBeDefined();
     expect(result.effectiveRecommendation).toBeDefined();
-    expect(result.participatingAgents.length).toBeGreaterThanOrEqual(18);
+    expect(result.participatingAgents.length).toBeGreaterThanOrEqual(12);
     expect(new Set(result.participatingAgents).size).toBe(result.participatingAgents.length);
 
     const eventTypes = events.map((event) => event.type);

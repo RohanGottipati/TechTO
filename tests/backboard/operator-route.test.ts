@@ -131,7 +131,7 @@ describe("POST /api/backboard/operator-question", () => {
     const { getBackboardAdapter } = await import("@/lib/backboard/adapter");
     const { askOperatorQuestion } = await import("@/lib/backboard/operator");
     const adapter = getBackboardAdapter() as MockBackboardAdapter;
-    adapter.scriptAssistantResponses(roleAssistantId("operator-explanation"), [
+    adapter.scriptAssistantResponses(roleAssistantId("explanation-map-action-agent"), [
       { mockContent: "not json at all" },
       { mockContent: "still not json" },
     ]);
