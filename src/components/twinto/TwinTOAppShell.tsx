@@ -31,6 +31,7 @@ import { FinalRecommendation } from "@/components/twinto/FinalRecommendation";
 import { OperatorQuestionPanel } from "@/components/twinto/OperatorQuestionPanel";
 import { PreviousRunsPanel } from "@/components/twinto/PreviousRunsPanel";
 import { BackboardStatusPanel } from "@/components/twinto/BackboardStatusPanel";
+import { CityCopilotChat } from "@/components/chat/CityCopilotChat";
 
 const BASELINE_SEED = 20260718;
 
@@ -233,9 +234,12 @@ export function TwinTOAppShell() {
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-[380px] flex-col gap-2 p-3 pt-24 sm:p-4 sm:pt-28">
             <div className="pointer-events-auto flex-1 min-h-0">{rightPanelContent}</div>
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center p-3 sm:p-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 p-3 sm:p-4">
             <div className="pointer-events-auto w-[min(92vw,640px)]">
               <PlaybackControls scenario={scenario} />
+            </div>
+            <div className="pointer-events-auto w-full">
+              <CityCopilotChat />
             </div>
           </div>
         </>
@@ -244,6 +248,9 @@ export function TwinTOAppShell() {
       {isMobile && (
         <>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 p-3">
+            <div className="pointer-events-auto w-full">
+              <CityCopilotChat />
+            </div>
             <div className="pointer-events-auto w-full">
               <PlaybackControls scenario={scenario} />
             </div>

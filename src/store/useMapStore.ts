@@ -1,10 +1,5 @@
 import { create } from "zustand";
 
-/**
- * Visibility toggles for the TwinTO city-view overlays. Kept as a flat
- * boolean record (rather than a generic string set) so layer keys are
- * type-checked at every call site.
- */
 export interface MapLayerVisibility {
   transit: boolean;
   parcels: boolean;
@@ -13,12 +8,21 @@ export interface MapLayerVisibility {
   policyOverlay: boolean;
 }
 
+export interface CandidateMarker {
+  candidateId: string;
+  coordinates: [number, number];
+  rank: number;
+  label: string;
+}
+
 interface MapState {
   selectedStationId: string | null;
   selectedScenarioId: string | null;
-  /** Minutes since the start of the playback window, for scrubbing a time-based overlay (e.g. transit headways). */
   playbackMinute: number;
   layers: MapLayerVisibility;
+  cameraTarget: { center: [number, number]; zoom: number } | null;
+  highlightedNeighbourhoodIds: string[];
+  candidateMarkers: CandidateMarker[];
 }
 
 interface MapActions {
@@ -27,6 +31,9 @@ interface MapActions {
   setPlaybackMinute: (minute: number) => void;
   toggleLayer: (layer: keyof MapLayerVisibility, visible?: boolean) => void;
   setLayerVisibility: (layers: Partial<MapLayerVisibility>) => void;
+  setCameraTarget: (target: { center: [number, number]; zoom: number } | null) => void;
+  setHighlightedNeighbourhoods: (ids: string[]) => void;
+  setCandidateMarkers: (markers: CandidateMarker[]) => void;
   reset: () => void;
 }
 
@@ -45,6 +52,9 @@ const initialState: MapState = {
   selectedScenarioId: null,
   playbackMinute: 0,
   layers: DEFAULT_LAYERS,
+  cameraTarget: null,
+  highlightedNeighbourhoodIds: [],
+  candidateMarkers: [],
 };
 
 export const useMapStore = create<MapStore>((set) => ({
@@ -62,6 +72,10 @@ export const useMapStore = create<MapStore>((set) => ({
     set((state) => ({
       layers: { ...state.layers, ...layers },
     })),
+
+  setCameraTarget: (cameraTarget) => set({ cameraTarget }),
+  setHighlightedNeighbourhoods: (highlightedNeighbourhoodIds) => set({ highlightedNeighbourhoodIds }),
+  setCandidateMarkers: (candidateMarkers) => set({ candidateMarkers }),
 
   reset: () => set({ ...initialState, layers: DEFAULT_LAYERS }),
 }));
