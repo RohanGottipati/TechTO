@@ -83,12 +83,35 @@ export const finalRecommendationSchema = z
 
 export type FinalRecommendation = z.output<typeof finalRecommendationSchema>;
 
+export const objectiveWeightsSchema = z
+  .object({
+    netValue: z.number().finite(),
+    renewableCapture: z.number().finite(),
+    carbonAvoided: z.number().finite(),
+    degradation: z.number().finite(),
+  })
+  .strict();
+
+export type ObjectiveWeightsInput = z.output<typeof objectiveWeightsSchema>;
+
+/**
+ * The plant-operator-facing brief for one completed run. The four metric
+ * fields and safetyResult are always populated server-side straight from
+ * GridRunResult / SimulationMetrics, never from a model's own arithmetic;
+ * only mainRisk, majorAssumption, limitations, and summary are ever
+ * generated text (see src/lib/backboard/executive.ts).
+ */
 export const executiveSummarySchema = z
   .object({
-    headline: z.string().min(1).max(200),
-    narrative: z.string().min(1).max(2000),
-    highlights: z.array(z.string().max(300)).max(8).default([]),
-    watchItems: z.array(z.string().max(300)).max(8).default([]),
+    simulatedNetValueCad: z.number().finite(),
+    renewableCapturedMwh: z.number().finite(),
+    estimatedCarbonAvoidedKg: z.number().finite(),
+    degradationProxyCad: z.number().finite(),
+    safetyResult: z.enum(["clear", "overridden_for_safety", "hold_for_operator"]),
+    mainRisk: z.string().min(1).max(500),
+    majorAssumption: z.string().min(1).max(500),
+    limitations: z.string().min(1).max(500),
+    summary: z.string().min(1).max(800),
   })
   .strict();
 
@@ -102,3 +125,27 @@ export const operatorExplanationSchema = z
   .strict();
 
 export type OperatorExplanation = z.output<typeof operatorExplanationSchema>;
+
+/**
+ * Frontend-safe envelope every Backboard SSE route wraps its events in (see
+ * src/lib/backboard/sse.ts). payload is deliberately a plain record: the
+ * concrete shape varies per event `type` and is validated further upstream
+ * (e.g. GridRunEvent), but the envelope itself only needs to guarantee it
+ * never carries a raw reasoning/thinking field across the wire.
+ */
+export const backboardRunEventEnvelopeSchema = z
+  .object({
+    eventId: z.string().min(1),
+    runId: z.string().min(1),
+    sequence: z.number().int().nonnegative(),
+    type: z.string().min(1),
+    timestamp: z.string().min(1),
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .strict()
+  .refine((envelope) => !("reasoning" in envelope.payload) && !("thinking" in envelope.payload), {
+    message: "Event envelopes must never carry raw reasoning or thinking content.",
+    path: ["payload"],
+  });
+
+export type BackboardRunEventEnvelope = z.output<typeof backboardRunEventEnvelopeSchema>;

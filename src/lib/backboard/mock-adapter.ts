@@ -104,6 +104,12 @@ export class MockBackboardAdapter implements BackboardAdapter {
     this.scriptedResponsesByAssistant.set(assistantId, [...responses]);
   }
 
+  /** True when at least one scripted response is queued for this assistant. */
+  hasScriptedResponses(assistantId: string): boolean {
+    const queue = this.scriptedResponsesByAssistant.get(assistantId);
+    return Boolean(queue && queue.length > 0);
+  }
+
   private resolveHints(options: SendMessageOptions): MockSendMessageHints {
     const metadataHints = (options.metadata ?? {}) as MockSendMessageHints;
     if (

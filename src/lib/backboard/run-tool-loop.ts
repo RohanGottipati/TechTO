@@ -6,6 +6,7 @@ import type {
   MemoryMode,
   StreamEventHandler,
   ThinkingConfig,
+  WebSearchMode,
 } from "@/lib/backboard/client";
 import { dispatchToolCall, type RunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dispatcher";
 
@@ -23,6 +24,7 @@ export interface RunToolLoopOptions {
   tools?: ChatToolDefinition[];
   thinking?: ThinkingConfig;
   memory?: MemoryMode;
+  webSearch?: WebSearchMode;
   jsonOutput?: boolean;
   metadata?: Record<string, unknown>;
   /** Safety bound on tool-call round trips for one logical turn. */
@@ -60,6 +62,7 @@ export async function runToolLoop(options: RunToolLoopOptions): Promise<RunToolL
       tools: options.tools,
       thinking: options.thinking,
       memory: options.memory,
+      webSearch: options.webSearch,
       jsonOutput: options.jsonOutput,
       metadata: options.metadata,
     },
