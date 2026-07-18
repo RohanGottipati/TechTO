@@ -16,10 +16,10 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="relative h-dvh w-screen overflow-hidden bg-[#070A0F]">
+    <div className="relative h-dvh w-screen overflow-hidden bg-twinto-ink">
       <SceneErrorOverlay
         title="Something went wrong"
-        message="The world experience hit an unexpected error. You can try reloading the scene."
+        message="TwinTO hit an unexpected error. You can try reloading the page."
         onRetry={reset}
       />
     </div>

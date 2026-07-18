@@ -1,9 +1,5 @@
-import { WorldSceneClient } from "@/components/world/WorldSceneClient";
+import { TwinTOAppShell } from "@/components/twinto/TwinTOAppShell";
 
 export default function HomePage() {
-  return (
-    <main className="h-dvh w-screen overflow-hidden bg-[#070A0F]">
-      <WorldSceneClient />
-    </main>
-  );
+  return <TwinTOAppShell />;
 }
