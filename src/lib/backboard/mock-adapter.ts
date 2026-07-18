@@ -94,7 +94,7 @@ export class MockBackboardAdapter implements BackboardAdapter {
   /**
    * Test-only: queue the response(s) a given assistantId will give on its
    * next call(s) to sendMessage, used by orchestrator-level tests that call
-   * runGridTwinOrchestration (which has no per-call metadata hook of its
+   * runTwinTOOrchestration (which has no per-call metadata hook of its
    * own, unlike direct runToolLoop tests). Responses are consumed in order;
    * the last one repeats indefinitely once the queue is down to one, so a
    * stage that only needs a single scripted turn does not have to guess how
@@ -248,6 +248,10 @@ export class MockBackboardAdapter implements BackboardAdapter {
     };
     this.assistants.set(assistantId, updated);
     return updated;
+  }
+
+  async deleteAssistant(assistantId: string): Promise<void> {
+    this.assistants.delete(assistantId);
   }
 
   async uploadAssistantDocument(

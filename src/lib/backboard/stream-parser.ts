@@ -5,7 +5,7 @@
  * server-side tests, and only depends on the Web Streams / fetch globals and
  * the zod envelope schema, both of which are safe in either environment.
  */
-import { backboardRunEventEnvelopeSchema, type BackboardRunEventEnvelope } from "@/lib/grid/schemas";
+import { twinTORunEventEnvelopeSchema as backboardRunEventEnvelopeSchema, type TwinTORunEventEnvelope as BackboardRunEventEnvelope } from "@/lib/transit/schemas";
 
 export interface ParseSseChunkResult {
   events: BackboardRunEventEnvelope[];

@@ -7,8 +7,8 @@ import type { MockBackboardAdapter } from "@/lib/backboard/mock-adapter";
 import { askOperatorQuestion } from "@/lib/backboard/operator";
 import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 import { createSseResponse, createSseStream } from "@/lib/backboard/sse";
-import type { BackboardRunEventEnvelope } from "@/lib/grid/schemas";
-import { requireAsset } from "@/lib/grid/fixtures";
+import type { TwinTORunEventEnvelope } from "@/lib/transit/schemas";
+import { requireScenario } from "@/data/transit/scenarios";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,8 +18,7 @@ const MAX_RUN_CONTEXT_LENGTH = 4000;
 
 const operatorQuestionRequestSchema = z
   .object({
-    assetId: z.string().min(1).max(80),
-    scenarioId: z.string().min(1).max(80).optional(),
+    scenarioId: z.string().min(1).max(80),
     threadId: z.string().min(1).max(200).optional(),
     runContext: z.string().max(MAX_RUN_CONTEXT_LENGTH).optional(),
     question: z.string().min(1).max(MAX_QUESTION_LENGTH),
@@ -41,7 +40,7 @@ function envelope(
   sequence: number,
   type: string,
   payload: Record<string, unknown>,
-): BackboardRunEventEnvelope {
+): TwinTORunEventEnvelope {
   return {
     eventId: `${questionId}:${sequence}`,
     runId: questionId,
@@ -67,9 +66,9 @@ export async function POST(request: Request) {
     return jsonError("Invalid request body.", 400, { issues: parsed.error.issues });
   }
 
-  const { assetId, scenarioId, threadId, runContext, question, includeWebSearch } = parsed.data;
+  const { scenarioId, threadId, runContext, question, includeWebSearch } = parsed.data;
   try {
-    requireAsset(assetId);
+    requireScenario(scenarioId);
   } catch (error) {
     return jsonError(errorMessage(error), 404);
   }
@@ -89,7 +88,6 @@ export async function POST(request: Request) {
   const stream = createSseStream(async (writer) => {
     try {
       const result = await askOperatorQuestion({
-        assetId,
         scenarioId,
         threadId,
         runContext,

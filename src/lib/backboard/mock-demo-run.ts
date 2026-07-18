@@ -2,81 +2,112 @@ import { ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
 import {
   mockAssistantId,
   type MockBackboardAdapter,
-  type MockSendMessageHints,
 } from "@/lib/backboard/mock-adapter";
-import { requireAsset } from "@/lib/grid/fixtures";
-import type {
-  AnalystFinding,
-  DispatchPlanParsed,
-  FinalRecommendation,
-  RiskReview,
-} from "@/lib/grid/schemas";
-import { resolveScenarioConditions } from "@/lib/grid/scenarios";
-import type { ConditionHour, DispatchInterval } from "@/lib/grid/types";
+import type { CitizenCohort } from "@/lib/citizen-reaction/schemas";
+import { requireScenario } from "@/data/transit/scenarios";
+import type { TransitAnalystFinding, TransitIntervention } from "@/lib/transit/schemas";
 
 /**
- * Deterministic mock-mode pipeline used by POST /api/backboard/run when the
- * adapter is the offline mock. Produces:
- * - one malformed first-attempt planner response (forces structured-output retry)
- * - one unsafe candidate (fails reserve validation)
- * - one valid conservative candidate
- * - one valid balanced candidate that the Chief recommends
+ * Deterministic mock-mode script used by POST /api/backboard/run when the
+ * adapter is the offline mock. Rather than scripting all ~25 specialist
+ * roles a flagship run invokes (unscripted roles fall back gracefully to a
+ * local, deterministic finding via orchestrator.ts's runFindingAgent), this
+ * only scripts the roles whose output actually shapes the demo narrative:
+ * - baseline finding (Baseline Analyst)
+ * - 3 policy candidates (Intervention Generator): one that deliberately
+ *   exceeds the vehicle crush capacity (unsafe, rejected by the
+ *   deterministic simulator regardless of mock mode), one modest capacity
+ *   boost, and one balanced retiming of both flagship departures (the
+ *   candidate this script expects to be preferred)
+ * - citizen reactions via a real tool call per candidate (call_citizen_
+ *   reaction_model is the same deterministic/local code path live mode
+ *   uses; nothing about citizen reactions themselves is faked here)
+ * - the Final Policy Judge's recommendation
  *
- * The real local validator and simulator still evaluate every candidate.
+ * The real local ranker, simulator, and stress tester still evaluate every
+ * candidate exactly as they would against a live Backboard response.
  */
+
+export const MOCK_DEMO_CANDIDATE_IDS = {
+  BALANCED_RETIME: "balanced-retime",
+  CAPACITY_BOOST_MODEST: "capacity-boost-modest",
+  UNSAFE_OVERCAPACITY: "unsafe-overcapacity",
+} as const;
 
 function roleAssistantId(role: keyof typeof ASSISTANT_ROSTER): string {
   return mockAssistantId(ASSISTANT_ROSTER[role].name);
 }
 
-function buildPlan(
-  assetId: string,
-  scenarioId: string,
-  candidateId: string,
-  visibleHours: ConditionHour[],
-  overrides: (hour: ConditionHour) => Partial<DispatchInterval> = () => ({}),
-): DispatchPlanParsed {
-  return {
-    schemaVersion: 1,
-    assetId,
-    scenarioId,
-    horizonStart: visibleHours[0].timestamp,
-    intervalMinutes: 60,
-    strategy: candidateId,
-    assumptions: [],
-    warnings: [],
-    intervals: visibleHours.map((hour) => ({
-      timestamp: hour.timestamp,
-      chargeMw: 0,
-      dischargeMw: 0,
-      reserveMw: 20,
-      rationale: "hold",
-      confidence: 0.5,
-      ...overrides(hour),
-    })),
-  };
+function finding(role: string, headline: string, summary: string, confidence = 0.75): TransitAnalystFinding {
+  return { role, headline, summary, keySignals: ["fixture-signal"], confidence };
 }
 
-function analystFinding(role: string, headline: string): AnalystFinding {
-  return {
-    role,
-    headline,
-    summary: `${headline} Summary is fixture-backed demo text for mock mode.`,
-    keySignals: ["fixture-signal"],
-    confidence: 0.75,
-  };
+function buildCandidates(baselineDepartures: string[]): TransitIntervention[] {
+  const [first, second] = baselineDepartures;
+  const retimeActions: TransitIntervention["actions"] = [
+    { type: "shift_departure_minutes", departureId: first, deltaMinutes: 2 },
+  ];
+  if (second) {
+    retimeActions.push({ type: "shift_departure_minutes", departureId: second, deltaMinutes: 1 });
+  }
+  return [
+    {
+      id: MOCK_DEMO_CANDIDATE_IDS.BALANCED_RETIME,
+      label: "Retime both departures to absorb the pre-departure surge",
+      description: `Shift ${first} later by 2 minutes and ${second ?? first} later by 1 minute so the surge that currently overloads ${first} spreads across both departures.`,
+      actions: retimeActions,
+    },
+    {
+      id: MOCK_DEMO_CANDIDATE_IDS.CAPACITY_BOOST_MODEST,
+      label: `Add modest capacity to ${second ?? first}`,
+      description: `Add 100 seats of capacity to ${second ?? first} to absorb overflow without changing the timetable.`,
+      actions: [{ type: "capacity_boost", departureId: second ?? first, extraCapacity: 100 }],
+    },
+    {
+      id: MOCK_DEMO_CANDIDATE_IDS.UNSAFE_OVERCAPACITY,
+      label: `Overcapacity boost on ${first} (intentionally unsafe demo candidate)`,
+      description: `Add 300 seats of capacity to ${first}, well past the vehicle's crush capacity, to exercise the deterministic simulator's hard rejection path.`,
+      actions: [{ type: "capacity_boost", departureId: first, extraCapacity: 300 }],
+    },
+  ];
 }
 
-function reviewFor(candidateId: string, recommendation: RiskReview["recommendation"], riskLevel: RiskReview["riskLevel"]): RiskReview {
+const CITIZEN_COHORT_SUBSET: CitizenCohort[] = [
+  {
+    cohortId: "downtown-commuters",
+    label: "Downtown 9-to-5 commuters",
+    populationWeight: 28,
+    homeNeighborhood: "zone-liberty-village",
+    demographics: { ageBand: "adult", incomeBand: "middle", primaryMode: "transit", hasDisability: false },
+  },
+  {
+    cohortId: "accessibility-users",
+    label: "Wheelchair and mobility-device users",
+    populationWeight: 4,
+    homeNeighborhood: "zone-regent-park",
+    demographics: { ageBand: "adult", incomeBand: "low", primaryMode: "transit", hasDisability: true },
+  },
+  {
+    cohortId: "seniors",
+    label: "Seniors traveling off-peak and peak",
+    populationWeight: 8,
+    homeNeighborhood: "zone-st-lawrence",
+    demographics: { ageBand: "senior", incomeBand: "middle", primaryMode: "transit", hasDisability: false },
+  },
+];
+
+function citizenModelToolCall(scenarioId: string, candidate: TransitIntervention, waitDeltaMinutes: number) {
   return {
-    candidateId,
-    riskLevel,
-    summary:
-      recommendation === "reject"
-        ? `${candidateId} fails deterministic reserve validation and must not be approved.`
-        : `${candidateId} passed validation and simulation on fixture data.`,
-    concerns: recommendation === "reject" ? ["Reserve requirement not met."] : [],
-    recommendation,
+    name: "call_citizen_reaction_model",
+    arguments: {
+      scenarioId,
+      intervention: { id: candidate.id, title: candidate.label, description: candidate.description ?? candidate.label, category: "transit" },
+      cohorts: CITIZEN_COHORT_SUBSET,
+      context: {
+        wait: { beforeMinutes: 6, afterMinutes: Math.max(0, 6 + waitDeltaMinutes) },
+        crowding: { beforeIndex: 0.6, afterIndex: candidate.id === MOCK_DEMO_CANDIDATE_IDS.UNSAFE_OVERCAPACITY ? 0.75 : 0.3 },
+      },
+    },
   };
 }
 
@@ -84,178 +115,88 @@ function reviewFor(candidateId: string, recommendation: RiskReview["recommendati
  * Scripts the process-wide mock adapter so a UI-triggered run (which has no
  * per-request metadata hook) still exercises the full multi-agent path.
  */
-export function prepareMockDemoRun(
-  adapter: MockBackboardAdapter,
-  assetId: string,
-  scenarioId: string,
-): void {
-  const asset = requireAsset(assetId);
-  const visibleHours = resolveScenarioConditions(scenarioId, asset).visibleHours;
+export function prepareMockDemoRun(adapter: MockBackboardAdapter, scenarioId: string): void {
+  const scenario = requireScenario(scenarioId);
 
-  adapter.scriptAssistantResponses(roleAssistantId("market-analyst"), [
+  adapter.scriptAssistantResponses(roleAssistantId("problem-definition"), [
     {
-      mockToolPlan: [[{ name: "get_market_window", arguments: { assetId, scenarioId } }]],
-      mockJsonResponse: analystFinding(
-        "market-analyst",
-        scenarioId === "overnight-wind-surplus"
-          ? "Overnight prices collapse under wind surplus."
-          : "Cheapest hours are overnight; peak value is evening demand.",
+      mockJsonResponse: finding(
+        "problem-definition",
+        `${scenario.baselineDepartures[0] ?? "the first departure"} leaves underused while the following departure is overcrowded`,
+        `Passenger arrivals concentrate in the minutes before ${scenario.baselineDepartures[0] ?? "the first departure"}, denying boardings, while the following departure absorbs the overflow and runs comparatively underused at ${scenario.stationId}.`,
       ),
     },
   ]);
 
-  adapter.scriptAssistantResponses(roleAssistantId("renewable-analyst"), [
+  adapter.scriptAssistantResponses(roleAssistantId("baseline-analyst"), [
     {
-      mockToolPlan: [[{ name: "get_renewable_forecast", arguments: { assetId, scenarioId } }]],
-      mockJsonResponse: analystFinding(
-        "renewable-analyst",
-        scenarioId === "overnight-wind-surplus"
-          ? "Renewable Analyst identified overnight wind surplus."
-          : "Moderate wind and solar; no thermal risk on visible forecast.",
+      mockJsonResponse: finding(
+        "baseline-analyst",
+        "Baseline shows a clear load imbalance between the two flagship departures",
+        `No-intervention baseline for ${scenario.id}: passenger arrivals peak just before the first scheduled departure, producing denied boardings there and an underloaded following departure.`,
       ),
     },
   ]);
 
-  const conservativePlan = buildPlan(assetId, scenarioId, "conservative", visibleHours);
-  const balancedPlan = buildPlan(assetId, scenarioId, "balanced", visibleHours, (hour) => {
-    if (hour.hour >= 0 && hour.hour < 6) {
-      return { chargeMw: 20, rationale: "charge overnight surplus", confidence: 0.7 };
-    }
-    if (hour.hour >= 17 && hour.hour < 21) {
-      return { dischargeMw: 15, rationale: "discharge into evening peak", confidence: 0.7 };
-    }
-    return {};
-  });
-  // Unsafe: commits zero reserve every hour, which the validator rejects.
-  const unsafePlan = buildPlan(assetId, scenarioId, "unsafe-zero-reserve", visibleHours, () => ({
-    reserveMw: 0,
-    dischargeMw: 10,
-    rationale: "chase revenue without reserve (intentionally unsafe demo candidate)",
-    confidence: 0.4,
-  }));
+  const candidates = buildCandidates(scenario.baselineDepartures);
+  adapter.scriptAssistantResponses(roleAssistantId("intervention-generator"), [
+    { mockJsonResponse: { candidates } },
+  ]);
 
-  // First planner attempt is malformed (missing required intervals field) so
-  // the structured-output retry path is exercised; the second attempt is valid.
-  adapter.scriptAssistantResponses(roleAssistantId("dispatch-planner"), [
+  const [balanced, boost, unsafe] = candidates;
+  adapter.scriptAssistantResponses(roleAssistantId("citizen-response"), [
     {
-      mockJsonResponse: {
-        candidates: [
-          { candidateId: "broken", plan: { schemaVersion: 1, assetId, scenarioId } },
+      mockToolPlan: [
+        [
+          citizenModelToolCall(scenarioId, balanced, -2),
+          citizenModelToolCall(scenarioId, boost, -1),
+          citizenModelToolCall(scenarioId, unsafe, 1),
         ],
-      },
-    },
-    {
-      mockToolPlan: [[{ name: "get_asset_spec", arguments: { assetId } }]],
+      ],
       mockJsonResponse: {
-        candidates: [
-          { candidateId: "conservative", plan: conservativePlan },
-          { candidateId: "unsafe-zero-reserve", plan: unsafePlan },
-          { candidateId: "balanced", plan: balancedPlan },
-        ],
+        summary: "Simulated citizen reactions favor the balanced retiming over the capacity boost, and reject the overcapacity candidate as infeasible.",
+        processedCandidateIds: candidates.map((candidate) => candidate.id),
       },
     },
   ]);
 
-  const reviewerHints: MockSendMessageHints = {
-    mockToolPlan: [
-      [
-        {
-          name: "validate_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "conservative", plan: conservativePlan },
-        },
-        {
-          name: "simulate_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "conservative", plan: conservativePlan },
-        },
-        {
-          name: "validate_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "unsafe-zero-reserve", plan: unsafePlan },
-        },
-        {
-          name: "simulate_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "unsafe-zero-reserve", plan: unsafePlan },
-        },
-        {
-          name: "validate_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "balanced", plan: balancedPlan },
-        },
-        {
-          name: "simulate_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "balanced", plan: balancedPlan },
-        },
-      ],
-      [
-        {
-          name: "stress_test_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "conservative", plan: conservativePlan },
-        },
-        {
-          name: "stress_test_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "unsafe-zero-reserve", plan: unsafePlan },
-        },
-        {
-          name: "stress_test_dispatch_plan",
-          arguments: { assetId, scenarioId, candidateId: "balanced", plan: balancedPlan },
-        },
-      ],
-      [
-        {
-          name: "rank_dispatch_candidates",
-          arguments: {
-            assetId,
-            scenarioId,
-            candidateIds: ["conservative", "unsafe-zero-reserve", "balanced"],
-          },
-        },
-      ],
-    ],
-    mockJsonResponse: {
-      reviews: [
-        reviewFor("conservative", "approve_with_caution", "low"),
-        reviewFor("unsafe-zero-reserve", "reject", "high"),
-        reviewFor("balanced", "approve", "low"),
-      ],
+  adapter.scriptAssistantResponses(roleAssistantId("final-policy-judge"), [
+    {
+      mockJsonResponse: {
+        chosenCandidateId: MOCK_DEMO_CANDIDATE_IDS.BALANCED_RETIME,
+        headline: `Recommend retiming both flagship departures at ${scenario.stationId}`,
+        reasoning:
+          "The balanced retiming candidate is valid under both visible and stress-tested conditions, spreads load across both departures, and does not require any capacity that exceeds the vehicle's crush limit. The overcapacity candidate fails deterministic validation outright and the modest capacity boost, while valid, leaves a larger residual wait than the retiming.",
+        tradeoffs: [
+          "The retiming shifts both departures later, which shift-worker and fixed-schedule cohorts are less able to absorb.",
+          "The modest capacity boost was safer to operate but left more residual wait than the retiming.",
+        ],
+        confidence: 0.82,
+        recommendedAction: "approve_with_monitoring",
+      },
     },
-  };
-  adapter.scriptAssistantResponses(roleAssistantId("risk-reviewer"), [reviewerHints]);
-
-  const chiefRecommendation: FinalRecommendation = {
-    chosenCandidateId: "balanced",
-    headline: "Recommend balanced overnight charge and evening discharge.",
-    reasoning:
-      "Balanced is hard-valid on fixture data, captures overnight surplus, and preserves the 20 MW reserve. Unsafe-zero-reserve is rejected by the deterministic validator.",
-    tradeoffs: ["Conservative earns less simulated net value.", "Unsafe candidate fails reserve."],
-    confidence: 0.82,
-    recommendedAction: "approve_with_monitoring",
-  };
-  adapter.scriptAssistantResponses(roleAssistantId("chief-dispatch-officer"), [
-    { mockJsonResponse: chiefRecommendation },
   ]);
 }
 
 /**
  * Scripts a deterministic operator follow-up answer for mock mode. Call this
- * immediately before askOperatorQuestion so the repeating FinalRecommendation
+ * immediately before askOperatorQuestion so the repeating recommendation
  * script left over from prepareMockDemoRun does not poison the Q&A turn.
  */
-export function prepareMockOperatorAnswer(
-  adapter: MockBackboardAdapter,
-  question: string,
-): void {
-  // Always overwrite: prepareMockDemoRun leaves a repeating FinalRecommendation
-  // script on the chief assistant that would otherwise poison Q&A turns.
-  adapter.scriptAssistantResponses(roleAssistantId("chief-dispatch-officer"), [
+export function prepareMockOperatorAnswer(adapter: MockBackboardAdapter, question: string): void {
+  adapter.scriptAssistantResponses(roleAssistantId("operator-explanation"), [
     {
       mockJsonResponse: {
         answer:
           `Mock Backboard Mode answer for: "${question.slice(0, 120)}". ` +
-          "The balanced candidate was preferred because it is hard-valid on fixture data, " +
-          "preserves the 20 MW reserve requirement, and captures overnight surplus without " +
-          "inventing telemetry. This is decision support only; nothing here controls a real battery.",
+          "The balanced retiming candidate was preferred because it is valid on fixture data, spreads load across " +
+          "both flagship departures, and does not require capacity past the vehicle's crush limit. This is " +
+          "decision support only; nothing here controls a real TTC service change, and every citizen reaction " +
+          "cited is a simulated reading, never real public opinion.",
         citedEvidence: [
-          "candidate:balanced",
-          "tool:validate_dispatch_plan",
-          "fixture:ontario-bess-01",
+          `candidate:${MOCK_DEMO_CANDIDATE_IDS.BALANCED_RETIME}`,
+          "tool:run_transit_simulation",
+          "tool:stress_test_intervention",
         ],
       },
     },

@@ -1,5 +1,5 @@
-import type { GridRunEvent } from "@/lib/backboard/orchestrator";
-import type { BackboardRunEventEnvelope } from "@/lib/grid/schemas";
+import type { TwinTORunEvent } from "@/lib/backboard/orchestrator";
+import type { TwinTORunEventEnvelope } from "@/lib/transit/schemas";
 
 /**
  * Encodes one Server-Sent Event. With only (eventId, data) supplied, this
@@ -29,17 +29,18 @@ export function createSseResponse(stream: ReadableStream<Uint8Array>): Response 
 }
 
 /**
- * Maps one internal GridRunEvent to the frontend-safe envelope every
- * Backboard SSE route sends over the wire. GridRunEvent is already coarse
- * (agent/tool lifecycle and grid-domain evidence only, see orchestrator.ts),
- * so this is a reshape, not a redaction pass. `payload` carries the event
- * verbatim (type and runId included) rather than a stripped-down remainder,
- * since consumers (see src/lib/gridtwin/use-backboard-run.ts) are written
- * against `envelope.payload` being a complete GridRunEvent on its own; the
- * outer eventId/runId/sequence/type/timestamp fields are stream bookkeeping
+ * Maps one internal TwinTORunEvent to the frontend-safe envelope every
+ * Backboard SSE route sends over the wire. TwinTORunEvent is already coarse
+ * (agent/tool lifecycle and transit-domain evidence only, see
+ * orchestrator.ts), so this is a reshape, not a redaction pass. `payload`
+ * carries the event verbatim (type and runId included) rather than a
+ * stripped-down remainder, since consumers (see
+ * src/lib/twinto/use-backboard-run.ts) are written against
+ * `envelope.payload` being a complete TwinTORunEvent on its own; the outer
+ * eventId/runId/sequence/type/timestamp fields are stream bookkeeping
  * layered on top, not a replacement for them.
  */
-export function toGridRunEventEnvelope(event: GridRunEvent, sequence: number): BackboardRunEventEnvelope {
+export function toTwinTORunEventEnvelope(event: TwinTORunEvent, sequence: number): TwinTORunEventEnvelope {
   return {
     eventId: `${event.runId}:${sequence}`,
     runId: event.runId,

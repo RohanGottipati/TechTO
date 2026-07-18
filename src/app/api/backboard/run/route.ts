@@ -3,12 +3,11 @@ import { z } from "zod";
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
 import { prepareMockDemoRun } from "@/lib/backboard/mock-demo-run";
 import type { MockBackboardAdapter } from "@/lib/backboard/mock-adapter";
-import { runGridTwinOrchestration, type GridRunEvent } from "@/lib/backboard/orchestrator";
+import { runTwinTOOrchestration, type TwinTORunEvent } from "@/lib/backboard/orchestrator";
 import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 import { clientKeyFor, isRunRateLimited } from "@/lib/backboard/run-rate-limit";
-import { createSseResponse, createSseStream, toGridRunEventEnvelope } from "@/lib/backboard/sse";
-import { objectiveWeightsSchema } from "@/lib/grid/schemas";
-import { requireAsset, requireScenario } from "@/lib/grid/fixtures";
+import { createSseResponse, createSseStream, toTwinTORunEventEnvelope } from "@/lib/backboard/sse";
+import { requireScenario } from "@/data/transit/scenarios";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,23 +17,18 @@ const MAX_ID_LENGTH = 80;
 
 const runRequestSchema = z
   .object({
-    assetId: z.string().min(1).max(MAX_ID_LENGTH),
     scenarioId: z.string().min(1).max(MAX_ID_LENGTH),
-    // Accepted for forward-compatibility with the operator-question route's
-    // shape; not yet wired into the orchestrator, which does not thread a
-    // webSearch option through its per-agent turns (see runStructuredTurn).
     includeWebSearch: z.boolean().optional(),
-    objectiveWeights: objectiveWeightsSchema.optional(),
   })
   .strict();
 
 /**
- * Starts one GridTwin orchestration run and streams its lifecycle as SSE.
- * The response body is a live ReadableStream, so every check that can fail
- * cheaply (rate limit, body size, schema, unknown asset/scenario) happens
- * before the stream is created; once streaming starts, an orchestration
- * failure is reported as a run.failed event by the orchestrator itself
- * rather than as an HTTP error status, since headers are already committed.
+ * Starts one TwinTO planning run and streams its lifecycle as SSE. The
+ * response body is a live ReadableStream, so every check that can fail
+ * cheaply (rate limit, body size, schema, unknown scenario) happens before
+ * the stream is created; once streaming starts, an orchestration failure is
+ * reported as a run.failed event by the orchestrator itself rather than as
+ * an HTTP error status, since headers are already committed.
  */
 export async function POST(request: Request) {
   if (isRunRateLimited(clientKeyFor(request))) {
@@ -58,9 +52,8 @@ export async function POST(request: Request) {
     return jsonError("Invalid request body.", 400, { issues: parsed.error.issues });
   }
 
-  const { assetId, scenarioId, objectiveWeights } = parsed.data;
+  const { scenarioId, includeWebSearch } = parsed.data;
   try {
-    requireAsset(assetId);
     requireScenario(scenarioId);
   } catch (error) {
     return jsonError(errorMessage(error), 404);
@@ -72,27 +65,27 @@ export async function POST(request: Request) {
   });
 
   // Offline UI runs use the mock adapter with no per-request metadata hook, so
-  // script a deterministic demo pipeline (malformed retry, unsafe reject,
-  // valid recommend) before the tool loop starts.
+  // script a deterministic demo pipeline (baseline finding, 3 candidates
+  // including one intentionally unsafe, citizen reactions via a real tool
+  // call, final judge recommendation) before the tool loop starts.
   const adapter = getBackboardAdapter();
   if (adapter.mode === "mock") {
-    prepareMockDemoRun(adapter as MockBackboardAdapter, assetId, scenarioId);
+    prepareMockDemoRun(adapter as MockBackboardAdapter, scenarioId);
   }
 
   let sequence = 0;
   const stream = createSseStream(async (writer) => {
-    await runGridTwinOrchestration({
-      assetId,
+    await runTwinTOOrchestration({
       scenarioId,
-      objectiveWeights,
+      includeWebSearch,
       adapter,
-      onEvent: (event: GridRunEvent) => {
+      onEvent: (event: TwinTORunEvent) => {
         if (aborted || writer.closed) return;
         sequence += 1;
-        writer.send(toGridRunEventEnvelope(event, sequence));
+        writer.send(toTwinTORunEventEnvelope(event, sequence));
       },
     }).catch(() => {
-      // runGridTwinOrchestration already emitted a run.failed event with the
+      // runTwinTOOrchestration already emitted a run.failed event with the
       // error message via onEvent above (see orchestrator.ts); swallow the
       // rethrow here so it does not surface as an unhandled stream.error.
     });

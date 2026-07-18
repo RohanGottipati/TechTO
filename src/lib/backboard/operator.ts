@@ -4,18 +4,16 @@ import type { BackboardAdapter, WebSearchMode } from "@/lib/backboard/client";
 import { runToolLoop } from "@/lib/backboard/run-tool-loop";
 import { createRunContext } from "@/lib/backboard/tool-dispatcher";
 import { getToolDefinitions } from "@/lib/backboard/tools";
-import { operatorExplanationSchema, type OperatorExplanation } from "@/lib/grid/schemas";
+import { operatorExplanationSchema, type OperatorExplanation } from "@/lib/transit/schemas";
 
 export class OperatorQuestionError extends Error {}
 
-const OPERATOR_ROLE = "chief-dispatch-officer" as const;
+const OPERATOR_ROLE = "operator-explanation" as const;
 
 export interface AskOperatorQuestionInput {
-  /** The asset the operator's question concerns; used to give tool calls a real target. */
-  assetId: string;
-  /** The scenario the run was against, if known. Optional: a follow-up question may not name one. */
-  scenarioId?: string;
-  /** Existing chief-dispatch-officer thread to continue; omit to start a fresh thread. */
+  /** The scenario the operator's question concerns; used to give tool calls a real target. */
+  scenarioId: string;
+  /** Existing operator-explanation thread to continue; omit to start a fresh thread. */
   threadId?: string;
   /** Free-text recap of the run (recommendation, key metrics) so the answer does not have to be re-derived. */
   runContext?: string;
@@ -34,8 +32,7 @@ export interface AskOperatorQuestionResult {
 
 function buildOperatorPrompt(input: AskOperatorQuestionInput): string {
   const contextLines = [
-    `Asset: ${input.assetId}.`,
-    input.scenarioId ? `Scenario: ${input.scenarioId}.` : null,
+    `Scenario: ${input.scenarioId}.`,
     input.runContext ? `Run context so far:\n${input.runContext}` : null,
   ].filter((line): line is string => line !== null);
 
@@ -44,10 +41,10 @@ ${contextLines.join("\n")}
 
 Operator question: ${input.question}
 
-Answer as the Chief Dispatch Officer, addressing the operator directly.
+Answer as the TTC Operator Explanation Agent, addressing the operator directly.
 Ground your answer in this specific run's evidence (candidateIds, tool
-results, or memory items), not general knowledge. Call recall_operator_notes
-if the question could relate to a previously-approved operator preference.
+results, or memory items), not general knowledge. Call retrieve_policy_documents
+if a term needs a plain-language definition.
 
 Respond with ONLY JSON matching:
 {"answer": string, "citedEvidence": string[]}
@@ -75,10 +72,10 @@ function parseOperatorAnswer(raw: string | null): { ok: true; value: OperatorExp
 }
 
 /**
- * Asks the operator's question to the Chief Dispatch Officer (the same role
- * that closes out a run, so it can continue that run's thread) and returns a
- * structured, evidence-cited answer. Retries once on malformed JSON, same as
- * the orchestrator's structured turns. `onDelta` lets a caller (the
+ * Asks the operator's question to the TTC Operator Explanation Agent (a
+ * low-cost synthesis role, see assistants.ts) and returns a structured,
+ * evidence-cited answer. Retries once on malformed JSON, same as the
+ * orchestrator's structured turns. `onDelta` lets a caller (the
  * operator-question SSE route) forward content as it streams without ever
  * seeing the model's raw reasoning, since reasoning deltas are never wired
  * into onDelta.
@@ -86,7 +83,7 @@ function parseOperatorAnswer(raw: string | null): { ok: true; value: OperatorExp
 export async function askOperatorQuestion(input: AskOperatorQuestionInput): Promise<AskOperatorQuestionResult> {
   const adapter = input.adapter ?? getBackboardAdapter();
   const resolved = await resolveAssistant(OPERATOR_ROLE, adapter);
-  const context = createRunContext(input.assetId, input.scenarioId ?? "unspecified-scenario", adapter);
+  const context = createRunContext(input.scenarioId, adapter);
   const tools = getToolDefinitions(resolved.role.toolNames);
 
   let loop = await runToolLoop({

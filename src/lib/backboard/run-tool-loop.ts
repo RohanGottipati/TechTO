@@ -48,7 +48,7 @@ export interface RunToolLoopResult {
  * produces a final answer or `maxRounds` is exceeded.
  */
 export async function runToolLoop(options: RunToolLoopOptions): Promise<RunToolLoopResult> {
-  const maxRounds = options.maxRounds ?? 6;
+  const maxRounds = options.maxRounds ?? 8;
   const toolCallLog: ToolCallOutcome[] = [];
 
   let result = await options.adapter.sendMessage(

@@ -8,10 +8,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Read-only introspection endpoint: which assistants are configured, which
- * tools/memory/thinking settings each uses, and which model Backboard's
- * capability catalog resolved for each one. Used by the control room UI to
- * show "who is on this run" and by developers to sanity-check model routing.
+ * Read-only introspection endpoint: which TwinTO assistants are configured,
+ * which tools/memory/thinking settings each uses, and which model Backboard's
+ * capability catalog resolved for each one. Used by the TwinTO UI status
+ * panel and by developers to sanity-check model routing.
  */
 export async function GET() {
   try {
@@ -36,7 +36,10 @@ export async function GET() {
     }));
 
     return NextResponse.json({
+      product: "twinto",
       mode: adapter.mode,
+      citizenReactionProvider: process.env.TWINTO_CITIZEN_REACTION_PROVIDER?.trim() || "mock",
+      repositoryProvider: process.env.TWINTO_REPOSITORY_PROVIDER?.trim() || "fixture",
       modelCatalogSize: models.length,
       assistants,
     });

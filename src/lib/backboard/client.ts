@@ -186,6 +186,7 @@ export interface BackboardAdapter {
   createAssistant(options: CreateAssistantOptions): Promise<AssistantRecord>;
   listAssistants(): Promise<AssistantRecord[]>;
   updateAssistant(assistantId: string, options: Partial<CreateAssistantOptions>): Promise<AssistantRecord>;
+  deleteAssistant(assistantId: string): Promise<void>;
   uploadAssistantDocument(
     assistantId: string,
     filename: string,
@@ -542,6 +543,13 @@ export class RestBackboardAdapter implements BackboardAdapter {
     });
     const wire = (await response.json()) as AssistantWire;
     return mapAssistant(wire);
+  }
+
+  async deleteAssistant(assistantId: string): Promise<void> {
+    await this.request(`/assistants/${assistantId}`, {
+      method: "DELETE",
+      headers: this.headers(),
+    });
   }
 
   async uploadAssistantDocument(

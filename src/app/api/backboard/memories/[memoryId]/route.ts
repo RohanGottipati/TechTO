@@ -13,7 +13,7 @@ interface RouteParams {
 }
 
 const updateSchema = z.object({
-  assistantRole: z.string().min(1).default("chief-dispatch-officer"),
+  assistantRole: z.string().min(1).default("memory-curator"),
   content: z.string().min(1).max(2000),
 });
 
@@ -41,7 +41,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
 export async function DELETE(request: Request, { params }: RouteParams) {
   const url = new URL(request.url);
-  const assistantRole = url.searchParams.get("assistantRole") ?? "chief-dispatch-officer";
+  const assistantRole = url.searchParams.get("assistantRole") ?? "memory-curator";
   if (!isAssistantRoleKey(assistantRole)) {
     return jsonError(`Unknown assistantRole "${assistantRole}".`, 400);
   }

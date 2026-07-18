@@ -2,9 +2,7 @@ import { z } from "zod";
 
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
 import { resolveAssistant } from "@/lib/backboard/assistant-manifest";
-import type {
-  AssistantRoleKey,
-} from "@/lib/backboard/assistants";
+import { selectAssistantBundle, type AssistantRoleKey } from "@/lib/backboard/assistants";
 import type {
   BackboardAdapter,
   ChatToolCall,
@@ -15,103 +13,121 @@ import type {
 import { runToolLoop, type RunToolLoopResult } from "@/lib/backboard/run-tool-loop";
 import { createRunContext, type RunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dispatcher";
 import { getToolDefinitions } from "@/lib/backboard/tools";
-import { rankCandidates } from "@/lib/grid/candidate-ranker";
-import { requireAsset, requireScenario } from "@/lib/grid/fixtures";
+import type { CohortModeShare } from "@/data/transit/cohorts";
+import { listCohorts } from "@/data/transit/cohorts";
+import { listStressOverlays, requireScenario } from "@/data/transit/scenarios";
+import { getCitizenReactionProvider } from "@/lib/citizen-reaction/provider";
+import type { CitizenCohort, CitizenReactionBatchResult, CitizenReactionContext } from "@/lib/citizen-reaction/schemas";
+import { rankInterventions, type RankableIntervention } from "@/lib/transit/candidate-ranker";
+import { simulateTransit } from "@/lib/transit/simulator";
+import { stressTestIntervention, type StressTestOutcome } from "@/lib/transit/stress-tests";
 import {
-  analystFindingSchema,
-  dispatchPlanSchema,
-  finalRecommendationSchema,
-  riskReviewSchema,
-  type AnalystFinding,
-  type DispatchPlanParsed,
-  type FinalRecommendation,
-  type RiskReview,
-} from "@/lib/grid/schemas";
-import { resolveScenarioConditions } from "@/lib/grid/scenarios";
-import { simulateDispatchPlan } from "@/lib/grid/simulator";
-import type {
-  BatteryAsset,
-  ConditionHour,
-  ObjectiveWeights,
-  RankedCandidate,
-  ScenarioDefinition,
-  SimulationResult,
-} from "@/lib/grid/types";
+  finalPolicyRecommendationSchema,
+  transitAnalystFindingSchema,
+  transitInterventionSchema,
+  type FinalPolicyRecommendation,
+  type PolicyCandidate,
+  type TransitAnalystFinding,
+  type TransitScenario,
+  type TransitSimulationResult,
+  type TransitIntervention,
+} from "@/lib/transit/schemas";
 
 export class OrchestrationError extends Error {}
 
 export type EvidenceSource = "agent" | "local_fallback";
 
-export interface CandidateOutcome {
-  candidateId: string;
-  plan: DispatchPlanParsed;
-  simulation: SimulationResult;
-  simulationSource: EvidenceSource;
-  stressSimulation: SimulationResult;
-  stressSimulationSource: EvidenceSource;
+/** The TwinTO agent-role key. Identical to AssistantRoleKey; kept as a named alias so orchestration code reads in domain terms. */
+export type TwinTOAgentRole = AssistantRoleKey;
+
+export interface TwinTOIntervention {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
 }
 
 /**
- * Frontend-safe event stream for one orchestration run. Deliberately coarser
- * than Backboard's raw token stream: only agent/tool lifecycle and grid-domain
- * evidence cross this boundary, never raw reasoning or chain-of-thought text.
+ * Frontend-safe lifecycle stream for one TwinTO planner-agent run: problem
+ * framing -> baseline -> parallel context gathering -> policy generation ->
+ * citizen reaction -> simulation -> parallel impact review -> stress test ->
+ * debate -> final judgment, mirrored by generic agent/tool events. Coarse by
+ * design (AGENTS.md "keep the scored thing legible"): never carries raw
+ * reasoning/thinking content, only lifecycle markers and domain evidence.
  */
-export type GridRunEvent =
-  | { type: "run.created"; runId: string; assetId: string; scenarioId: string }
-  | { type: "agent.started"; runId: string; role: AssistantRoleKey; name: string }
-  | { type: "agent.completed"; runId: string; role: AssistantRoleKey; name: string; summary: string }
-  | { type: "agent.failed"; runId: string; role: AssistantRoleKey; name: string; error: string }
-  | { type: "tool.requested"; runId: string; role: AssistantRoleKey; toolName: string }
-  | { type: "tool.completed"; runId: string; role: AssistantRoleKey; toolName: string; ok: boolean }
-  | { type: "candidate.created"; runId: string; candidateId: string; strategy: string }
-  | {
-      type: "candidate.simulated";
-      runId: string;
-      candidateId: string;
-      valid: boolean;
-      netValueCad: number;
-      source: EvidenceSource;
-    }
-  | { type: "candidate.stress_tested"; runId: string; candidateId: string; valid: boolean; source: EvidenceSource }
-  | { type: "candidates.ranked"; runId: string; ranking: RankedCandidate[] }
+export type TwinTORunEvent =
+  | { type: "run.started"; runId: string; scenarioId: string }
+  | { type: "problem.started"; runId: string }
+  | { type: "problem.completed"; runId: string; summary: string }
+  | { type: "baseline.started"; runId: string }
+  | { type: "baseline.completed"; runId: string; summary: string }
+  | { type: "context.started"; runId: string }
+  | { type: "context.completed"; runId: string; summary: string }
+  | { type: "policy.generated"; runId: string; intervention: TransitIntervention }
+  | { type: "citizens.started"; runId: string }
+  | { type: "citizens.completed"; runId: string; candidateId: string; result: CitizenReactionBatchResult }
+  | { type: "simulation.started"; runId: string }
+  | { type: "simulation.completed"; runId: string; candidateId: string; summary: string }
+  | { type: "impact.started"; runId: string }
+  | { type: "impact.completed"; runId: string; summary: string }
+  | { type: "stress.started"; runId: string }
+  | { type: "stress.completed"; runId: string; candidateId: string; summary: string; invalidated: boolean }
+  | { type: "debate.started"; runId: string }
+  | { type: "debate.completed"; runId: string; summary: string }
   | {
       type: "recommendation.ready";
       runId: string;
-      recommendation: FinalRecommendation;
+      recommendation: FinalPolicyRecommendation;
       overridden: boolean;
       overrideReason?: string;
     }
-  | { type: "run.completed"; runId: string; result: GridRunResult }
-  | { type: "run.failed"; runId: string; error: string };
+  | { type: "operator.ready"; runId: string; question: string }
+  | { type: "run.completed"; runId: string; result: TwinTORunResult }
+  | { type: "run.failed"; runId: string; error: string }
+  | { type: "agent.started"; runId: string; role: TwinTOAgentRole; name: string }
+  | { type: "agent.completed"; runId: string; role: TwinTOAgentRole; name: string; summary: string }
+  | { type: "agent.failed"; runId: string; role: TwinTOAgentRole; name: string; error: string }
+  | { type: "tool.requested"; runId: string; role: TwinTOAgentRole; toolName: string }
+  | { type: "tool.completed"; runId: string; role: TwinTOAgentRole; toolName: string; ok: boolean };
 
-export interface GridRunResult {
+export interface CandidateEvaluation {
+  candidateId: string;
+  intervention: TransitIntervention;
+  simulation: TransitSimulationResult;
+  simulationSource: EvidenceSource;
+  stress: StressTestOutcome | null;
+  stressSource: EvidenceSource;
+  citizenReactions: CitizenReactionBatchResult | null;
+  citizenReactionsSource: EvidenceSource;
+}
+
+export interface TwinTORunResult {
   runId: string;
-  assetId: string;
   scenarioId: string;
-  marketFinding: AnalystFinding;
-  renewableFinding: AnalystFinding;
-  candidates: CandidateOutcome[];
-  riskReviews: RiskReview[];
-  ranking: RankedCandidate[];
-  /** Verbatim structured output from the Chief Dispatch Officer, kept for audit even when overridden. */
-  aiRecommendation: FinalRecommendation;
-  /** What the UI should actually act on: identical to aiRecommendation unless a hard safety override fired. */
-  effectiveRecommendation: FinalRecommendation;
+  problemSummary: string;
+  baselineSummary: string;
+  candidates: TransitIntervention[];
+  simulations: { candidateId: string; result: TransitSimulationResult }[];
+  stressResults: { candidateId: string; result: StressTestOutcome }[];
+  citizenReactions: { candidateId: string; result: CitizenReactionBatchResult }[];
+  ranking: PolicyCandidate[];
+  /** Verbatim structured output from the Final Policy Judge, kept for audit even when overridden. */
+  aiRecommendation: FinalPolicyRecommendation;
+  /** What the UI should actually act on: identical to aiRecommendation unless a hard final-authority override fired. */
+  effectiveRecommendation: FinalPolicyRecommendation;
   recommendationOverridden: boolean;
   overrideReason: string | null;
-  /** True when the AI chose a valid candidate that is not the deterministic rank-1 (soft signal, not an override). */
-  rankDisagreement: boolean;
-  chiefAssistantId: string;
-  chiefThreadId: string;
-  hiddenStressDescription: string | null;
+  judgeAssistantId: string;
+  judgeThreadId: string;
+  /** Every assistant role that actually took part in this run, in invocation order (deduplicated). */
+  participatingAgents: TwinTOAgentRole[];
 }
 
 export interface RunOrchestrationInput {
-  assetId: string;
   scenarioId: string;
-  objectiveWeights?: ObjectiveWeights;
+  includeWebSearch?: boolean;
   adapter?: BackboardAdapter;
-  onEvent?: (event: GridRunEvent) => void;
+  onEvent?: (event: TwinTORunEvent) => void;
 }
 
 function generateRunId(): string {
@@ -121,6 +137,11 @@ function generateRunId(): string {
 function formatZodError(error: z.ZodError): string {
   return error.issues.map((issue) => `- ${issue.path.join(".") || "(root)"}: ${issue.message}`).join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Generic structured-turn helper (same retry-on-malformed-JSON pattern used
+// throughout Backboard orchestration; see AGENTS.md 3.3 on legible output).
+// ---------------------------------------------------------------------------
 
 interface StructuredTurnParams<T> {
   adapter: BackboardAdapter;
@@ -167,7 +188,8 @@ function parseStructuredContent<T>(raw: string | null, schema: z.ZodType<T>): Pa
 /**
  * Sends one message expecting strict JSON matching `schema`. On a parse or
  * validation failure, feeds the exact issues back on the same thread and
- * retries up to `maxRetries` times before giving up.
+ * retries up to `maxRetries` times before giving up. `maxRounds` (tool-call
+ * round trips) defaults to runToolLoop's own default (8).
  */
 async function runStructuredTurn<T>(params: StructuredTurnParams<T>): Promise<StructuredTurnResult<T>> {
   const maxRetries = params.maxRetries ?? 1;
@@ -226,269 +248,59 @@ async function runStructuredTurn<T>(params: StructuredTurnParams<T>): Promise<St
   return { value: attempt.value, result: { ...loopResult, toolCallLog } };
 }
 
-function buildAnalystPrompt(
-  role: "market-analyst" | "renewable-analyst",
-  asset: BatteryAsset,
-  scenario: ScenarioDefinition,
-): string {
-  const focus =
-    role === "market-analyst"
-      ? "the visible market conditions (energy price, demand, reserve price, marginal emissions)"
-      : "the visible renewable generation forecast (wind, solar, ambient temperature)";
+// ---------------------------------------------------------------------------
+// Finding agents: the many specialist roles that narrate a
+// transitAnalystFindingSchema-shaped observation, grounded in their own tool
+// calls. Resilient by design: a failed or malformed turn never aborts the
+// run, it degrades to a low-confidence local fallback finding so the
+// pipeline can always finish (AGENTS.md: the simulator, not the narrator, is
+// the authority).
+// ---------------------------------------------------------------------------
 
-  return `
-Asset: ${asset.id} (${asset.name}) on the ${asset.market} market.
-Scenario: ${scenario.id} - ${scenario.name}.
-Scenario description: ${scenario.description}
-
-Call your tool(s) to fetch ${focus} for exactly assetId "${asset.id}" and scenarioId "${scenario.id}", then
-respond with ONLY JSON matching this schema (no prose outside the JSON):
-{"role": string, "headline": string, "summary": string, "keySignals": string[], "confidence": number between 0 and 1}
-`.trim();
-}
-
-function buildDispatchPlannerPrompt(params: {
-  asset: BatteryAsset;
-  scenario: ScenarioDefinition;
-  visibleHours: ConditionHour[];
-  marketFinding: AnalystFinding;
-  renewableFinding: AnalystFinding;
-}): string {
-  const hourTable = params.visibleHours.map((hour) => `  hour ${hour.hour}: ${hour.timestamp}`).join("\n");
-
-  return `
-Asset: ${params.asset.id} (${params.asset.name}).
-Scenario: ${params.scenario.id} - ${params.scenario.name}.
-Scenario description: ${params.scenario.description}
-
-Market Analyst finding:
-${JSON.stringify(params.marketFinding)}
-
-Renewable Analyst finding:
-${JSON.stringify(params.renewableFinding)}
-
-Call get_asset_spec for "${params.asset.id}" to confirm exact power, energy, SOC, ramp, and reserve limits before
-proposing intervals.
-
-Propose 2-3 candidate dispatch plans as JSON matching:
-{"candidates": [{"candidateId": string, "plan": DispatchPlan}]}
-
-Every plan must:
-- set schemaVersion to 1, assetId to "${params.asset.id}", scenarioId to "${params.scenario.id}"
-- set intervalMinutes to ${params.visibleHours.length > 0 ? "the value matching the hour list below" : "60"}
-- contain exactly ${params.visibleHours.length} intervals, in order, one per hour below, each with the EXACT
-  timestamp shown (do not shift, round, or reformat these timestamps):
-${hourTable}
-- give each candidate a short, unique, memorable candidateId (e.g. "conservative", "aggressive", "balanced")
-- give "strategy" a SHORT label, at most 15 words and well under 150 characters (e.g. "Charge overnight
-  wind surplus, discharge into the evening peak"); put any longer explanation in "assumptions" instead
-- explore genuinely different strategies, not minor variations of the same plan
-
-Respond with ONLY the JSON object, no prose outside it.
-`.trim();
-}
-
-function buildRiskReviewerPrompt(params: {
-  asset: BatteryAsset;
-  scenario: ScenarioDefinition;
-  candidates: { candidateId: string; plan: DispatchPlanParsed }[];
-}): string {
-  const candidateBlocks = params.candidates
-    .map((candidate) => `Candidate "${candidate.candidateId}":\n${JSON.stringify(candidate.plan)}`)
-    .join("\n\n");
-
-  return `
-Asset: ${params.asset.id} (${params.asset.name}).
-Scenario: ${params.scenario.id} - ${params.scenario.name}.
-
-Review these ${params.candidates.length} candidate dispatch plans:
-
-${candidateBlocks}
-
-For EACH candidate, call validate_dispatch_plan and simulate_dispatch_plan (assetId "${params.asset.id}",
-scenarioId "${params.scenario.id}", the candidateId shown above, and the exact plan JSON shown above), then call
-stress_test_dispatch_plan for the same candidate. You may call these for several different candidates within the
-same turn. Once every candidate has been simulated and stress-tested, call rank_dispatch_candidates exactly once
-with all candidateIds together.
-
-After your tool calls are complete, respond with ONLY JSON matching:
-{"reviews": [{"candidateId": string, "riskLevel": "low"|"medium"|"high", "summary": string, "concerns": string[], "recommendation": "approve"|"approve_with_caution"|"reject"}]}
-Include exactly one review per candidate, using the exact candidateId values above.
-`.trim();
-}
-
-function buildChiefPrompt(params: {
-  asset: BatteryAsset;
-  scenario: ScenarioDefinition;
-  marketFinding: AnalystFinding;
-  renewableFinding: AnalystFinding;
-  candidates: CandidateOutcome[];
-  riskReviews: RiskReview[];
-  ranking: RankedCandidate[];
-}): string {
-  const candidateSummaries = params.candidates
-    .map((candidate) => {
-      const rank = params.ranking.find((entry) => entry.candidateId === candidate.candidateId);
-      return (
-        `Candidate "${candidate.candidateId}" (${candidate.plan.strategy}): ` +
-        `netValueCad=${candidate.simulation.metrics.netValueCad.toFixed(2)}, ` +
-        `renewableCapturedMwh=${candidate.simulation.metrics.renewableCapturedMwh.toFixed(2)}, ` +
-        `carbonAvoidedKg=${candidate.simulation.metrics.carbonAvoidedKg.toFixed(2)}, ` +
-        `degradationCostCad=${candidate.simulation.metrics.degradationCostCad.toFixed(2)}, ` +
-        `visibleValid=${candidate.simulation.valid}, stressValid=${candidate.stressSimulation.valid}, ` +
-        `deterministicRank=${rank?.rank ?? "n/a"}, disqualified=${rank?.disqualified ?? true}`
-      );
-    })
-    .join("\n");
-
-  return `
-Asset: ${params.asset.id} (${params.asset.name}).
-Scenario: ${params.scenario.id} - ${params.scenario.name}.
-
-Market Analyst finding:
-${JSON.stringify(params.marketFinding)}
-
-Renewable Analyst finding:
-${JSON.stringify(params.renewableFinding)}
-
-Candidate simulation summary (from the deterministic simulator/ranker, not your own arithmetic):
-${candidateSummaries}
-
-Risk & Compliance review:
-${JSON.stringify(params.riskReviews)}
-
-Deterministic ranking (rank 1 = best; disqualified candidates failed hard validation and must never be recommended):
-${JSON.stringify(params.ranking)}
-
-Choose one candidate and respond with ONLY JSON matching:
-{"chosenCandidateId": string, "headline": string, "reasoning": string, "tradeoffs": string[], "confidence": number between 0 and 1, "recommendedAction": "approve"|"approve_with_monitoring"|"hold_for_operator"}
-
-Never choose a disqualified candidateId. If every candidate is disqualified, or the risk review found unresolved
-high risk everywhere, use recommendedAction "hold_for_operator".
-`.trim();
-}
-
-function buildDispatchCandidatesSchema(params: {
-  assetId: string;
-  scenarioId: string;
-  intervalMinutes: number;
-  expectedTimestamps: string[];
-}) {
-  const candidateSchema = z
-    .object({
-      candidateId: z.string().min(1).max(60),
-      plan: dispatchPlanSchema,
-    })
-    .strict()
-    .superRefine((candidate, ctx) => {
-      if (candidate.plan.assetId !== params.assetId) {
-        ctx.addIssue({
-          code: "custom",
-          message: `plan.assetId must be "${params.assetId}", got "${candidate.plan.assetId}".`,
-          path: ["plan", "assetId"],
-        });
-      }
-      if (candidate.plan.scenarioId !== params.scenarioId) {
-        ctx.addIssue({
-          code: "custom",
-          message: `plan.scenarioId must be "${params.scenarioId}", got "${candidate.plan.scenarioId}".`,
-          path: ["plan", "scenarioId"],
-        });
-      }
-      if (candidate.plan.intervalMinutes !== params.intervalMinutes) {
-        ctx.addIssue({
-          code: "custom",
-          message: `plan.intervalMinutes must be ${params.intervalMinutes}, got ${candidate.plan.intervalMinutes}.`,
-          path: ["plan", "intervalMinutes"],
-        });
-      }
-      if (candidate.plan.intervals.length !== params.expectedTimestamps.length) {
-        ctx.addIssue({
-          code: "custom",
-          message: `plan.intervals must have exactly ${params.expectedTimestamps.length} entries (one per hour), got ${candidate.plan.intervals.length}.`,
-          path: ["plan", "intervals"],
-        });
-        return;
-      }
-      candidate.plan.intervals.forEach((interval, index) => {
-        if (interval.timestamp !== params.expectedTimestamps[index]) {
-          ctx.addIssue({
-            code: "custom",
-            message: `intervals[${index}].timestamp must be exactly "${params.expectedTimestamps[index]}", got "${interval.timestamp}".`,
-            path: ["plan", "intervals", index, "timestamp"],
-          });
-        }
-      });
-    });
-
-  return z
-    .object({ candidates: z.array(candidateSchema).min(2).max(3) })
-    .strict()
-    .refine(
-      (data) => new Set(data.candidates.map((candidate) => candidate.candidateId)).size === data.candidates.length,
-      { message: "candidateId values must be unique across candidates.", path: ["candidates"] },
-    );
-}
-
-function buildRiskReviewsSchema(candidateIds: string[]) {
-  return z
-    .object({ reviews: z.array(riskReviewSchema).min(1) })
-    .strict()
-    .superRefine((data, ctx) => {
-      const seen = new Set<string>();
-      data.reviews.forEach((review, index) => {
-        if (!candidateIds.includes(review.candidateId)) {
-          ctx.addIssue({
-            code: "custom",
-            message: `Unknown candidateId "${review.candidateId}"; expected one of: ${candidateIds.join(", ")}.`,
-            path: ["reviews", index, "candidateId"],
-          });
-        }
-        seen.add(review.candidateId);
-      });
-      for (const id of candidateIds) {
-        if (!seen.has(id)) {
-          ctx.addIssue({ code: "custom", message: `Missing a review for candidateId "${id}".`, path: ["reviews"] });
-        }
-      }
-    });
-}
-
-function buildFinalRecommendationSchema(candidateIds: string[]) {
-  return finalRecommendationSchema.superRefine((data, ctx) => {
-    if (!candidateIds.includes(data.chosenCandidateId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: `chosenCandidateId must be one of: ${candidateIds.join(", ")}.`,
-        path: ["chosenCandidateId"],
-      });
-    }
-  });
-}
-
-interface AnalystOutcome {
-  finding: AnalystFinding;
-  threadId: string;
-}
-
-async function runAnalyst(params: {
+interface FindingAgentParams {
   adapter: BackboardAdapter;
   context: RunContext;
-  role: "market-analyst" | "renewable-analyst";
-  asset: BatteryAsset;
-  scenario: ScenarioDefinition;
+  role: AssistantRoleKey;
   runId: string;
-  emit: (event: GridRunEvent) => void;
-}): Promise<AnalystOutcome> {
+  prompt: string;
+  emit: (event: TwinTORunEvent) => void;
+  maxRounds?: number;
+  fallbackSummary: string;
+}
+
+interface FindingAgentOutcome {
+  role: AssistantRoleKey;
+  name: string;
+  finding: TransitAnalystFinding;
+  threadId: string | null;
+  assistantId: string;
+  source: EvidenceSource;
+}
+
+function findingResponseInstruction(): string {
+  return `Respond with ONLY JSON matching:\n{"role": string, "headline": string, "summary": string, "keySignals": string[], "confidence": number between 0 and 1}\nDo not include any prose outside the JSON.`;
+}
+
+function scenarioContextBlock(scenario: TransitScenario): string {
+  return [
+    `Scenario: ${scenario.id} - ${scenario.label}.`,
+    scenario.description ?? "",
+    `Station: ${scenario.stationId}. Route: ${scenario.routeId}. Window: ${scenario.window.start} to ${scenario.window.end}.`,
+    `Baseline departures: ${scenario.baselineDepartures.join(", ")}.`,
+  ]
+    .filter((line) => line.length > 0)
+    .join("\n");
+}
+
+async function runFindingAgent(params: FindingAgentParams): Promise<FindingAgentOutcome> {
   const resolved = await resolveAssistant(params.role, params.adapter);
   params.emit({ type: "agent.started", runId: params.runId, role: params.role, name: resolved.role.name });
 
   try {
-    const prompt = buildAnalystPrompt(params.role, params.asset, params.scenario);
     const turn = await runStructuredTurn({
       adapter: params.adapter,
       assistantId: resolved.record.assistantId,
-      content: prompt,
+      content: params.prompt,
       systemPrompt: resolved.role.systemPrompt,
       modelName: resolved.model.modelName,
       llmProvider: resolved.model.provider,
@@ -496,7 +308,8 @@ async function runAnalyst(params: {
       thinking: resolved.role.thinking,
       memory: resolved.role.memory,
       context: params.context,
-      schema: analystFindingSchema,
+      schema: transitAnalystFindingSchema,
+      maxRounds: params.maxRounds,
       onToolCallStart: (call) =>
         params.emit({ type: "tool.requested", runId: params.runId, role: params.role, toolName: call.name }),
       onToolCallEnd: (outcome) =>
@@ -515,249 +328,766 @@ async function runAnalyst(params: {
       name: resolved.role.name,
       summary: turn.value.headline,
     });
-    return { finding: turn.value, threadId: turn.result.finalResult.threadId };
+    return {
+      role: params.role,
+      name: resolved.role.name,
+      finding: turn.value,
+      threadId: turn.result.finalResult.threadId,
+      assistantId: resolved.record.assistantId,
+      source: "agent",
+    };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    params.emit({ type: "agent.failed", runId: params.runId, role: params.role, name: resolved.role.name, error: message });
+
+    const fallback = transitAnalystFindingSchema.parse({
+      role: params.role,
+      headline: `${resolved.role.name}: evidence unavailable`,
+      summary: params.fallbackSummary,
+      keySignals: [],
+      confidence: 0.2,
+    });
     params.emit({
-      type: "agent.failed",
+      type: "agent.completed",
       runId: params.runId,
       role: params.role,
       name: resolved.role.name,
-      error: error instanceof Error ? error.message : String(error),
+      summary: fallback.headline,
     });
-    throw error;
+    return {
+      role: params.role,
+      name: resolved.role.name,
+      finding: fallback,
+      threadId: null,
+      assistantId: resolved.record.assistantId,
+      source: "local_fallback",
+    };
   }
 }
 
-interface SafetyOverrideOutcome {
-  effectiveRecommendation: FinalRecommendation;
+// ---------------------------------------------------------------------------
+// Citizen cohort mapping (transit cohort fixtures -> citizen-reaction contract)
+// ---------------------------------------------------------------------------
+
+function mapAgeBand(ageBand: string): "youth" | "adult" | "senior" {
+  if (ageBand.includes("65") || ageBand.includes("+")) return "senior";
+  if (ageBand.startsWith("18")) return "youth";
+  return "adult";
+}
+
+function dominantMode(shares: CohortModeShare): "transit" | "car" | "walk" | "bike" {
+  const entries: [("transit" | "car" | "walk" | "bike"), number][] = [
+    ["transit", shares.transit],
+    ["car", shares.car],
+    ["walk", shares.walk],
+    ["bike", shares.cycle],
+  ];
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries[0][0];
+}
+
+function buildCitizenCohorts(): CitizenCohort[] {
+  return listCohorts().map((cohort) => ({
+    cohortId: cohort.id,
+    label: cohort.label,
+    populationWeight: cohort.weight,
+    homeNeighborhood: cohort.homeZoneId,
+    demographics: {
+      ageBand: mapAgeBand(cohort.ageBand),
+      incomeBand: cohort.incomeBand,
+      primaryMode: dominantMode(cohort.baselineModeShare),
+      hasDisability: cohort.mobilityNeeds.length > 0,
+    },
+  }));
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function buildCitizenReactionContext(
+  baseline: TransitSimulationResult,
+  candidate: TransitSimulationResult,
+): CitizenReactionContext {
+  return {
+    wait: { beforeMinutes: baseline.metrics.meanWaitMinutes, afterMinutes: candidate.metrics.meanWaitMinutes },
+    crowding: {
+      beforeIndex: clamp01(baseline.metrics.loadImbalance),
+      afterIndex: clamp01(candidate.metrics.loadImbalance),
+    },
+    transfer: { beforeCount: baseline.metrics.missedTransfers, afterCount: candidate.metrics.missedTransfers },
+    accessibility: {
+      beforeScore: baseline.metrics.accessibilityFailures > 0 ? 0 : 1,
+      afterScore: candidate.metrics.accessibilityFailures > 0 ? 0 : 1,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Policy candidate generation (with a deterministic fallback so a run never
+// stalls with zero candidates, e.g. in mock mode with no scripted response).
+// ---------------------------------------------------------------------------
+
+const policyCandidatesSchema = z
+  .object({ candidates: z.array(transitInterventionSchema).min(1).max(3) })
+  .strict()
+  .refine((data) => new Set(data.candidates.map((candidate) => candidate.id)).size === data.candidates.length, {
+    message: "candidate ids must be unique across candidates.",
+    path: ["candidates"],
+  });
+
+function buildPolicyPrompt(params: {
+  scenario: TransitScenario;
+  problem: TransitAnalystFinding;
+  baseline: TransitAnalystFinding;
+  contextFindings: TransitAnalystFinding[];
+}): string {
+  return `
+${scenarioContextBlock(params.scenario)}
+
+Problem Definition finding:
+${JSON.stringify(params.problem)}
+
+Baseline Analyst finding:
+${JSON.stringify(params.baseline)}
+
+Context findings:
+${JSON.stringify(params.contextFindings)}
+
+Call find_similar_interventions for precedent, and get_fleet_availability for routeId "${params.scenario.routeId}" before
+proposing anything that adds a trip or capacity.
+
+Propose 2-3 candidate schedule interventions that explore genuinely different strategies (for example: a
+retiming-only plan, a capacity-boost plan, and a combined plan), not minor variations of the same idea. Give every
+candidate a short, unique, memorable id.
+
+Respond with ONLY JSON matching:
+{"candidates": [{"id": string, "label": string, "description"?: string, "actions": [{"type": "shift_departure_minutes"|"add_trip"|"capacity_boost"|"entrance_closure"|"hold_departure"|"retime_feeder", ...}]}]}
+`.trim();
+}
+
+function synthesizeFallbackCandidates(scenario: TransitScenario): TransitIntervention[] {
+  const firstDeparture = scenario.baselineDepartures[0];
+  const candidates: unknown[] = [
+    {
+      id: "fallback-retime",
+      label: "Fallback: retime first departure",
+      description: "Deterministic fallback candidate: shift the first scheduled departure later by 2 minutes.",
+      actions: [{ type: "shift_departure_minutes", departureId: firstDeparture, deltaMinutes: 2 }],
+    },
+    {
+      id: "fallback-capacity-boost",
+      label: "Fallback: add capacity to first departure",
+      description: "Deterministic fallback candidate: add extra capacity to the first scheduled departure.",
+      actions: [
+        {
+          type: "capacity_boost",
+          departureId: firstDeparture,
+          extraCapacity: Math.max(10, Math.round(scenario.vehicleCapacity * 0.2)),
+        },
+      ],
+    },
+  ];
+  return candidates.map((candidate) => transitInterventionSchema.parse(candidate));
+}
+
+// ---------------------------------------------------------------------------
+// Final authority: hard failure checks no recommendation can override.
+// ---------------------------------------------------------------------------
+
+function hardFailureReasons(evaluation: CandidateEvaluation, stressOverlayAvailable: boolean): string[] {
+  const reasons: string[] = [];
+
+  for (const violation of evaluation.simulation.violations) {
+    if (violation.severity === "error") {
+      reasons.push(`validation error (${violation.code}): ${violation.message}`);
+    }
+  }
+  if (evaluation.simulation.violations.some((violation) => violation.code === "platform-crowding-exceeded")) {
+    reasons.push("unsafe platform crowding under visible conditions");
+  }
+  if (evaluation.simulation.metrics.accessibilityFailures > 0) {
+    reasons.push(`inaccessible policy: ${evaluation.simulation.metrics.accessibilityFailures} accessibility failure(s)`);
+  }
+  if (evaluation.stress?.invalidated) {
+    reasons.push(
+      `fails under stress test: ${evaluation.stress.invalidationReasons.join("; ") || "invalidated under stress"}`,
+    );
+  }
+  if (stressOverlayAvailable && !evaluation.stress) {
+    reasons.push("missing stress-test evidence");
+  }
+  if (!evaluation.citizenReactions) {
+    reasons.push("missing citizen-reaction evidence");
+  }
+
+  return Array.from(new Set(reasons));
+}
+
+interface FinalAuthorityOutcome {
+  effectiveRecommendation: FinalPolicyRecommendation;
   overridden: boolean;
   overrideReason: string | null;
-  rankDisagreement: boolean;
 }
 
 /**
- * The deterministic ranker, not the Chief Dispatch Officer, has final say.
- * If the AI recommends a candidate that was never simulated or that the
- * validator disqualified, force the decision to hold_for_operator and fall
- * back to the top valid deterministic rank (if any) for transparency.
+ * The deterministic simulator and stress tester, not the Final Policy
+ * Judge, have final say (AGENTS.md 3.2: the scorer is never co-adapted with
+ * the generator). If the judge recommends a candidate with any hard
+ * safety/accessibility/evidence failure, force the decision to
+ * hold_for_operator and fall back to the best clean candidate (if any) for
+ * transparency.
  */
-function applySafetyOverride(
-  aiRecommendation: FinalRecommendation,
-  ranking: RankedCandidate[],
-  candidates: CandidateOutcome[],
-): SafetyOverrideOutcome {
-  const chosenRank = ranking.find((entry) => entry.candidateId === aiRecommendation.chosenCandidateId);
+function applyFinalAuthority(params: {
+  evaluations: CandidateEvaluation[];
+  ranking: PolicyCandidate[];
+  chosen: FinalPolicyRecommendation;
+  stressOverlayAvailable: boolean;
+}): FinalAuthorityOutcome {
+  const { evaluations, ranking, chosen, stressOverlayAvailable } = params;
+  const evaluationById = new Map(evaluations.map((evaluation) => [evaluation.candidateId, evaluation]));
+  const rankById = new Map(ranking.map((entry) => [entry.interventionId, entry]));
 
-  if (!chosenRank || chosenRank.disqualified) {
-    const reason = !chosenRank
-      ? `Recommended candidateId "${aiRecommendation.chosenCandidateId}" was never simulated or ranked.`
-      : `Recommended candidate "${aiRecommendation.chosenCandidateId}" failed deterministic validation: ${chosenRank.disqualifyReason ?? "unspecified violation"}.`;
+  const failuresFor = (candidateId: string): string[] => {
+    const evaluation = evaluationById.get(candidateId);
+    if (!evaluation) return ["was never simulated or evaluated in this run"];
+    const reasons = hardFailureReasons(evaluation, stressOverlayAvailable);
+    const rank = rankById.get(candidateId);
+    if (rank?.disqualified) reasons.push(rank.disqualifyReason ?? "failed deterministic validation");
+    return Array.from(new Set(reasons));
+  };
 
-    const fallback = ranking.find((entry) => !entry.disqualified);
-    if (!fallback) {
-      return {
-        effectiveRecommendation: {
-          ...aiRecommendation,
-          recommendedAction: "hold_for_operator",
-          reasoning: `${reason} No candidate passed deterministic validation for this scenario; every candidate requires operator review.`,
-        },
-        overridden: true,
-        overrideReason: reason,
-        rankDisagreement: false,
-      };
-    }
+  const chosenFailures = failuresFor(chosen.chosenCandidateId);
+  if (chosenFailures.length === 0) {
+    return { effectiveRecommendation: chosen, overridden: false, overrideReason: null };
+  }
 
-    const fallbackPlan = candidates.find((candidate) => candidate.candidateId === fallback.candidateId);
+  const reason = `Recommended candidate "${chosen.chosenCandidateId}" failed final-authority checks: ${chosenFailures.join("; ")}.`;
+
+  const cleanFallback = [...ranking]
+    .filter((entry) => !entry.disqualified)
+    .sort((a, b) => a.rank - b.rank)
+    .find((entry) => failuresFor(entry.interventionId).length === 0);
+
+  if (!cleanFallback) {
     return {
       effectiveRecommendation: {
-        ...aiRecommendation,
-        chosenCandidateId: fallback.candidateId,
-        headline: `Deterministic override: ${fallback.candidateId}`,
-        reasoning: `${reason} Falling back to the top deterministically-ranked valid candidate ("${fallback.candidateId}"${fallbackPlan ? `, strategy: ${fallbackPlan.plan.strategy}` : ""}) pending operator review.`,
+        ...chosen,
         recommendedAction: "hold_for_operator",
+        reasoning: `${reason} No candidate in this run passed every hard safety, accessibility, and evidence check; every candidate requires operator review.`,
       },
       overridden: true,
       overrideReason: reason,
-      rankDisagreement: false,
     };
   }
 
   return {
-    effectiveRecommendation: aiRecommendation,
-    overridden: false,
-    overrideReason: null,
-    rankDisagreement: chosenRank.rank !== 1,
+    effectiveRecommendation: {
+      ...chosen,
+      chosenCandidateId: cleanFallback.interventionId,
+      headline: `Deterministic override: ${cleanFallback.interventionId}`,
+      reasoning: `${reason} Falling back to the top deterministically-ranked candidate that passes every hard check ("${cleanFallback.interventionId}") pending operator review.`,
+      recommendedAction: "hold_for_operator",
+    },
+    overridden: true,
+    overrideReason: reason,
   };
 }
 
-/**
- * Runs the full GridTwin multi-agent pipeline for one asset/scenario pair:
- * parallel market + renewable analysis, dispatch candidate generation, risk
- * review (validate/simulate/stress-test/rank every candidate), and a final
- * Chief Dispatch Officer recommendation. The deterministic simulator and
- * candidate ranker are re-run locally as a safety net for any candidate the
- * agents forget to evaluate, and the final recommendation is never trusted
- * over a hard validation failure (see applySafetyOverride).
- */
-export async function runGridTwinOrchestration(input: RunOrchestrationInput): Promise<GridRunResult> {
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
+
+export async function runTwinTOOrchestration(input: RunOrchestrationInput): Promise<TwinTORunResult> {
   const adapter = input.adapter ?? getBackboardAdapter();
   const emit = input.onEvent ?? (() => {});
   const runId = generateRunId();
+  const participatingAgents: AssistantRoleKey[] = [];
+  const seenAgents = new Set<AssistantRoleKey>();
+  const recordParticipant = (role: AssistantRoleKey) => {
+    if (!seenAgents.has(role)) {
+      seenAgents.add(role);
+      participatingAgents.push(role);
+    }
+  };
 
-  const asset = requireAsset(input.assetId);
   const scenario = requireScenario(input.scenarioId);
-  const conditions = resolveScenarioConditions(input.scenarioId, asset);
-  const context = createRunContext(input.assetId, input.scenarioId, adapter);
+  const context = createRunContext(input.scenarioId, adapter);
+  const declaredBundle = selectAssistantBundle(input.scenarioId);
+  const includesConcertBundle = declaredBundle.includes("concert-event");
 
-  emit({ type: "run.created", runId, assetId: input.assetId, scenarioId: input.scenarioId });
+  emit({ type: "run.started", runId, scenarioId: input.scenarioId });
 
   try {
-    const [marketOutcome, renewableOutcome] = await Promise.all([
-      runAnalyst({ adapter, context, role: "market-analyst", asset, scenario, runId, emit }),
-      runAnalyst({ adapter, context, role: "renewable-analyst", asset, scenario, runId, emit }),
-    ]);
+    const baselineSimulation = simulateTransit({
+      schemaVersion: 1,
+      scenario,
+      intervention: null,
+      stressOverlay: null,
+      seed: 20260718,
+    });
 
-    const plannerResolved = await resolveAssistant("dispatch-planner", adapter);
-    emit({ type: "agent.started", runId, role: "dispatch-planner", name: plannerResolved.role.name });
-    const plannerSchema = buildDispatchCandidatesSchema({
-      assetId: input.assetId,
-      scenarioId: input.scenarioId,
-      intervalMinutes: conditions.intervalMinutes,
-      expectedTimestamps: conditions.visibleHours.map((hour) => hour.timestamp),
-    });
-    const plannerTurn = await runStructuredTurn({
+    // -- Problem definition --------------------------------------------------
+    emit({ type: "problem.started", runId });
+    const problemOutcome = await runFindingAgent({
       adapter,
-      assistantId: plannerResolved.record.assistantId,
-      content: buildDispatchPlannerPrompt({
-        asset,
-        scenario,
-        visibleHours: conditions.visibleHours,
-        marketFinding: marketOutcome.finding,
-        renewableFinding: renewableOutcome.finding,
-      }),
-      systemPrompt: plannerResolved.role.systemPrompt,
-      modelName: plannerResolved.model.modelName,
-      llmProvider: plannerResolved.model.provider,
-      tools: getToolDefinitions(plannerResolved.role.toolNames),
-      thinking: plannerResolved.role.thinking,
-      memory: plannerResolved.role.memory,
       context,
-      schema: plannerSchema,
-      onToolCallStart: (call) =>
-        emit({ type: "tool.requested", runId, role: "dispatch-planner", toolName: call.name }),
-      onToolCallEnd: (outcome) =>
-        emit({ type: "tool.completed", runId, role: "dispatch-planner", toolName: outcome.toolName, ok: outcome.ok }),
-    });
-    emit({
-      type: "agent.completed",
+      role: "problem-definition",
       runId,
-      role: "dispatch-planner",
-      name: plannerResolved.role.name,
-      summary: `Proposed ${plannerTurn.value.candidates.length} candidate(s).`,
+      emit,
+      prompt: `${scenarioContextBlock(scenario)}\n\nCall your tools to read the network snapshot, this scenario's passenger arrivals, and any active event context. Write a precise, falsifiable statement of what is going wrong: which departure, which station, which window, what fails and by how much.\n\n${findingResponseInstruction()}`,
+      fallbackSummary: `Baseline simulation shows a mean wait of ${baselineSimulation.metrics.meanWaitMinutes.toFixed(1)} minutes and ${baselineSimulation.metrics.deniedBoardings} denied boarding(s) at ${scenario.stationId}.`,
     });
-    for (const candidate of plannerTurn.value.candidates) {
-      emit({ type: "candidate.created", runId, candidateId: candidate.candidateId, strategy: candidate.plan.strategy });
+    recordParticipant(problemOutcome.role);
+    emit({ type: "problem.completed", runId, summary: problemOutcome.finding.summary });
+
+    // -- Baseline analysis ----------------------------------------------------
+    emit({ type: "baseline.started", runId });
+    const baselineOutcome = await runFindingAgent({
+      adapter,
+      context,
+      role: "baseline-analyst",
+      runId,
+      emit,
+      prompt: `${scenarioContextBlock(scenario)}\n\nCall get_route_schedule (routeId "${scenario.routeId}"), get_departure_loads (no interventionId), and get_passenger_arrivals to establish the no-intervention baseline. Report the baseline numbers plainly.\n\n${findingResponseInstruction()}`,
+      fallbackSummary: `Deterministic baseline: meanWaitMinutes=${baselineSimulation.metrics.meanWaitMinutes.toFixed(2)}, deniedBoardings=${baselineSimulation.metrics.deniedBoardings}, loadImbalance=${baselineSimulation.metrics.loadImbalance.toFixed(3)}.`,
+    });
+    recordParticipant(baselineOutcome.role);
+    emit({ type: "baseline.completed", runId, summary: baselineOutcome.finding.summary });
+
+    // -- Parallel context gathering -------------------------------------------
+    emit({ type: "context.started", runId });
+    const contextRoles: AssistantRoleKey[] = ["passenger-arrival", "origin-destination", "platform-crowding"];
+    const contextOutcomes = await Promise.all(
+      contextRoles.map((role) =>
+        runFindingAgent({
+          adapter,
+          context,
+          role,
+          runId,
+          emit,
+          prompt: `${scenarioContextBlock(scenario)}\n\nCall your tools for this scenario and report your findings.\n\n${findingResponseInstruction()}`,
+          fallbackSummary: `Evidence for role "${role}" was unavailable this run; deterministic tool data remains the source of truth.`,
+        }),
+      ),
+    );
+    for (const outcome of contextOutcomes) recordParticipant(outcome.role);
+    emit({
+      type: "context.completed",
+      runId,
+      summary: contextOutcomes.map((outcome) => outcome.finding.headline).join(" | "),
+    });
+
+    // -- Policy candidate generation -------------------------------------------
+    const policyResolved = await resolveAssistant("intervention-generator", adapter);
+    emit({ type: "agent.started", runId, role: "intervention-generator", name: policyResolved.role.name });
+    let candidates: TransitIntervention[];
+    try {
+      const policyTurn = await runStructuredTurn({
+        adapter,
+        assistantId: policyResolved.record.assistantId,
+        content: buildPolicyPrompt({
+          scenario,
+          problem: problemOutcome.finding,
+          baseline: baselineOutcome.finding,
+          contextFindings: contextOutcomes.map((outcome) => outcome.finding),
+        }),
+        systemPrompt: policyResolved.role.systemPrompt,
+        modelName: policyResolved.model.modelName,
+        llmProvider: policyResolved.model.provider,
+        tools: getToolDefinitions(policyResolved.role.toolNames),
+        thinking: policyResolved.role.thinking,
+        memory: policyResolved.role.memory,
+        context,
+        schema: policyCandidatesSchema,
+        onToolCallStart: (call) =>
+          emit({ type: "tool.requested", runId, role: "intervention-generator", toolName: call.name }),
+        onToolCallEnd: (outcome) =>
+          emit({
+            type: "tool.completed",
+            runId,
+            role: "intervention-generator",
+            toolName: outcome.toolName,
+            ok: outcome.ok,
+          }),
+      });
+      candidates = policyTurn.value.candidates;
+      emit({
+        type: "agent.completed",
+        runId,
+        role: "intervention-generator",
+        name: policyResolved.role.name,
+        summary: `Proposed ${candidates.length} candidate(s).`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ type: "agent.failed", runId, role: "intervention-generator", name: policyResolved.role.name, error: message });
+      candidates = synthesizeFallbackCandidates(scenario);
+      emit({
+        type: "agent.completed",
+        runId,
+        role: "intervention-generator",
+        name: policyResolved.role.name,
+        summary: `Fell back to ${candidates.length} deterministic candidate(s) after a structured-output failure.`,
+      });
+    }
+    recordParticipant("intervention-generator");
+    for (const candidate of candidates) {
+      const state = context.simulationsByCandidateId.get(candidate.id) ?? { intervention: candidate };
+      state.intervention = candidate;
+      context.simulationsByCandidateId.set(candidate.id, state);
+      emit({ type: "policy.generated", runId, intervention: candidate });
     }
 
-    const candidateIds = plannerTurn.value.candidates.map((candidate) => candidate.candidateId);
-    const reviewerResolved = await resolveAssistant("risk-reviewer", adapter);
-    emit({ type: "agent.started", runId, role: "risk-reviewer", name: reviewerResolved.role.name });
-    const reviewerTurn = await runStructuredTurn({
-      adapter,
-      assistantId: reviewerResolved.record.assistantId,
-      content: buildRiskReviewerPrompt({ asset, scenario, candidates: plannerTurn.value.candidates }),
-      systemPrompt: reviewerResolved.role.systemPrompt,
-      modelName: reviewerResolved.model.modelName,
-      llmProvider: reviewerResolved.model.provider,
-      tools: getToolDefinitions(reviewerResolved.role.toolNames),
-      thinking: reviewerResolved.role.thinking,
-      memory: reviewerResolved.role.memory,
-      context,
-      schema: buildRiskReviewsSchema(candidateIds),
-      maxRounds: 12,
-      onToolCallStart: (call) => emit({ type: "tool.requested", runId, role: "risk-reviewer", toolName: call.name }),
-      onToolCallEnd: (outcome) =>
-        emit({ type: "tool.completed", runId, role: "risk-reviewer", toolName: outcome.toolName, ok: outcome.ok }),
-    });
-    emit({
-      type: "agent.completed",
-      runId,
-      role: "risk-reviewer",
-      name: reviewerResolved.role.name,
-      summary: `Reviewed ${reviewerTurn.value.reviews.length} candidate(s).`,
-    });
+    // -- Simulation (deterministic authority; agent turns add narration) -----
+    emit({ type: "simulation.started", runId });
+    const simulationNarrationOutcomes = await Promise.all(
+      (["subway-scheduling", "counterfactual"] as AssistantRoleKey[]).map((role) =>
+        runFindingAgent({
+          adapter,
+          context,
+          role,
+          runId,
+          emit,
+          prompt: `${scenarioContextBlock(scenario)}\n\nCandidates under review:\n${JSON.stringify(candidates)}\n\nCall run_transit_simulation for each candidate above (using its exact JSON), then report your findings.\n\n${findingResponseInstruction()}`,
+          fallbackSummary: `Deterministic simulation is the source of truth for these ${candidates.length} candidate(s); narration from role "${role}" was unavailable this run.`,
+        }),
+      ),
+    );
+    for (const outcome of simulationNarrationOutcomes) recordParticipant(outcome.role);
 
-    const candidateOutcomes: CandidateOutcome[] = plannerTurn.value.candidates.map(({ candidateId, plan }) => {
-      const existing = context.simulationsByCandidateId.get(candidateId) ?? {};
-
-      let visible = existing.visible;
+    const evaluations: CandidateEvaluation[] = candidates.map((candidate) => {
+      const state = context.simulationsByCandidateId.get(candidate.id);
+      let simulation = state?.visible;
       let simulationSource: EvidenceSource = "agent";
-      if (!visible) {
-        visible = simulateDispatchPlan(plan, asset, conditions.visibleHours);
+      if (!simulation) {
+        simulation = simulateTransit({ schemaVersion: 1, scenario, intervention: candidate, stressOverlay: null, seed: 20260718 });
         simulationSource = "local_fallback";
+        const nextState = state ?? { intervention: candidate };
+        nextState.visible = simulation;
+        nextState.intervention = candidate;
+        context.simulationsByCandidateId.set(candidate.id, nextState);
       }
-
-      let stress = existing.stress;
-      let stressSimulationSource: EvidenceSource = "agent";
-      if (!stress) {
-        stress = simulateDispatchPlan(plan, asset, conditions.actualHours);
-        stressSimulationSource = "local_fallback";
-      }
-
       emit({
-        type: "candidate.simulated",
+        type: "simulation.completed",
         runId,
-        candidateId,
-        valid: visible.valid,
-        netValueCad: visible.metrics.netValueCad,
-        source: simulationSource,
+        candidateId: candidate.id,
+        summary: `meanWaitMinutes=${simulation.metrics.meanWaitMinutes.toFixed(2)}, deniedBoardings=${simulation.metrics.deniedBoardings}, valid=${simulation.valid}`,
       });
-      emit({ type: "candidate.stress_tested", runId, candidateId, valid: stress.valid, source: stressSimulationSource });
-
-      return { candidateId, plan, simulation: visible, simulationSource, stressSimulation: stress, stressSimulationSource };
+      return {
+        candidateId: candidate.id,
+        intervention: candidate,
+        simulation,
+        simulationSource,
+        stress: null,
+        stressSource: "local_fallback" as EvidenceSource,
+        citizenReactions: null,
+        citizenReactionsSource: "local_fallback" as EvidenceSource,
+      };
     });
 
-    const ranking = rankCandidates(
-      candidateOutcomes.map((candidate) => ({ candidateId: candidate.candidateId, result: candidate.simulation })),
-      input.objectiveWeights,
+    const ranking = rankInterventions(
+      evaluations.map((evaluation): RankableIntervention => ({ intervention: evaluation.intervention, result: evaluation.simulation })),
     );
-    emit({ type: "candidates.ranked", runId, ranking });
 
-    const chiefResolved = await resolveAssistant("chief-dispatch-officer", adapter);
-    emit({ type: "agent.started", runId, role: "chief-dispatch-officer", name: chiefResolved.role.name });
-    const chiefTurn = await runStructuredTurn({
-      adapter,
-      assistantId: chiefResolved.record.assistantId,
-      content: buildChiefPrompt({
-        asset,
-        scenario,
-        marketFinding: marketOutcome.finding,
-        renewableFinding: renewableOutcome.finding,
-        candidates: candidateOutcomes,
-        riskReviews: reviewerTurn.value.reviews,
-        ranking,
-      }),
-      systemPrompt: chiefResolved.role.systemPrompt,
-      modelName: chiefResolved.model.modelName,
-      llmProvider: chiefResolved.model.provider,
-      tools: getToolDefinitions(chiefResolved.role.toolNames),
-      thinking: chiefResolved.role.thinking,
-      memory: chiefResolved.role.memory,
-      context,
-      schema: buildFinalRecommendationSchema(candidateIds),
-    });
+    // -- Citizen reaction ------------------------------------------------------
+    emit({ type: "citizens.started", runId });
+    const cohorts = buildCitizenCohorts();
+    const citizenResponseSchema = z
+      .object({ summary: z.string().min(1).max(1500), processedCandidateIds: z.array(z.string()).default([]) })
+      .strict();
+    const citizenPrompt = `
+${scenarioContextBlock(scenario)}
 
-    const { effectiveRecommendation, overridden, overrideReason, rankDisagreement } = applySafetyOverride(
-      chiefTurn.value,
+Candidates and their deterministic before/after effect features (baseline vs candidate simulation):
+${JSON.stringify(
+  evaluations.map((evaluation) => ({
+    intervention: { id: evaluation.intervention.id, title: evaluation.intervention.label, description: evaluation.intervention.description ?? evaluation.intervention.label },
+    context: buildCitizenReactionContext(baselineSimulation, evaluation.simulation),
+  })),
+)}
+
+Cohorts to react on behalf of (${cohorts.length} census-weighted cohorts):
+${JSON.stringify(cohorts)}
+
+For EACH candidate above, call call_citizen_reaction_model with that candidate's intervention, the cohorts, and its
+context, then call aggregate_citizen_reactions with the exact reactions it returned. Every reaction is a SIMULATED
+reading, never real public opinion.
+
+Respond with ONLY JSON matching:
+{"summary": string, "processedCandidateIds": string[]}
+`.trim();
+
+    const citizenRoles: AssistantRoleKey[] = ["citizen-response", "mode-shift", "waiting-behaviour"];
+    const [citizenCoordinatorOutcome, ...citizenAuxOutcomes] = await Promise.all([
+      (async () => {
+        const resolved = await resolveAssistant("citizen-response", adapter);
+        emit({ type: "agent.started", runId, role: "citizen-response", name: resolved.role.name });
+        try {
+          const turn = await runStructuredTurn({
+            adapter,
+            assistantId: resolved.record.assistantId,
+            content: citizenPrompt,
+            systemPrompt: resolved.role.systemPrompt,
+            modelName: resolved.model.modelName,
+            llmProvider: resolved.model.provider,
+            tools: getToolDefinitions(resolved.role.toolNames),
+            thinking: resolved.role.thinking,
+            memory: resolved.role.memory,
+            context,
+            schema: citizenResponseSchema,
+            maxRounds: 10,
+            onToolCallStart: (call) => emit({ type: "tool.requested", runId, role: "citizen-response", toolName: call.name }),
+            onToolCallEnd: (outcome) =>
+              emit({ type: "tool.completed", runId, role: "citizen-response", toolName: outcome.toolName, ok: outcome.ok }),
+          });
+          emit({ type: "agent.completed", runId, role: "citizen-response", name: resolved.role.name, summary: turn.value.summary });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          emit({ type: "agent.failed", runId, role: "citizen-response", name: resolved.role.name, error: message });
+          emit({
+            type: "agent.completed",
+            runId,
+            role: "citizen-response",
+            name: resolved.role.name,
+            summary: "Citizen reactions computed via local deterministic fallback.",
+          });
+        }
+      })(),
+      ...citizenRoles
+        .filter((role) => role !== "citizen-response")
+        .map((role) =>
+          runFindingAgent({
+            adapter,
+            context,
+            role,
+            runId,
+            emit,
+            prompt: `${scenarioContextBlock(scenario)}\n\nCandidates under review:\n${JSON.stringify(candidates)}\n\nCall your tools for this scenario and report your findings.\n\n${findingResponseInstruction()}`,
+            fallbackSummary: `Evidence for role "${role}" was unavailable this run.`,
+          }),
+        ),
+    ]);
+    void citizenCoordinatorOutcome;
+    recordParticipant("citizen-response");
+    for (const outcome of citizenAuxOutcomes) recordParticipant(outcome.role);
+
+    const citizenProvider = getCitizenReactionProvider();
+    for (const evaluation of evaluations) {
+      const state = context.simulationsByCandidateId.get(evaluation.candidateId);
+      let reactions = state?.citizenReactions;
+      let source: EvidenceSource = "agent";
+      if (!reactions) {
+        reactions = await citizenProvider.predictBatch({
+          scenarioId: input.scenarioId,
+          intervention: {
+            id: evaluation.intervention.id,
+            title: evaluation.intervention.label,
+            description: evaluation.intervention.description ?? evaluation.intervention.label,
+            category: "transit",
+          },
+          cohorts,
+          context: buildCitizenReactionContext(baselineSimulation, evaluation.simulation),
+        });
+        source = "local_fallback";
+        const nextState = state ?? { intervention: evaluation.intervention };
+        nextState.citizenReactions = reactions;
+        context.simulationsByCandidateId.set(evaluation.candidateId, nextState);
+      }
+      evaluation.citizenReactions = reactions;
+      evaluation.citizenReactionsSource = source;
+      emit({ type: "citizens.completed", runId, candidateId: evaluation.candidateId, result: reactions });
+    }
+
+    // -- Parallel impact review -------------------------------------------------
+    emit({ type: "impact.started", runId });
+    const topCandidateId =
+      ranking.find((entry) => !entry.disqualified)?.interventionId ?? ranking[0]?.interventionId ?? evaluations[0]?.candidateId;
+    const topEvaluation = evaluations.find((evaluation) => evaluation.candidateId === topCandidateId) ?? evaluations[0];
+    const impactRoles: AssistantRoleKey[] = [
+      "vehicle-crowding",
+      "reliability-bunching",
+      "accessibility",
+      "equity",
+      "operating-cost",
+      "carbon-impact",
+    ];
+    const impactOutcomes = await Promise.all(
+      impactRoles.map((role) =>
+        runFindingAgent({
+          adapter,
+          context,
+          role,
+          runId,
+          emit,
+          prompt: `${scenarioContextBlock(scenario)}\n\nLeading candidate under review:\n${JSON.stringify(topEvaluation?.intervention)}\n\nCall your tools for this scenario and candidate and report your findings.\n\n${findingResponseInstruction()}`,
+          fallbackSummary: `Deterministic metrics for candidate "${topCandidateId}": ${JSON.stringify(topEvaluation?.simulation.metrics)}`,
+        }),
+      ),
+    );
+    for (const outcome of impactOutcomes) recordParticipant(outcome.role);
+    emit({ type: "impact.completed", runId, summary: impactOutcomes.map((outcome) => outcome.finding.headline).join(" | ") });
+
+    // -- Stress testing ----------------------------------------------------------
+    emit({ type: "stress.started", runId });
+    const stressOverlay = listStressOverlays()[0] ?? null;
+    const stressOverlayAvailable = stressOverlay !== null;
+
+    if (stressOverlay) {
+      for (const evaluation of evaluations) {
+        const state = context.simulationsByCandidateId.get(evaluation.candidateId);
+        let outcome = state?.stress;
+        let source: EvidenceSource = "agent";
+        if (!outcome) {
+          outcome = stressTestIntervention(scenario, evaluation.intervention, stressOverlay, 20260718);
+          source = "local_fallback";
+          const nextState = state ?? { intervention: evaluation.intervention };
+          nextState.stress = outcome;
+          context.simulationsByCandidateId.set(evaluation.candidateId, nextState);
+        }
+        evaluation.stress = outcome;
+        evaluation.stressSource = source;
+        emit({
+          type: "stress.completed",
+          runId,
+          candidateId: evaluation.candidateId,
+          summary: outcome.invalidated
+            ? `Invalidated under stress: ${outcome.invalidationReasons.join("; ") || "fails once stressed"}`
+            : "Remains valid under the hidden stress overlay.",
+          invalidated: outcome.invalidated,
+        });
+      }
+    }
+
+    const stressAgentRoles: AssistantRoleKey[] = includesConcertBundle
+      ? ["adversarial-stress", "evidence-auditor", "concert-event", "night-service", "safety", "emergency-rerouting", "traffic-impact"]
+      : ["adversarial-stress", "evidence-auditor"];
+    const stressOutcomes = await Promise.all(
+      stressAgentRoles.map((role) =>
+        runFindingAgent({
+          adapter,
+          context,
+          role,
+          runId,
+          emit,
+          prompt: `${scenarioContextBlock(scenario)}\n\nCandidates and their deterministic simulation/stress results:\n${JSON.stringify(
+            evaluations.map((evaluation) => ({
+              candidateId: evaluation.candidateId,
+              metrics: evaluation.simulation.metrics,
+              stressInvalidated: evaluation.stress?.invalidated ?? null,
+            })),
+          )}\n\nCall your tools for this scenario and report your findings, thinking adversarially about worst-case combinations.\n\n${findingResponseInstruction()}`,
+          fallbackSummary: `Deterministic stress-test authority stands: ${
+            evaluations.filter((evaluation) => evaluation.stress?.invalidated).length
+          } of ${evaluations.length} candidate(s) invalidated under stress.`,
+        }),
+      ),
+    );
+    for (const outcome of stressOutcomes) recordParticipant(outcome.role);
+
+    // -- Policy debate -------------------------------------------------------------
+    emit({ type: "debate.started", runId });
+    const debateSchema = z
+      .object({ summary: z.string().min(1).max(2000), disagreements: z.array(z.string().max(300)).max(10).default([]) })
+      .strict();
+    const debateResolved = await resolveAssistant("debate-moderator", adapter);
+    emit({ type: "agent.started", runId, role: "debate-moderator", name: debateResolved.role.name });
+    let debateSummary: string;
+    try {
+      const debateTurn = await runStructuredTurn({
+        adapter,
+        assistantId: debateResolved.record.assistantId,
+        content: `${scenarioContextBlock(scenario)}\n\nDeterministic ranking (rank 1 = best; disqualified candidates failed hard validation):\n${JSON.stringify(ranking)}\n\nCall compare_interventions to ground your summary, then report where the candidates genuinely disagree on facts, values, or risk tolerance.\n\nRespond with ONLY JSON matching:\n{"summary": string, "disagreements": string[]}`,
+        systemPrompt: debateResolved.role.systemPrompt,
+        modelName: debateResolved.model.modelName,
+        llmProvider: debateResolved.model.provider,
+        tools: getToolDefinitions(debateResolved.role.toolNames),
+        thinking: debateResolved.role.thinking,
+        memory: debateResolved.role.memory,
+        context,
+        schema: debateSchema,
+        onToolCallStart: (call) => emit({ type: "tool.requested", runId, role: "debate-moderator", toolName: call.name }),
+        onToolCallEnd: (outcome) =>
+          emit({ type: "tool.completed", runId, role: "debate-moderator", toolName: outcome.toolName, ok: outcome.ok }),
+      });
+      debateSummary = debateTurn.value.summary;
+      emit({ type: "agent.completed", runId, role: "debate-moderator", name: debateResolved.role.name, summary: debateSummary });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ type: "agent.failed", runId, role: "debate-moderator", name: debateResolved.role.name, error: message });
+      debateSummary = `Deterministic ranking stands: ${ranking.map((entry) => `${entry.interventionId} (rank ${entry.rank}${entry.disqualified ? ", disqualified" : ""})`).join(", ")}.`;
+      emit({ type: "agent.completed", runId, role: "debate-moderator", name: debateResolved.role.name, summary: debateSummary });
+    }
+    recordParticipant("debate-moderator");
+    emit({ type: "debate.completed", runId, summary: debateSummary });
+
+    // -- Final judgment --------------------------------------------------------------
+    const candidateIds = candidates.map((candidate) => candidate.id);
+    const judgeDecisionSchema = z
+      .object({
+        chosenCandidateId: z.string().min(1),
+        headline: z.string().min(1).max(200),
+        reasoning: z.string().min(1).max(2000),
+        tradeoffs: z.array(z.string().max(300)).max(10).default([]),
+        confidence: z.number().min(0).max(1),
+        recommendedAction: z.enum(["approve", "approve_with_monitoring", "hold_for_operator", "reject_unsafe"]),
+      })
+      .strict()
+      .superRefine((data, ctx) => {
+        if (!candidateIds.includes(data.chosenCandidateId)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `chosenCandidateId must be one of: ${candidateIds.join(", ")}.`,
+            path: ["chosenCandidateId"],
+          });
+        }
+      });
+
+    const judgeResolved = await resolveAssistant("final-policy-judge", adapter);
+    emit({ type: "agent.started", runId, role: "final-policy-judge", name: judgeResolved.role.name });
+
+    const fallbackRank = ranking.find((entry) => !entry.disqualified) ?? ranking[0];
+    let aiRecommendation: FinalPolicyRecommendation;
+    let judgeThreadId: string;
+    try {
+      const judgeTurn = await runStructuredTurn({
+        adapter,
+        assistantId: judgeResolved.record.assistantId,
+        content: `${scenarioContextBlock(scenario)}\n\nDebate summary: ${debateSummary}\n\nDeterministic ranking (rank 1 = best; disqualified candidates failed hard validation and must never be recommended):\n${JSON.stringify(ranking)}\n\nStress-test results:\n${JSON.stringify(evaluations.map((evaluation) => ({ candidateId: evaluation.candidateId, invalidated: evaluation.stress?.invalidated ?? null })))}\n\nCall compare_interventions, calculate_accessibility, and calculate_equity as needed to confirm every claim before deciding.\n\nRespond with ONLY JSON matching:\n{"chosenCandidateId": string, "headline": string, "reasoning": string, "tradeoffs": string[], "confidence": number between 0 and 1, "recommendedAction": "approve"|"approve_with_monitoring"|"hold_for_operator"|"reject_unsafe"}\n\nNever choose a disqualified candidateId. Use "hold_for_operator" whenever every candidate has material unresolved concerns, and "reject_unsafe" whenever a candidate's own evidence shows it fails a hard check.`,
+        systemPrompt: judgeResolved.role.systemPrompt,
+        modelName: judgeResolved.model.modelName,
+        llmProvider: judgeResolved.model.provider,
+        tools: getToolDefinitions(judgeResolved.role.toolNames),
+        thinking: judgeResolved.role.thinking,
+        memory: judgeResolved.role.memory,
+        context,
+        schema: judgeDecisionSchema,
+      });
+      aiRecommendation = finalPolicyRecommendationSchema.parse({ ...judgeTurn.value, dataMode: "synthetic-fixture" });
+      judgeThreadId = judgeTurn.result.finalResult.threadId;
+      emit({ type: "agent.completed", runId, role: "final-policy-judge", name: judgeResolved.role.name, summary: aiRecommendation.headline });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ type: "agent.failed", runId, role: "final-policy-judge", name: judgeResolved.role.name, error: message });
+      aiRecommendation = finalPolicyRecommendationSchema.parse({
+        chosenCandidateId: fallbackRank?.interventionId ?? candidateIds[0],
+        headline: fallbackRank && !fallbackRank.disqualified ? `Deterministic fallback: ${fallbackRank.interventionId}` : "Hold for operator review",
+        reasoning: `The Final Policy Judge did not return valid structured output (${message}). Falling back to the deterministic ranking.`,
+        tradeoffs: [],
+        confidence: 0.3,
+        recommendedAction: fallbackRank && !fallbackRank.disqualified ? "hold_for_operator" : "hold_for_operator",
+        dataMode: "synthetic-fixture",
+      });
+      judgeThreadId = `local-fallback-${runId}`;
+      emit({ type: "agent.completed", runId, role: "final-policy-judge", name: judgeResolved.role.name, summary: aiRecommendation.headline });
+    }
+    recordParticipant("final-policy-judge");
+
+    const { effectiveRecommendation, overridden, overrideReason } = applyFinalAuthority({
+      evaluations,
       ranking,
-      candidateOutcomes,
-    );
-    emit({
-      type: "agent.completed",
-      runId,
-      role: "chief-dispatch-officer",
-      name: chiefResolved.role.name,
-      summary: chiefTurn.value.headline,
+      chosen: aiRecommendation,
+      stressOverlayAvailable,
     });
     emit({
       type: "recommendation.ready",
@@ -766,24 +1096,39 @@ export async function runGridTwinOrchestration(input: RunOrchestrationInput): Pr
       overridden,
       overrideReason: overrideReason ?? undefined,
     });
-
-    const result: GridRunResult = {
+    emit({
+      type: "operator.ready",
       runId,
-      assetId: input.assetId,
+      question:
+        effectiveRecommendation.recommendedAction === "hold_for_operator"
+          ? "This run requires operator review before proceeding. Ask why, or ask what would change the recommendation."
+          : "Ask the TTC Operator Explanation Agent anything about this recommendation.",
+    });
+
+    const result: TwinTORunResult = {
+      runId,
       scenarioId: input.scenarioId,
-      marketFinding: marketOutcome.finding,
-      renewableFinding: renewableOutcome.finding,
-      candidates: candidateOutcomes,
-      riskReviews: reviewerTurn.value.reviews,
+      problemSummary: problemOutcome.finding.summary,
+      baselineSummary: baselineOutcome.finding.summary,
+      candidates,
+      simulations: evaluations.map((evaluation) => ({ candidateId: evaluation.candidateId, result: evaluation.simulation })),
+      stressResults: evaluations
+        .filter((evaluation): evaluation is CandidateEvaluation & { stress: StressTestOutcome } => evaluation.stress !== null)
+        .map((evaluation) => ({ candidateId: evaluation.candidateId, result: evaluation.stress })),
+      citizenReactions: evaluations
+        .filter(
+          (evaluation): evaluation is CandidateEvaluation & { citizenReactions: CitizenReactionBatchResult } =>
+            evaluation.citizenReactions !== null,
+        )
+        .map((evaluation) => ({ candidateId: evaluation.candidateId, result: evaluation.citizenReactions })),
       ranking,
-      aiRecommendation: chiefTurn.value,
+      aiRecommendation,
       effectiveRecommendation,
       recommendationOverridden: overridden,
       overrideReason,
-      rankDisagreement,
-      chiefAssistantId: chiefResolved.record.assistantId,
-      chiefThreadId: chiefTurn.result.finalResult.threadId,
-      hiddenStressDescription: conditions.hiddenStressDescription,
+      judgeAssistantId: judgeResolved.record.assistantId,
+      judgeThreadId,
+      participatingAgents,
     };
     emit({ type: "run.completed", runId, result });
     return result;
