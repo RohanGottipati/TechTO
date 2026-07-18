@@ -1,3 +1,4 @@
+import type { TransitCohortFixture } from "@/data/transit/cohorts";
 import { simulateTransit } from "@/lib/transit/simulator";
 import type { TransitIntervention, TransitScenario, TransitSimulationResult } from "@/lib/transit/schemas";
 
@@ -18,6 +19,7 @@ export interface BoundedSearchInput {
   /** Inclusive minute range for shifting the second baseline departure. */
   shiftBRange?: [number, number];
   seed?: number;
+  cohorts?: TransitCohortFixture[];
 }
 
 /**
@@ -49,6 +51,7 @@ export function boundedDepartureSearch(input: BoundedSearchInput): DepartureShif
         intervention,
         stressOverlay: null,
         seed,
+        cohorts: input.cohorts,
       });
       if (!result.valid) continue;
       const objective =

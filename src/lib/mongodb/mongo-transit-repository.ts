@@ -93,6 +93,12 @@ export class MongoTransitRepository implements TransitRepository {
         "MongoDB TwinTO collections are empty. Run `npm run mongo:bootstrap` to create indexes and seed demo fixtures.",
       );
     }
+    if (cohortDocs.length === 0) {
+      throw new Error(
+        "MongoDB citizen_cohorts collection is empty. Run `npm run mongo:bootstrap` (synthetic fixture) or " +
+          "`uv run python -m population.build_neighbourhood_cohorts` (real resident-persona aggregate) to seed it.",
+      );
+    }
 
     const stations: TransitStationFixture[] = places.map((doc) => {
       const coords = (doc.location?.coordinates ?? [0, 0]) as [number, number];
@@ -177,19 +183,21 @@ export class MongoTransitRepository implements TransitRepository {
         id: String(raw.cohortId ?? raw.id),
         label: String(raw.label),
         weight: Number(raw.weight),
+        personaCount: raw.personaCount === undefined ? undefined : Number(raw.personaCount),
         homeZoneId: String(raw.homeZoneId),
         primaryDestinationZoneId: String(raw.primaryDestinationZoneId),
         ageBand: String(raw.ageBand),
         incomeBand: raw.incomeBand as TransitCohortFixture["incomeBand"],
-        occupationGroup: String(raw.occupationGroup),
-        workSchedule: raw.workSchedule as TransitCohortFixture["workSchedule"],
+        occupationGroup: raw.occupationGroup === undefined ? undefined : String(raw.occupationGroup),
+        workSchedule:
+          raw.workSchedule === undefined ? undefined : (raw.workSchedule as TransitCohortFixture["workSchedule"]),
         vehicleAccessProbability: Number(raw.vehicleAccessProbability),
         transitPassProbability: Number(raw.transitPassProbability),
-        scheduleFlexibility: Number(raw.scheduleFlexibility),
+        scheduleFlexibility: raw.scheduleFlexibility === undefined ? undefined : Number(raw.scheduleFlexibility),
         mobilityNeeds: raw.mobilityNeeds as string[],
         sensitivity: raw.sensitivity as TransitCohortFixture["sensitivity"],
         baselineModeShare: raw.baselineModeShare as TransitCohortFixture["baselineModeShare"],
-        dataMode: "synthetic-fixture",
+        dataMode: (raw.dataMode as TransitCohortFixture["dataMode"]) ?? "synthetic-fixture",
       };
     });
 
@@ -401,6 +409,7 @@ export class MongoTransitRepository implements TransitRepository {
       intervention: null,
       stressOverlay: null,
       seed: DEFAULT_REPOSITORY_SEED,
+      cohorts: this.cohorts,
     });
     return result.departureLoads;
   }
@@ -441,6 +450,7 @@ export class MongoTransitRepository implements TransitRepository {
       intervention: null,
       stressOverlay: null,
       seed: DEFAULT_REPOSITORY_SEED,
+      cohorts: this.cohorts,
     });
     const peakQueueLength = result.queueTrace.reduce((max, point) => Math.max(max, point.queueLength), 0);
     const peakLoad = result.departureLoads.reduce((max, load) => Math.max(max, load.loadFactor), 0);

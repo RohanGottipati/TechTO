@@ -15,6 +15,9 @@ import {
   type PopulationProvider,
 } from "@/lib/population/provider";
 import type { PopulationScoreResult } from "@/lib/population/score";
+import type { MapAction } from "@/lib/twinto/map-actions";
+import type { AgentMapOverlay } from "@/lib/twinto/map-overlays";
+import { parseMapActions } from "@/lib/twinto/map-actions";
 
 export type CityRunEvent =
   | { type: "run.started"; runId: string; question: string }
@@ -56,6 +59,7 @@ export interface CityOrchestrationResult {
   events: CityRunEvent[];
   toolCallLog: ToolCallOutcome[];
   adapterMode: "live";
+  mapActions: MapAction[];
 }
 
 export interface RunCityOrchestrationInput {
@@ -65,6 +69,8 @@ export interface RunCityOrchestrationInput {
   population?: PopulationProvider;
   onEvent?: (event: CityRunEvent) => void;
   seed?: number;
+  /** Current UI map drawings so collision checks see what the user already sees. */
+  agentOverlays?: AgentMapOverlay[];
 }
 
 const optionalMetaSchema = z.object({
@@ -181,6 +187,7 @@ export async function runCityOrchestration(
   const context = createRunContext("open-city", adapter, undefined, runId, {
     populationProvider: pop,
     populationSeed: seed,
+    agentOverlays: input.agentOverlays,
   });
 
   const hintPatches = input.patches?.length ? input.patches : [];
@@ -193,10 +200,11 @@ export async function runCityOrchestration(
     "Tools are available and optional; use them only when they help.",
     "Never invent ScenarioPatches or fake rankings just to fill a pipeline.",
     "If you score population acceptance, say it is simulated day-one feel, not ridership.",
+    "When comparing places or proposing geometry, use compose_map_actions to fly/highlight/draw on the map so the user can see it.",
     hintPatches.length
       ? `Caller supplied optional starter patches (use or ignore):\n${JSON.stringify(hintPatches)}`
       : "",
-    "Final reply: plain prose to the user.",
+    "Final reply: plain prose to the user. Be concise; no rambling.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -300,6 +308,9 @@ export async function runCityOrchestration(
     }
   }
 
+  const mapParsed = parseMapActions(context.composedMapActions);
+  const mapActions = mapParsed.ok ? mapParsed.actions : [];
+
   return {
     runId,
     question: input.question,
@@ -311,5 +322,6 @@ export async function runCityOrchestration(
     events,
     toolCallLog: loop.toolCallLog,
     adapterMode: "live",
+    mapActions,
   };
 }

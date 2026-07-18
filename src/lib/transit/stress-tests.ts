@@ -1,3 +1,4 @@
+import type { TransitCohortFixture } from "@/data/transit/cohorts";
 import { simulateTransit } from "@/lib/transit/simulator";
 import type {
   TransitIntervention,
@@ -31,6 +32,7 @@ export function stressTestIntervention(
   intervention: TransitIntervention,
   stressOverlay: TransitStressOverlay,
   seed: number,
+  cohorts?: TransitCohortFixture[],
 ): StressTestOutcome {
   const baseline = simulateTransit({
     schemaVersion: 1,
@@ -38,6 +40,7 @@ export function stressTestIntervention(
     intervention,
     stressOverlay: null,
     seed,
+    cohorts,
   });
   const stressed = simulateTransit({
     schemaVersion: 1,
@@ -45,6 +48,7 @@ export function stressTestIntervention(
     intervention,
     stressOverlay,
     seed,
+    cohorts,
   });
 
   const invalidationReasons: string[] = [];
@@ -83,8 +87,11 @@ export function stressTestCandidates(
   interventions: TransitIntervention[],
   stressOverlay: TransitStressOverlay,
   seed: number,
+  cohorts?: TransitCohortFixture[],
 ): StressTestOutcome[] {
-  return interventions.map((intervention) => stressTestIntervention(scenario, intervention, stressOverlay, seed));
+  return interventions.map((intervention) =>
+    stressTestIntervention(scenario, intervention, stressOverlay, seed, cohorts),
+  );
 }
 
 /** Convenience filter: interventions that failed the stress test and should be revised or rejected before being recommended. */

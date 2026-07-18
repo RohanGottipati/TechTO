@@ -26,6 +26,8 @@ import {
   ROUTE_COLORS,
   ROUTE_FALLBACK,
 } from "@/lib/map/palette";
+import { AgentOverlayLayer } from "@/components/map/AgentOverlayLayer";
+import { CandidateMarkerLayer } from "@/components/map/CandidateMarkerLayer";
 
 const SELECTED_BUILDING_SOURCE = "torontwin-selected-building";
 const SELECTED_BUILDING_FILL = "torontwin-selected-building-fill";
@@ -156,6 +158,9 @@ export function MapCanvas({
   const layers = useSimStore((s) => s.layers);
   const scenarioId = useSimStore((s) => s.scenarioId);
   const selectedCode = useSimStore((s) => s.selectedCode);
+  const cameraTarget = useMapStore((s) => s.cameraTarget);
+  const boundsTarget = useMapStore((s) => s.boundsTarget);
+  const highlightedNeighbourhoodIds = useMapStore((s) => s.highlightedNeighbourhoodIds);
   const layersRef = useRef(layers);
   layersRef.current = layers;
 
@@ -771,9 +776,72 @@ export function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, personas]);
 
+  // Agent camera fly / fit
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !cameraTarget) return;
+    map.flyTo({
+      center: cameraTarget.center,
+      zoom: cameraTarget.zoom,
+      duration: cameraTarget.durationMs ?? 900,
+      essential: true,
+    });
+  }, [cameraTarget, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !boundsTarget) return;
+    map.fitBounds(boundsTarget.bounds, {
+      padding: boundsTarget.padding ?? 48,
+      duration: boundsTarget.durationMs ?? 900,
+    });
+  }, [boundsTarget, ready]);
+
+  // Neighbourhood highlight by Coolness `code`
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !map.getSource("nbhd")) return;
+    const layerId = "nbhd-agent-hl";
+    const fillId = "nbhd-agent-hl-fill";
+    if (!map.getLayer(fillId)) {
+      map.addLayer({
+        id: fillId,
+        type: "fill",
+        source: "nbhd",
+        paint: { "fill-color": "#22d3ee", "fill-opacity": 0.16 },
+        filter: ["==", ["get", "code"], "__none__"],
+      });
+    }
+    if (!map.getLayer(layerId)) {
+      map.addLayer({
+        id: layerId,
+        type: "line",
+        source: "nbhd",
+        paint: { "line-color": "#67e8f9", "line-width": 2.2 },
+        filter: ["==", ["get", "code"], "__none__"],
+      });
+    }
+    const filter =
+      highlightedNeighbourhoodIds.length === 0
+        ? (["==", ["get", "code"], "__none__"] as maplibregl.FilterSpecification)
+        : ([
+            "in",
+            ["get", "code"],
+            ["literal", highlightedNeighbourhoodIds],
+          ] as maplibregl.FilterSpecification);
+    map.setFilter(fillId, filter);
+    map.setFilter(layerId, filter);
+  }, [highlightedNeighbourhoodIds, ready]);
+
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} className="h-full w-full" />
+      {ready && (
+        <>
+          <AgentOverlayLayer map={mapRef.current} />
+          <CandidateMarkerLayer map={mapRef.current} />
+        </>
+      )}
       {tooltip && (
         <div
           className="pointer-events-none absolute z-20 max-w-[240px] -translate-y-full rounded-sm border border-white/10 bg-[#14181a]/95 px-2.5 py-1.5"

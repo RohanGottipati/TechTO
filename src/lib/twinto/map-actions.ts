@@ -6,9 +6,8 @@ import {
 } from "@/lib/twinto/toronto-scope";
 
 /**
- * Allowlisted MapLibre actions the Explanation / Map Action agent may emit.
- * The frontend validates with Zod and remains the final executor.
- * Coordinates must fall inside the City of Toronto.
+ * Allowlisted MapLibre actions. Frontend validates with Zod and remains the
+ * final executor. Coordinates must fall inside the City of Toronto.
  */
 
 const lonLat = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
@@ -81,6 +80,50 @@ export const mapActionSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
+      type: z.literal("draw_point"),
+      id: z.string().min(1).max(80),
+      coordinates: lonLat,
+      label: z.string().min(1).max(120),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("draw_line"),
+      id: z.string().min(1).max(80),
+      coordinates: z.array(lonLat).min(2).max(200),
+      label: z.string().min(1).max(120),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("draw_polygon"),
+      id: z.string().min(1).max(80),
+      coordinates: z.array(lonLat).min(3).max(200),
+      label: z.string().min(1).max(120),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("annotate"),
+      id: z.string().min(1).max(80),
+      coordinates: lonLat,
+      text: z.string().min(1).max(200),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("remove_overlays"),
+      ids: z.array(z.string().min(1)).min(1).max(50),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("clear_map_overlays"),
+      what: z.enum(["markers", "highlights", "drawings", "annotations", "all"]),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal("show_route_overlay"),
       routeGeoJsonId: z.string().min(1).max(80),
     })
@@ -123,7 +166,7 @@ export type MapAction = z.output<typeof mapActionSchema>;
 export const mapActionListSchema = z.array(mapActionSchema).max(30);
 
 export type MapActionParseResult =
-  | { ok: true; actions: MapAction[] }
+  | { ok: true; actions: MapAction[]; rejected: unknown[]; errors: string[] }
   | { ok: false; rejected: unknown[]; errors: string[] };
 
 function torontoGeoErrors(action: MapAction): string[] {
@@ -154,6 +197,18 @@ function torontoGeoErrors(action: MapAction): string[] {
         errors.push(
           `Candidate "${candidate.candidateId}": ${torontoScopeViolationMessage(lng, lat)}`,
         );
+      }
+    }
+  }
+  if (action.type === "draw_point" || action.type === "annotate") {
+    const [lng, lat] = action.coordinates;
+    if (!isInsideToronto(lng, lat)) errors.push(torontoScopeViolationMessage(lng, lat));
+  }
+  if (action.type === "draw_line" || action.type === "draw_polygon") {
+    for (const [lng, lat] of action.coordinates) {
+      if (!isInsideToronto(lng, lat)) {
+        errors.push(torontoScopeViolationMessage(lng, lat));
+        break;
       }
     }
   }
@@ -189,5 +244,5 @@ export function parseMapActions(input: unknown): MapActionParseResult {
   if (rejected.length > 0 && actions.length === 0) {
     return { ok: false, rejected, errors };
   }
-  return { ok: true, actions };
+  return { ok: true, actions, rejected, errors };
 }

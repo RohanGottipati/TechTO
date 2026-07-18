@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowUp, Columns2, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
-import { parseMapActions, type MapAction } from "@/lib/twinto/map-actions";
+import { parseMapActions } from "@/lib/twinto/map-actions";
+import { applyMapActions } from "@/lib/twinto/apply-map-actions";
 import { useMapStore } from "@/store/useMapStore";
 import { useTwinTOStore } from "@/store/useTwinTOStore";
 import type { UseBackboardRunResult } from "@/lib/twinto/use-backboard-run";
@@ -21,29 +22,6 @@ interface ChatMessage {
 const EXAMPLE_ASK =
   "Should I place a new train station in Wychwood or in Ionview?";
 
-function applyMapActions(actions: MapAction[]): void {
-  const map = useMapStore.getState();
-  for (const action of actions) {
-    if (action.type === "fly_to_center") {
-      map.setCameraTarget({ center: action.center, zoom: action.zoom });
-    } else if (action.type === "highlight_neighbourhoods") {
-      map.setHighlightedNeighbourhoods(action.neighbourhoodIds);
-    } else if (action.type === "show_candidate_markers") {
-      map.setCandidateMarkers(action.candidates);
-    } else if (action.type === "select_candidate") {
-      useTwinTOStore.getState().setSelectedCandidate(action.candidateId);
-    } else if (action.type === "open_panel") {
-      const focus =
-        action.panel === "citizen_reactions"
-          ? "citizens"
-          : action.panel === "candidate_details" || action.panel === "policy_comparison"
-            ? "recommendation"
-            : "chat";
-      useTwinTOStore.getState().setPanelFocus(focus);
-    }
-  }
-}
-
 export interface MapChatBarProps {
   /** Optional TwinTO planning run. Omit on the ToronTwin dashboard. */
   run?: UseBackboardRunResult;
@@ -52,7 +30,12 @@ export interface MapChatBarProps {
   enablePlanningRun?: boolean;
   /** Coolness open-city planner via /api/planner/run (orchestrator agent). */
   enableCityPlanRun?: boolean;
-  onCityPlanQuestion?: (question: string) => Promise<{ summary?: string; ranking?: CityPlanRankingRow[]; chosenId?: string } | void>;
+  onCityPlanQuestion?: (question: string) => Promise<{
+    summary?: string;
+    ranking?: CityPlanRankingRow[];
+    chosenId?: string;
+    mapActions?: unknown[];
+  } | void>;
   cityPlanRunning?: boolean;
 }
 
@@ -157,6 +140,8 @@ export function MapChatBar({
       // Open-city path: Planning Orchestrator agent (tools + optional subagents)
       if (enableCityPlanRun && onCityPlanQuestion) {
         const payload = await onCityPlanQuestion(text);
+        const mapParsed = parseMapActions(payload?.mapActions ?? []);
+        if (mapParsed.ok) applyMapActions(mapParsed.actions);
         const ranking = payload?.ranking ?? [];
         const rankLines = ranking
           .slice(0, 5)

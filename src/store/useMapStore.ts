@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { SelectedMapPlace } from "@/lib/twinto/place-context";
+import type { AgentMapOverlay } from "@/lib/twinto/map-overlays";
 
 export interface MapLayerVisibility {
   transit: boolean;
@@ -22,9 +23,19 @@ interface MapState {
   selectedScenarioId: string | null;
   playbackMinute: number;
   layers: MapLayerVisibility;
-  cameraTarget: { center: [number, number]; zoom: number } | null;
+  cameraTarget: {
+    center: [number, number];
+    zoom: number;
+    durationMs?: number;
+  } | null;
+  boundsTarget: {
+    bounds: [number, number, number, number];
+    padding?: number;
+    durationMs?: number;
+  } | null;
   highlightedNeighbourhoodIds: string[];
   candidateMarkers: CandidateMarker[];
+  agentOverlays: AgentMapOverlay[];
   /** Place selected for the floating mini chat (building footprint or station). */
   selectedPlace: SelectedMapPlace | null;
   buildingMiniChatOpen: boolean;
@@ -36,9 +47,24 @@ interface MapActions {
   setPlaybackMinute: (minute: number) => void;
   toggleLayer: (layer: keyof MapLayerVisibility, visible?: boolean) => void;
   setLayerVisibility: (layers: Partial<MapLayerVisibility>) => void;
-  setCameraTarget: (target: { center: [number, number]; zoom: number } | null) => void;
+  setCameraTarget: (
+    target: { center: [number, number]; zoom: number; durationMs?: number } | null,
+  ) => void;
+  setBoundsTarget: (
+    target: {
+      bounds: [number, number, number, number];
+      padding?: number;
+      durationMs?: number;
+    } | null,
+  ) => void;
   setHighlightedNeighbourhoods: (ids: string[]) => void;
   setCandidateMarkers: (markers: CandidateMarker[]) => void;
+  upsertAgentOverlay: (overlay: AgentMapOverlay) => void;
+  removeAgentOverlays: (ids: string[]) => void;
+  clearMapOverlays: (
+    what: "markers" | "highlights" | "drawings" | "annotations" | "all",
+  ) => void;
+  setAgentOverlays: (overlays: AgentMapOverlay[]) => void;
   selectPlace: (place: SelectedMapPlace) => void;
   clearPlaceSelection: () => void;
   setBuildingMiniChatOpen: (open: boolean) => void;
@@ -61,8 +87,10 @@ const initialState: MapState = {
   playbackMinute: 0,
   layers: DEFAULT_LAYERS,
   cameraTarget: null,
+  boundsTarget: null,
   highlightedNeighbourhoodIds: [],
   candidateMarkers: [],
+  agentOverlays: [],
   selectedPlace: null,
   buildingMiniChatOpen: false,
 };
@@ -84,8 +112,43 @@ export const useMapStore = create<MapStore>((set) => ({
     })),
 
   setCameraTarget: (cameraTarget) => set({ cameraTarget }),
+  setBoundsTarget: (boundsTarget) => set({ boundsTarget }),
   setHighlightedNeighbourhoods: (highlightedNeighbourhoodIds) => set({ highlightedNeighbourhoodIds }),
   setCandidateMarkers: (candidateMarkers) => set({ candidateMarkers }),
+  setAgentOverlays: (agentOverlays) => set({ agentOverlays }),
+
+  upsertAgentOverlay: (overlay) =>
+    set((state) => ({
+      agentOverlays: [
+        ...state.agentOverlays.filter((o) => o.id !== overlay.id),
+        overlay,
+      ],
+    })),
+  removeAgentOverlays: (ids) =>
+    set((state) => ({
+      agentOverlays: state.agentOverlays.filter((o) => !ids.includes(o.id)),
+    })),
+  clearMapOverlays: (what) =>
+    set((state) => {
+      if (what === "all") {
+        return {
+          candidateMarkers: [],
+          highlightedNeighbourhoodIds: [],
+          agentOverlays: [],
+        };
+      }
+      if (what === "markers") return { candidateMarkers: [] };
+      if (what === "highlights") return { highlightedNeighbourhoodIds: [] };
+      if (what === "annotations") {
+        return {
+          agentOverlays: state.agentOverlays.filter((o) => o.kind !== "annotation"),
+        };
+      }
+      // drawings: points, lines, polygons
+      return {
+        agentOverlays: state.agentOverlays.filter((o) => o.kind === "annotation"),
+      };
+    }),
 
   selectPlace: (place) =>
     set({

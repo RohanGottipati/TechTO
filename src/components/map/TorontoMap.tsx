@@ -10,6 +10,7 @@ import { EventLayer } from "@/components/map/EventLayer";
 import { VehicleLayer } from "@/components/map/VehicleLayer";
 import { CandidateMarkerLayer } from "@/components/map/CandidateMarkerLayer";
 import { NeighbourhoodHighlightLayer } from "@/components/map/NeighbourhoodHighlightLayer";
+import { AgentOverlayLayer } from "@/components/map/AgentOverlayLayer";
 import { InterventionDiffLayer } from "@/components/map/InterventionDiffLayer";
 import { MapLegend } from "@/components/map/MapLegend";
 import { DEFAULT_MAP_STYLE_URL, TORONTO_VIEW } from "@/lib/map/map-config";
@@ -168,7 +169,7 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
     map.flyTo({
       center: cameraTarget.center,
       zoom: cameraTarget.zoom,
-      duration: 1200,
+      duration: cameraTarget.durationMs ?? 1200,
       essential: true,
     });
   }, [map, cameraTarget]);
@@ -192,6 +193,7 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
       {layers.policyOverlay && <EventLayer map={map} />}
       <NeighbourhoodHighlightLayer map={map} />
       <CandidateMarkerLayer map={map} />
+      <AgentOverlayLayer map={map} />
       <InterventionDiffLayer map={map} />
       <div className="pointer-events-none absolute bottom-4 left-4 z-10">
         <MapLegend />

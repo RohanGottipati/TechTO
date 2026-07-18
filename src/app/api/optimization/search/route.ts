@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireScenario } from "@/data/transit/scenarios";
 import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 import { boundedDepartureSearch } from "@/lib/optimization/bounded-search";
+import { getTransitRepository } from "@/lib/transit/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,10 +26,12 @@ export async function POST(request: Request) {
 
   try {
     const scenario = requireScenario(parsed.data.scenarioId);
+    const repo = await getTransitRepository();
     const ranked = boundedDepartureSearch({
       scenario,
       shiftARange: parsed.data.shiftARange,
       shiftBRange: parsed.data.shiftBRange,
+      cohorts: repo.listCohorts(),
     });
     const limit = parsed.data.limit ?? 8;
     return Response.json({

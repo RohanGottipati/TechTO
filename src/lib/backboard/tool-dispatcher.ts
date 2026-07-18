@@ -25,12 +25,19 @@ import { rankInterventions, type RankableIntervention } from "@/lib/transit/cand
 import { simulateTransit } from "@/lib/transit/simulator";
 import { stressTestIntervention, type StressTestOutcome } from "@/lib/transit/stress-tests";
 import { transitInterventionSchema, type TransitIntervention, type TransitSimulationResult } from "@/lib/transit/schemas";
-import { parseMapActions } from "@/lib/twinto/map-actions";
+import { parseMapActions, type MapAction } from "@/lib/twinto/map-actions";
+import {
+  actionToOverlay,
+  findCollision,
+  MAP_COLLISION_METERS,
+  type AgentMapOverlay,
+} from "@/lib/twinto/map-overlays";
 import { emptyTwinSnapshot, patchTwin, queryTwin, type TwinSnapshot } from "@/lib/planner/state";
 import { diffTwin } from "@/lib/planner/diff";
 import { parseScenarioPatch, parseScenarioPatches, type ScenarioPatch } from "@/lib/planner/scenario";
 import { getPopulationProvider } from "@/lib/population/provider";
 import type { PopulationProvider } from "@/lib/population/provider";
+import { runAgentPython } from "@/lib/analysis/run-python";
 import { matchCannedAsk } from "@/lib/planner/canned";
 import { isTwinTOAssistantKey, ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
 import { getToolDefinitions } from "@/lib/backboard/tools";
@@ -88,6 +95,8 @@ export interface RunContext {
     rankHint: number;
   }>;
   composedMapActions: unknown[];
+  /** Agent map drawings for this run (and seeded from UI). */
+  agentOverlays: AgentMapOverlay[];
   /** In-memory city twin for open asks (query/patch/run). */
   twin: TwinSnapshot;
   twinBaseline: TwinSnapshot;
@@ -119,6 +128,7 @@ export function createRunContext(
   extras?: {
     populationProvider?: PopulationProvider;
     populationSeed?: number;
+    agentOverlays?: AgentMapOverlay[];
   },
 ): RunContext {
   return {
@@ -130,6 +140,7 @@ export function createRunContext(
     mapContext: { ...DEFAULT_MAP_CONTEXT, ...mapContext },
     stationCandidates: [],
     composedMapActions: [],
+    agentOverlays: extras?.agentOverlays ? [...extras.agentOverlays] : [],
     twin: emptyTwinSnapshot(),
     twinBaseline: emptyTwinSnapshot(),
     twinSnapshots: new Map(),
@@ -187,6 +198,7 @@ function ensureSimulated(
     intervention,
     stressOverlay: null,
     seed: TOOL_DISPATCH_SEED,
+    cohorts: repo.listCohorts(),
   });
   state.visible = result;
   return result;
@@ -446,6 +458,7 @@ async function handleRunSimulation(args: unknown, context: RunContext, repo: Tra
     intervention,
     stressOverlay: null,
     seed: TOOL_DISPATCH_SEED,
+    cohorts: repo.listCohorts(),
   });
   state.visible = result;
   const persisted = await persistSimulationRun({ scenarioId, intervention, result });
@@ -555,7 +568,7 @@ function handleStressTest(args: unknown, context: RunContext, repo: TransitRepos
   }
   const state = candidateState(context, intervention.id);
   state.intervention = intervention;
-  const outcome = stressTestIntervention(scenario, intervention, overlay, TOOL_DISPATCH_SEED);
+  const outcome = stressTestIntervention(scenario, intervention, overlay, TOOL_DISPATCH_SEED, repo.listCohorts());
   state.visible = state.visible ?? outcome.baseline;
   state.stress = outcome;
   return { ...outcome, storageLayer: repo.getStorageLayer() };
@@ -797,6 +810,9 @@ async function executeTool(
         storageLayer: repo.getStorageLayer(),
         ...context.mapContext,
         scenarioId: context.scenarioId,
+        agentOverlays: context.agentOverlays,
+        twinPoiCount: context.twin.pois.length,
+        twinCorridorCount: context.twin.corridors.length,
       };
     case TOOL_NAMES.SEARCH_NEIGHBOURHOODS: {
       const parsed = z
@@ -981,14 +997,108 @@ async function executeTool(
     case TOOL_NAMES.COMPOSE_MAP_ACTIONS: {
       const parsed = z.object({ actions: z.array(z.unknown()) }).strict().parse(args);
       const validated = parseMapActions(parsed.actions);
-      const accepted = validated.ok ? validated.actions : [];
-      context.composedMapActions = accepted;
+      if (!validated.ok) {
+        return {
+          ok: false,
+          accepted: [],
+          rejected: validated.rejected,
+          errors: validated.errors,
+          note: "No valid map actions. Fix schema / Toronto scope and retry.",
+        };
+      }
+
+      const accepted: MapAction[] = [];
+      const rejected: unknown[] = [...validated.rejected];
+      const errors: string[] = [...validated.errors];
+
+      // Occupancy: prior agent drawings + twin POIs/corridors
+      const occupancy: AgentMapOverlay[] = [
+        ...context.agentOverlays,
+        ...context.twin.pois.map(
+          (p): AgentMapOverlay => ({
+            kind: "point",
+            id: `twin-poi:${p.id}`,
+            coordinates: [p.lng, p.lat],
+            label: p.label,
+          }),
+        ),
+        ...context.twin.corridors.map(
+          (c): AgentMapOverlay => ({
+            kind: "line",
+            id: `twin-corridor:${c.id}`,
+            coordinates: c.alignment,
+            label: c.label,
+          }),
+        ),
+      ];
+
+      for (const action of validated.actions) {
+        if (
+          action.type === "draw_point" ||
+          action.type === "draw_line" ||
+          action.type === "draw_polygon" ||
+          action.type === "annotate"
+        ) {
+          const overlay = actionToOverlay(action);
+          if (!overlay) {
+            rejected.push(action);
+            errors.push(`Could not materialize overlay for action ${action.type}`);
+            continue;
+          }
+          if (occupancy.some((o) => o.id === overlay.id) || context.agentOverlays.some((o) => o.id === overlay.id)) {
+            rejected.push(action);
+            errors.push(`Overlay id "${overlay.id}" already exists on the map.`);
+            continue;
+          }
+          const hit = findCollision(overlay, occupancy);
+          if (hit) {
+            rejected.push(action);
+            errors.push(
+              `Collision: "${overlay.id}" is within ${MAP_COLLISION_METERS}m of existing "${hit.id}" (${hit.kind}). Move it or remove the other overlay first.`,
+            );
+            continue;
+          }
+          context.agentOverlays.push(overlay);
+          occupancy.push(overlay);
+          accepted.push(action);
+          continue;
+        }
+
+        if (action.type === "remove_overlays") {
+          context.agentOverlays = context.agentOverlays.filter((o) => !action.ids.includes(o.id));
+          accepted.push(action);
+          continue;
+        }
+
+        if (action.type === "clear_map_overlays") {
+          if (action.what === "all" || action.what === "drawings") {
+            context.agentOverlays =
+              action.what === "all"
+                ? []
+                : context.agentOverlays.filter((o) => o.kind === "annotation");
+          }
+          if (action.what === "annotations") {
+            context.agentOverlays = context.agentOverlays.filter((o) => o.kind !== "annotation");
+          }
+          accepted.push(action);
+          continue;
+        }
+
+        accepted.push(action);
+      }
+
+      // Append so multiple compose calls in one turn accumulate
+      context.composedMapActions = [...context.composedMapActions, ...accepted];
       return {
-        ok: validated.ok,
+        ok: errors.length === 0,
         accepted,
-        rejected: validated.ok ? [] : validated.rejected,
-        errors: validated.ok ? [] : validated.errors,
-        note: "Frontend remains the final executor of map actions.",
+        rejected,
+        errors,
+        agentOverlays: context.agentOverlays,
+        note:
+          errors.length > 0
+            ? "Some map actions were rejected (schema, Toronto scope, or collision). Frontend executes only accepted actions."
+            : "Frontend remains the final executor of map actions.",
       };
     }
     case TOOL_NAMES.WRITE_MEMORY:
@@ -1159,6 +1269,25 @@ async function executeTool(
         citywide: score.citywide,
         note: "Simulated acceptance readout.",
       };
+    }
+    case TOOL_NAMES.RUN_PYTHON: {
+      const parsed = z
+        .object({
+          code: z.string().min(1).max(40_000),
+          timeout_s: z.number().positive().max(30).optional(),
+        })
+        .strict()
+        .parse(args);
+      const timeoutMs = Math.round((parsed.timeout_s ?? 12) * 1000);
+      const result = await runAgentPython({
+        code: parsed.code,
+        timeoutMs,
+        twin: context.twin,
+        overlays: context.agentOverlays,
+        seed: context.populationSeed ?? 2262,
+      });
+      // return errors to the model so it can fix code; only spawn/parse throws
+      return result;
     }
     default:
       throw new ToolDispatchError(`Unknown tool: "${name}"`);

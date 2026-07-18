@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { TransitCohortFixture } from "@/data/transit/cohorts";
+
 /**
  * Zod contracts for the TwinTO deterministic transit domain layer (see
  * docs/twinto-implementation.md sections 2 and 11). These schemas are the
@@ -245,6 +247,16 @@ export const transitSimulationInputSchema = z
     intervention: transitInterventionSchema.nullable(),
     stressOverlay: transitStressOverlaySchema.nullable(),
     seed: z.number().int(),
+    /**
+     * Cohorts to use for this simulation's equity-gap and car-switch-probability
+     * math. Optional and never itself validated (this schema is a TS-type
+     * source, not a runtime parse boundary) — omitted, `simulateTransit`
+     * falls back to the static synthetic fixture. Passed explicitly by every
+     * server-side caller that has a resolved TransitRepository, so real
+     * resident-persona-aggregate cohorts (once seeded) drive the simulation
+     * instead of the 11 synthetic-fixture cohorts.
+     */
+    cohorts: z.custom<TransitCohortFixture[]>().optional(),
   })
   .strict();
 

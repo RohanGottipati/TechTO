@@ -499,6 +499,11 @@ Flash env publish: `flash env push --name <slug> model/sft` or `model/grpo`
 - **Free-form agent turns.** The open-city chat agent answers like Claude Code:
   it may talk, tool-call, or orchestrate. Do not reintroduce forced scenario
   scripts, mock adapters, or per-keyword special cases for phrases like "help".
+- **Code analysis tool.** `run_python` (planning-orchestrator, feasibility,
+  evidence-auditor, equity-impact) runs short Python via `analysis/agent_exec.py`
+  with pandas/numpy/scipy/statsmodels/sklearn and a **read-only** Mongo binding
+  (`MONGODB_URI_READONLY` or `MONGODB_URI`). No writes. Fail hard if the runner
+  errors.
 - **Live providers only.** Do not add Backboard or citizen-reaction mock
   adapters. Fail hard when `BACKBOARD_API_KEY` or FreeSolo credentials are
   missing for paths that need them.

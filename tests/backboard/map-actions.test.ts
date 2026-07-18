@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseMapActions } from "@/lib/twinto/map-actions";
+import { findCollision, type AgentMapOverlay } from "@/lib/twinto/map-overlays";
 
 describe("parseMapActions", () => {
   it("accepts allowlisted fly_to_center and candidate markers", () => {
@@ -33,5 +34,43 @@ describe("parseMapActions", () => {
     if (!result.ok) {
       expect(result.errors.some((error) => /outside the City of Toronto/i.test(error))).toBe(true);
     }
+  });
+
+  it("accepts draw_point and annotate inside Toronto", () => {
+    const result = parseMapActions([
+      {
+        type: "draw_point",
+        id: "opt-wychwood",
+        coordinates: [-79.42, 43.68],
+        label: "Wychwood",
+      },
+      {
+        type: "annotate",
+        id: "note-1",
+        coordinates: [-79.42, 43.681],
+        text: "Higher density",
+      },
+      { type: "clear_map_overlays", what: "drawings" },
+    ]);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.actions).toHaveLength(3);
+  });
+});
+
+describe("map overlay collision", () => {
+  it("flags points within 40m", () => {
+    const a: AgentMapOverlay = {
+      kind: "point",
+      id: "a",
+      coordinates: [-79.42, 43.68],
+      label: "A",
+    };
+    const b: AgentMapOverlay = {
+      kind: "point",
+      id: "b",
+      coordinates: [-79.4201, 43.68005],
+      label: "B",
+    };
+    expect(findCollision(b, [a])?.id).toBe("a");
   });
 });

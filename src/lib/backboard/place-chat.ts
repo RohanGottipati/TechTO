@@ -204,11 +204,10 @@ export async function askPlaceChat(input: AskPlaceChatInput): Promise<AskPlaceCh
 
   const fromAnswer = parseMapActions(attempt.value.mapActions ?? []);
   const fromTools = parseMapActions(context.composedMapActions);
-  const mapActions = fromAnswer.ok
-    ? fromAnswer.actions
-    : fromTools.ok
-      ? fromTools.actions
-      : [];
+  const mapActions = [
+    ...(fromTools.ok ? fromTools.actions : []),
+    ...(fromAnswer.ok ? fromAnswer.actions : []),
+  ];
 
   return {
     answer: attempt.value,

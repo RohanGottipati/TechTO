@@ -1,5 +1,5 @@
 import { getStation } from "@/data/transit/network";
-import { listCohorts, vulnerableCohorts } from "@/data/transit/cohorts";
+import { deriveVulnerableCohorts, listCohorts } from "@/data/transit/cohorts";
 import { StationQueue } from "@/lib/transit/queue";
 import {
   computeEquityGap,
@@ -537,8 +537,8 @@ export function simulateTransit(input: TransitSimulationInput): TransitSimulatio
   const p90Wait = p90WaitMinutes(waitSamples);
   const loadImbalance = computeLoadImbalance(rawLoads.map((load) => load.loadFactor));
 
-  const allCohorts = listCohorts();
-  const vulnerable = vulnerableCohorts();
+  const allCohorts = input.cohorts ?? listCohorts();
+  const vulnerable = deriveVulnerableCohorts(allCohorts);
   const equityGap = computeEquityGap(meanWait, vulnerable, allCohorts);
   const carSwitchProbability = weightedCarSwitchProbability(allCohorts);
   const estimatedCarTrips = estimateCarTripsFromDeniedBoardings(deniedBoardings, carSwitchProbability);

@@ -8,15 +8,51 @@ import { PRINCIPLED_CITY_BUNDLE } from "@/lib/backboard/assistants";
 
 export const runtime = "nodejs";
 
+const overlaySchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("point"),
+      id: z.string(),
+      coordinates: z.tuple([z.number(), z.number()]),
+      label: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("line"),
+      id: z.string(),
+      coordinates: z.array(z.tuple([z.number(), z.number()])),
+      label: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("polygon"),
+      id: z.string(),
+      coordinates: z.array(z.tuple([z.number(), z.number()])),
+      label: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("annotation"),
+      id: z.string(),
+      coordinates: z.tuple([z.number(), z.number()]),
+      text: z.string(),
+    })
+    .strict(),
+]);
+
 const bodySchema = z.object({
   question: z.string().min(1),
   patches: z.array(scenarioPatchSchema).optional(),
   seed: z.number().optional(),
+  agentOverlays: z.array(overlaySchema).optional(),
 });
 
 /**
  * Headless / UI city planning run: live Backboard Planning Orchestrator +
- * local twin/population score.
+ * local twin/population score. May return mapActions for the MapLibre UI.
  */
 export async function POST(request: Request) {
   const json = await request.json();
@@ -25,6 +61,7 @@ export async function POST(request: Request) {
     question: body.question,
     patches: body.patches,
     seed: body.seed ?? 2262,
+    agentOverlays: body.agentOverlays,
   });
 
   return NextResponse.json({
@@ -38,6 +75,7 @@ export async function POST(request: Request) {
     ranking: result.ranking,
     chosenId: result.chosenId,
     summary: result.summary,
+    mapActions: result.mapActions,
     events: result.events,
     candidates: result.candidates.map((c) => ({
       patch: c.patch,

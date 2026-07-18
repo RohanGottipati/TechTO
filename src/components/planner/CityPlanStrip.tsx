@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CANNED_CITY_ASKS } from "@/lib/planner/canned";
 import { cn } from "@/lib/utils/cn";
+import { useMapStore } from "@/store/useMapStore";
 
 export interface CityPlanRankingRow {
   id: string;
@@ -30,10 +31,11 @@ export function useCityPlanRun() {
   async function start(question: string) {
     setIsRunning(true);
     setError(null);
+    const agentOverlays = useMapStore.getState().agentOverlays;
     const response = await fetch("/api/planner/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, seed: 2262 }),
+      body: JSON.stringify({ question, seed: 2262, agentOverlays }),
     });
     if (!response.ok) {
       const errText = await response.text();

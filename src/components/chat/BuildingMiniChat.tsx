@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowUp, Loader2, MapPin, X } from "lucide-react";
 import { createRunStreamClient } from "@/lib/backboard/stream-parser";
-import { parseMapActions, type MapAction } from "@/lib/twinto/map-actions";
+import { parseMapActions } from "@/lib/twinto/map-actions";
+import { applyMapActions } from "@/lib/twinto/apply-map-actions";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { useMapStore } from "@/store/useMapStore";
-import { useTwinTOStore } from "@/store/useTwinTOStore";
 import { cn } from "@/lib/utils/cn";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 
@@ -16,29 +16,6 @@ interface MiniMessage {
   content: string;
   assistantKey?: string;
   citedEvidence?: string[];
-}
-
-function applyMapActions(actions: MapAction[]): void {
-  const map = useMapStore.getState();
-  for (const action of actions) {
-    if (action.type === "fly_to_center") {
-      map.setCameraTarget({ center: action.center, zoom: action.zoom });
-    } else if (action.type === "highlight_neighbourhoods") {
-      map.setHighlightedNeighbourhoods(action.neighbourhoodIds);
-    } else if (action.type === "show_candidate_markers") {
-      map.setCandidateMarkers(action.candidates);
-    } else if (action.type === "select_candidate") {
-      useTwinTOStore.getState().setSelectedCandidate(action.candidateId);
-    } else if (action.type === "open_panel") {
-      const focus =
-        action.panel === "citizen_reactions"
-          ? "citizens"
-          : action.panel === "candidate_details" || action.panel === "policy_comparison"
-            ? "recommendation"
-            : "chat";
-      useTwinTOStore.getState().setPanelFocus(focus);
-    }
-  }
 }
 
 function placeKindLabel(kind: "building" | "station" | "neighbourhood"): string {

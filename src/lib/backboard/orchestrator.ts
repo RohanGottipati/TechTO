@@ -13,12 +13,12 @@ import type {
 import { runToolLoop, type RunToolLoopResult } from "@/lib/backboard/run-tool-loop";
 import { createRunContext, type RunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dispatcher";
 import { getToolDefinitions } from "@/lib/backboard/tools";
-import type { CohortModeShare } from "@/data/transit/cohorts";
-import { listCohorts } from "@/data/transit/cohorts";
+import type { CohortModeShare, TransitCohortFixture } from "@/data/transit/cohorts";
 import { listStressOverlays, requireScenario } from "@/data/transit/scenarios";
 import { getCitizenReactionProvider } from "@/lib/citizen-reaction/provider";
 import type { CitizenCohort, CitizenReactionBatchResult, CitizenReactionContext } from "@/lib/citizen-reaction/schemas";
 import { rankInterventions, type RankableIntervention } from "@/lib/transit/candidate-ranker";
+import { getTransitRepository } from "@/lib/transit/repository";
 import { simulateTransit } from "@/lib/transit/simulator";
 import { stressTestIntervention, type StressTestOutcome } from "@/lib/transit/stress-tests";
 import {
@@ -386,8 +386,8 @@ function dominantMode(shares: CohortModeShare): "transit" | "car" | "walk" | "bi
   return entries[0][0];
 }
 
-function buildCitizenCohorts(): CitizenCohort[] {
-  return listCohorts().map((cohort) => ({
+function buildCitizenCohorts(cohorts: TransitCohortFixture[]): CitizenCohort[] {
+  return cohorts.map((cohort) => ({
     cohortId: cohort.id,
     label: cohort.label,
     populationWeight: cohort.weight,
@@ -612,6 +612,7 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
   };
 
   const scenario = requireScenario(input.scenarioId);
+  const repo = await getTransitRepository();
   const context = createRunContext(input.scenarioId, adapter, undefined, runId);
   const declaredBundle = selectAssistantBundle(input.scenarioId);
   const includesConcertBundle = input.scenarioId === "departure-406-412";
@@ -626,6 +627,7 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
       intervention: null,
       stressOverlay: null,
       seed: 20260718,
+      cohorts: repo.listCohorts(),
     });
 
     // -- Problem definition --------------------------------------------------
@@ -767,7 +769,14 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
       let simulation = state?.visible;
       let simulationSource: EvidenceSource = "agent";
       if (!simulation) {
-        simulation = simulateTransit({ schemaVersion: 1, scenario, intervention: candidate, stressOverlay: null, seed: 20260718 });
+        simulation = simulateTransit({
+          schemaVersion: 1,
+          scenario,
+          intervention: candidate,
+          stressOverlay: null,
+          seed: 20260718,
+          cohorts: repo.listCohorts(),
+        });
         simulationSource = "local_fallback";
         const nextState = state ?? { intervention: candidate };
         nextState.visible = simulation;
@@ -798,7 +807,7 @@ export async function runTwinTOOrchestration(input: RunOrchestrationInput): Prom
 
     // -- Citizen reaction ------------------------------------------------------
     emit({ type: "citizens.started", runId });
-    const cohorts = buildCitizenCohorts();
+    const cohorts = buildCitizenCohorts(repo.listCohorts());
     const citizenResponseSchema = z
       .object({ summary: z.string().min(1).max(1500), processedCandidateIds: z.array(z.string()).default([]) })
       .strict();
@@ -942,7 +951,7 @@ Respond with ONLY JSON matching:
         let outcome = state?.stress;
         let source: EvidenceSource = "agent";
         if (!outcome) {
-          outcome = stressTestIntervention(scenario, evaluation.intervention, stressOverlay, 20260718);
+          outcome = stressTestIntervention(scenario, evaluation.intervention, stressOverlay, 20260718, repo.listCohorts());
           source = "local_fallback";
           const nextState = state ?? { intervention: evaluation.intervention };
           nextState.stress = outcome;

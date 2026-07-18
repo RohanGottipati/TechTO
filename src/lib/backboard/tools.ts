@@ -58,6 +58,7 @@ export const TOOL_NAMES = {
   PROPOSE_SCENARIOS: "propose_scenarios",
   SCORE_POPULATION: "score_population",
   INVOKE_ASSISTANT: "invoke_assistant",
+  RUN_PYTHON: "run_python",
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];
@@ -653,13 +654,14 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
   [TOOL_NAMES.COMPOSE_MAP_ACTIONS]: {
     name: TOOL_NAMES.COMPOSE_MAP_ACTIONS,
     description:
-      "Compose an allowlisted list of TwinTO map actions (fly_to_center, fit_bounds, highlight_neighbourhoods, show_candidate_markers, etc.). The frontend validates and executes; never emit arbitrary JavaScript or URLs.",
+      "Control the Toronto MapLibre UI: fly_to_center, fit_bounds, highlight_neighbourhoods (use neighbourhood codes), show_candidate_markers, draw_point, draw_line, draw_polygon, annotate, remove_overlays, clear_map_overlays, set_layer_visibility. Use this to show the user what you are talking about. Drawing near an existing overlay / twin POI returns a collision error (~40m); remove or move first. Frontend validates and executes; never emit arbitrary JavaScript or URLs.",
     parameters: {
       type: "object",
       properties: {
         actions: {
           type: "array",
-          description: "Allowlisted MapAction objects for the TwinTO MapLibre frontend.",
+          description:
+            "Allowlisted MapAction objects. Examples: {type:'fly_to_center',center:[-79.4,43.66],zoom:13,durationMs:800}, {type:'draw_point',id:'opt-a',coordinates:[-79.42,43.68],label:'Wychwood option'}, {type:'annotate',id:'note-1',coordinates:[-79.42,43.68],text:'Higher density'}, {type:'clear_map_overlays',what:'drawings'}.",
           items: { type: "object" },
         },
       },
@@ -740,6 +742,26 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
         scenarioId: { type: "string", description: "Label for this analysis run." },
       },
       required: ["analysis", "question"],
+    },
+  },
+  [TOOL_NAMES.RUN_PYTHON]: {
+    name: TOOL_NAMES.RUN_PYTHON,
+    description:
+      "Run short Python to test hypotheses (pandas, numpy, scipy, statsmodels, sklearn). Read-only Mongo is available as `db` (MONGODB_URI_READONLY / MONGODB_URI). Also injected: TWIN (current twin snapshot), OVERLAYS (agent map drawings), DATA_DIR (data/processed). Assign RESULT to a DataFrame/Series/dict for a preview. Toronto data only. No Mongo writes. Print for stdout.",
+    parameters: {
+      type: "object",
+      properties: {
+        code: {
+          type: "string",
+          description:
+            "Python source. Example: cols = db.list_collection_names(); print(cols); RESULT = pd.DataFrame({'n':[len(cols)]})",
+        },
+        timeout_s: {
+          type: "number",
+          description: "Hard timeout seconds (default 12, max 30).",
+        },
+      },
+      required: ["code"],
     },
   },
   [TOOL_NAMES.SNAPSHOT_TWIN]: {

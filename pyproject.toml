@@ -19,6 +19,9 @@ dependencies = [
     "xlrd>=2.0.2",
     "popgen3",
     "pymongo>=4.17.0",
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "statsmodels>=0.14",
 ]
 
 [dependency-groups]

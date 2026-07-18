@@ -38,3 +38,9 @@ export function requireMongoUri(): string {
   }
   return uri;
 }
+
+/** Prefer MONGODB_URI_READONLY for agent code; fall back to MONGODB_URI. */
+export function getMongoReadonlyUri(): string {
+  assertServerOnly("MongoDB env");
+  return process.env.MONGODB_URI_READONLY?.trim() || getMongoUri();
+}
