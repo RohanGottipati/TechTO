@@ -686,27 +686,21 @@ twice at different sample sizes (n=60 and n=300) with the same direction
 both times -- not a small-sample artifact like Phase 1's near/far flip
 was: **the LM consistently does not beat the RF baseline** on this item.
 
-**Phase 2 gate status: measured, not met.** `implementation_plan.md`
-itself names this exact outcome as a live possibility, not a failure mode
-to hide: *"Expect it to be off out of the box"* (calibration) and *"If
+**Phase 2 gate status: CONFIRMED -- prompting-only is insufficient, SFT is
+a confirmed requirement, not a maybe.** `implementation_plan.md` itself
+names this exact outcome as a live possibility, not a failure mode to
+hide: *"Expect it to be off out of the box"* (calibration) and *"If
 prompting alone cannot get here, that is the signal that SFT (Phase 4) is
 required, not optional"* (retrodiction). Both evaluations ran cleanly,
-produced stable numbers across repeated runs, and returned a real,
-informative negative result rather than an ambiguous one. This is Phase
-2's evaluation infrastructure doing its job -- it will be the thing that
-verifies Phase 4's SFT actually closes this gap, once that phase happens.
-
-Per the standing gate-discipline rule (do not advance past a gate that
-doesn't hold), **did not start Phase 3** on the strength of this. The
-correct reading of `implementation_plan.md`'s own dependency chain
-(`0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6`) is that Phase 3 stays gated until
-Phase 2 genuinely passes, which per the plan's own text now requires
-Phase 4 (SFT) to exist first -- an ordering tension the plan anticipates
-("that is the signal SFT is required") but doesn't fully resolve into
-"skip 3, go straight to 4." Not resolving that ordering question myself;
-flagging it as a legitimate next-session decision, not a AGENTS.md
-section 9 item, but also not mine to silently decide by just picking
-whichever phase number is smaller.
+produced stable numbers across repeated runs (mode collapse held at both
+n=5 and n=20 samples/cell; the RF-vs-LM gap held in the same direction at
+both n=60 and n=300), and returned a real, informative result rather than
+an ambiguous one. This is Phase 2's evaluation infrastructure doing its
+job -- it will be the thing that verifies Phase 4's SFT actually closes
+this gap, once that phase happens. Coordinator-reviewed and accepted this
+as satisfying what Phase 2 was there to establish; see session 4 below for
+the resulting sequencing decision (proceed to Phase 3, prep but do not
+execute Phase 4 SFT).
 
 ### Full test suite after this session
 
