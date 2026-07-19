@@ -8,11 +8,6 @@ import { useMapStore } from "@/store/useMapStore";
 import { getScenario } from "@/lib/sim/scenarios";
 import { resolveAlignment } from "@/lib/sim/engine";
 import {
-  buildStreetWalkAnchors,
-  streetWalkPosition,
-  type StreetWalkAnchor,
-} from "@/lib/sim/streets";
-import {
   placeFromBuildingFeature,
   placeFromNeighbourhoodArea,
   polygonCentroid,
@@ -22,7 +17,6 @@ import type {
   NeighbourhoodCollection,
   Persona,
   RouteCollection,
-  StreetCollection,
 } from "@/lib/sim/types";
 import {
   ACCEPT_NEUTRAL,
@@ -74,37 +68,22 @@ interface MapCanvasProps {
   neighbourhoods: NeighbourhoodCollection;
   routes: RouteCollection;
   busRoutes: RouteCollection;
-  streets: StreetCollection;
   personas: Persona[];
   onReady: () => void;
 }
 
-interface WalkContext {
-  anchors: (StreetWalkAnchor | null)[];
-  t: number;
-}
-
 function personaCollection(
   personas: Persona[],
-  acceptance: Float32Array | null,
-  walk?: WalkContext
+  acceptance: Float32Array | null
 ): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: personas.map((p) => {
-      let lng = p.lng;
-      let lat = p.lat;
-      const anchor = walk?.anchors[p.id];
-      if (anchor) {
-        [lng, lat] = streetWalkPosition(anchor, walk.t);
-      }
-      return {
-        type: "Feature",
-        id: p.id,
-        properties: { a: acceptance ? acceptance[p.id] : 0.5 },
-        geometry: { type: "Point", coordinates: [lng, lat] },
-      };
-    }),
+    features: personas.map((p) => ({
+      type: "Feature",
+      id: p.id,
+      properties: { a: acceptance ? acceptance[p.id] : 0.5 },
+      geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+    })),
   };
 }
 
@@ -145,7 +124,6 @@ export function MapCanvas({
   neighbourhoods,
   routes,
   busRoutes,
-  streets,
   personas,
   onReady,
 }: MapCanvasProps) {
@@ -162,8 +140,6 @@ export function MapCanvas({
   const reducedMotion = useReducedMotion();
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
-  const walkAnchorsRef = useRef<(StreetWalkAnchor | null)[] | null>(null);
-  const walkStartRef = useRef(0);
   const trainsLayerReadyRef = useRef(false);
   const trainsStartRef = useRef(0);
   const trainConfigs = useMemo(() => buildTrainRouteConfigs(routes), [routes]);
@@ -183,14 +159,6 @@ export function MapCanvas({
   const highlightedNeighbourhoodIds = useMapStore((s) => s.highlightedNeighbourhoodIds);
   const layersRef = useRef(layers);
   layersRef.current = layers;
-
-  // Current wander offset context, or undefined when motion should be still
-  // (reduced-motion preference, or before the walk params are built).
-  const currentWalk = (): WalkContext | undefined => {
-    const anchors = walkAnchorsRef.current;
-    if (!anchors || reducedMotionRef.current) return undefined;
-    return { anchors, t: performance.now() - walkStartRef.current };
-  };
 
   // ---- init -------------------------------------------------------------
   useEffect(() => {
@@ -235,11 +203,9 @@ export function MapCanvas({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
-      walkAnchorsRef.current = buildStreetWalkAnchors(personas, streets);
-      walkStartRef.current = performance.now();
       map.addSource("personas", {
         type: "geojson",
-        data: personaCollection(personas, null, currentWalk()),
+        data: personaCollection(personas, null),
       });
 
       map.addLayer(
@@ -825,7 +791,7 @@ export function MapCanvas({
 
     if (reducedMotionRef.current) {
       current.set(target);
-      source.setData(personaCollection(personas, target, currentWalk()));
+      source.setData(personaCollection(personas, target));
       return;
     }
 
@@ -845,7 +811,7 @@ export function MapCanvas({
         if (sweep[i] <= threshold) current[i] = target[i];
       }
       if (t >= 1) current.set(target);
-      source.setData(personaCollection(personas, current, currentWalk()));
+      source.setData(personaCollection(personas, current));
       if (t < 1) {
         window.setTimeout(
           () => requestAnimationFrame(tick),
@@ -855,37 +821,6 @@ export function MapCanvas({
     };
     requestAnimationFrame(tick);
   }, [result, neighbourhoods, personas, ready]);
-
-  // ---- pedestrian wander: residents amble around their home block ---------
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
-    let rafId: number | undefined;
-    let cancelled = false;
-
-    // Runs every animation frame (cheap at 2k dots) so the wander reads as
-    // continuous motion rather than discrete hops.
-    const tick = () => {
-      if (cancelled) return;
-      if (!reducedMotionRef.current && layersRef.current.personas) {
-        const source = map.getSource<maplibregl.GeoJSONSource>("personas");
-        const walk = currentWalk();
-        if (source && walk) {
-          source.setData(personaCollection(personas, displayedA.current, walk));
-        }
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-
-    return () => {
-      cancelled = true;
-      if (rafId !== undefined) cancelAnimationFrame(rafId);
-    };
-    // reducedMotion/layers are read live via refs so the loop doesn't restart
-    // on every toggle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, personas]);
 
   // Agent camera fly / fit
   useEffect(() => {
