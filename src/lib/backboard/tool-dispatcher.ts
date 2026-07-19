@@ -35,8 +35,7 @@ import {
 import { emptyTwinSnapshot, patchTwin, queryTwin, type TwinSnapshot } from "@/lib/planner/state";
 import { diffTwin } from "@/lib/planner/diff";
 import { parseScenarioPatch, parseScenarioPatches, type ScenarioPatch } from "@/lib/planner/scenario";
-import { getPopulationProvider } from "@/lib/population/provider";
-import type { PopulationProvider } from "@/lib/population/provider";
+import { scoreRealPolicyAcceptance, policyTextForPatch } from "@/lib/citizen-reaction/policy-acceptance";
 import { runAgentPython } from "@/lib/analysis/run-python";
 import { matchCannedAsk } from "@/lib/planner/canned";
 import { isTechTOAssistantKey, ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
@@ -106,9 +105,6 @@ export interface RunContext {
   twinBaseline: TwinSnapshot;
   twinSnapshots: Map<string, TwinSnapshot>;
   proposedCityPatches: ScenarioPatch[];
-  /** Optional injected population provider (tests / city runs). */
-  populationProvider?: PopulationProvider;
-  populationSeed?: number;
   /** Roles invoked via invoke_assistant during this run. */
   invokedAssistants: string[];
   /** Prevent nested invoke recursion. */
@@ -130,8 +126,6 @@ export function createRunContext(
   mapContext?: Partial<MapContextState>,
   runId?: string,
   extras?: {
-    populationProvider?: PopulationProvider;
-    populationSeed?: number;
     agentOverlays?: AgentMapOverlay[];
   },
 ): RunContext {
@@ -149,8 +143,6 @@ export function createRunContext(
     twinBaseline: emptyTwinSnapshot(),
     twinSnapshots: new Map(),
     proposedCityPatches: [],
-    populationProvider: extras?.populationProvider,
-    populationSeed: extras?.populationSeed,
     invokedAssistants: [],
     invokeDepth: 0,
   };
@@ -1222,29 +1214,21 @@ async function executeTool(
         })
         .strict()
         .parse(args);
-      const pop = context.populationProvider ?? getPopulationProvider();
-      const personas = await pop.load();
-      let twin = context.twin;
       let scenarioId = parsed.scenarioId ?? `score-${context.twin.version}`;
+      let policyText = parsed.question;
       if (parsed.patch) {
         const patch = parseScenarioPatch(parsed.patch);
-        twin = patchTwin(emptyTwinSnapshot(), patch);
         scenarioId = parsed.scenarioId ?? patch.id;
+        policyText = policyTextForPatch(patch);
       }
-      const score = await pop.score({
-        personas,
-        twin,
-        question: parsed.question,
-        scenarioId,
-        seed: context.populationSeed,
-      });
+      const score = await scoreRealPolicyAcceptance(scenarioId, policyText);
       return {
-        dataMode: "population-provider",
+        dataMode: "real-opinion-model",
         provider: score.provider,
         scenarioId: score.scenarioId,
         citywide: score.citywide,
         neighbourhoodCount: Object.keys(score.byNeighbourhood).length,
-        note: "Simulated day-one acceptance; not real public opinion or ridership.",
+        note: "Real acceptance: Monte-Carlo-sampled real residents scored by the trained opinion model, not simulated public opinion or ridership.",
       };
     }
     case TOOL_NAMES.INVOKE_ASSISTANT: {
@@ -1301,20 +1285,15 @@ async function executeTool(
         })
         .strict()
         .parse(args);
-      const pop = context.populationProvider ?? getPopulationProvider();
-      const personas = await pop.load();
-      const score = await pop.score({
-        personas,
-        twin: context.twin,
-        question: parsed.question,
-        scenarioId: parsed.scenarioId ?? `analysis-${context.twin.version}`,
-        seed: context.populationSeed,
-      });
+      const score = await scoreRealPolicyAcceptance(
+        parsed.scenarioId ?? `analysis-${context.twin.version}`,
+        parsed.question,
+      );
       return {
         analysis: parsed.analysis,
         provider: score.provider,
         citywide: score.citywide,
-        note: "Simulated acceptance readout.",
+        note: "Real acceptance readout: Monte-Carlo-sampled real residents scored by the trained opinion model, not simulated public opinion or ridership.",
       };
     }
     case TOOL_NAMES.RUN_PYTHON: {
@@ -1331,7 +1310,7 @@ async function executeTool(
         timeoutMs,
         twin: context.twin,
         overlays: context.agentOverlays,
-        seed: context.populationSeed ?? 2262,
+        seed: 2262,
       });
       // return errors to the model so it can fix code; only spawn/parse throws
       return result;

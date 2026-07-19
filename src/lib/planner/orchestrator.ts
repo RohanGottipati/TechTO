@@ -9,12 +9,11 @@ import { createRunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dis
 import { getToolDefinitions, TOOL_NAMES } from "@/lib/backboard/tools";
 import type { TechTOAssistantKey } from "@/lib/backboard/assistants";
 import type { ScenarioPatch } from "@/lib/planner/scenario";
-import { emptyTwinSnapshot, patchTwin } from "@/lib/planner/state";
 import {
-  getPopulationProvider,
-  type PopulationProvider,
-} from "@/lib/population/provider";
-import type { PopulationScoreResult } from "@/lib/population/score";
+  scoreRealPolicyAcceptance,
+  policyTextForPatch,
+  type PolicyAcceptanceResult,
+} from "@/lib/citizen-reaction/policy-acceptance";
 import type { MapAction } from "@/lib/techto/map-actions";
 import type { AgentMapOverlay } from "@/lib/techto/map-overlays";
 import { focusPrimaryMapRecommendation, parseMapActions } from "@/lib/techto/map-actions";
@@ -61,8 +60,7 @@ export type CityRunEvent =
 
 export interface CityCandidateResult {
   patch: ScenarioPatch;
-  score: PopulationScoreResult;
-  twinVersion: number;
+  score: PolicyAcceptanceResult;
 }
 
 export interface CityOrchestrationResult {
@@ -84,7 +82,6 @@ export interface RunCityOrchestrationInput {
   question: string;
   patches?: ScenarioPatch[];
   adapter?: BackboardAdapter;
-  population?: PopulationProvider;
   onEvent?: (event: CityRunEvent) => void;
   seed?: number;
   /** Current UI map drawings so collision checks see what the user already sees. */
@@ -118,24 +115,11 @@ function emit(
   onEvent?.(event);
 }
 
-async function harvestScores(
-  patches: ScenarioPatch[],
-  question: string,
-  seed: number | undefined,
-  pop: PopulationProvider,
-  personas: Awaited<ReturnType<PopulationProvider["load"]>>,
-): Promise<CityCandidateResult[]> {
+async function harvestScores(patches: ScenarioPatch[]): Promise<CityCandidateResult[]> {
   return Promise.all(
     patches.map(async (patch) => {
-      const twin = patchTwin(emptyTwinSnapshot(), patch);
-      const score = await pop.score({
-        personas,
-        twin,
-        question,
-        scenarioId: patch.id,
-        seed,
-      });
-      return { patch, score, twinVersion: twin.version };
+      const score = await scoreRealPolicyAcceptance(patch.id, policyTextForPatch(patch));
+      return { patch, score };
     }),
   );
 }
@@ -191,8 +175,6 @@ export async function runCityOrchestration(
   const runId = randomUUID();
   const events: CityRunEvent[] = [];
   const onEvent = input.onEvent;
-  const pop = input.population ?? getPopulationProvider();
-  const seed = input.seed ?? 2262;
   const adapter = input.adapter ?? getBackboardAdapter();
 
   emit(events, onEvent, { type: "run.started", runId, question: input.question });
@@ -206,8 +188,6 @@ export async function runCityOrchestration(
   });
 
   const context = createRunContext("open-city", adapter, undefined, runId, {
-    populationProvider: pop,
-    populationSeed: seed,
     agentOverlays: input.agentOverlays,
   });
 
@@ -335,10 +315,9 @@ export async function runCityOrchestration(
     emit(events, onEvent, {
       type: "status",
       runId,
-      message: "Scoring day-one acceptance…",
+      message: "Scoring real citizen acceptance…",
     });
-    const personas = await pop.load();
-    candidates = await harvestScores(patches, input.question, seed, pop, personas);
+    candidates = await harvestScores(patches);
     emit(events, onEvent, {
       type: "status",
       runId,
