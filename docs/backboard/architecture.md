@@ -1,78 +1,98 @@
-# TechTO Backboard architecture
+# TwinTO Backboard architecture
 
-TechTO uses a live Backboard planning department shared by the open-city
-dashboard and the TechTO transit demonstration. The canonical roster is the
-principled city-planning set of 11 roles, identified by `rosterVersion:
-principled-11` and manifest schema version 4.
+TwinTO is a 2D Toronto transit digital twin demo. A virtual planning
+department on Backboard proposes schedule interventions for a synthetic
+flagship scenario (16:06 / 16:12 load imbalance at Union Station), scores
+them with a labelled mock CitizenReactionLM, and evaluates them with a
+deterministic local simulator.
 
-The root dashboard and TechTO are related but distinct products:
-
-- `/` is the open-city front door. `POST /api/planner/run` gives the Planning
-  Orchestrator a free-form turn with optional tools and specialist calls.
-- `/techto` is the transit demonstration. It adds a deterministic local transit
-  simulator, a synthetic flagship scenario, and a separate staged planning run.
-
-GridTwin is archived under `docs/archive/gridtwin/`.
+This document describes the Backboard branch product. It is separate from
+the ToronTwin research spine in `AGENTS.md`. GridTwin battery docs live
+under `docs/archive/gridtwin/`.
 
 ## Layers
 
-```text
+```
 +-----------------------------------------------------------+
-| WEB UI                                                    |
-| MapLibre Toronto map, chat, selection, reports            |
+| WEB UI (MapLibre 2D + TwinTOAppShell)                      |
+| Toronto map, scenario playback, agent council, policies   |
 +-----------------------------------------------------------+
-| LIVE BACKBOARD DEPARTMENT                                 |
-| Planning Orchestrator, general specialists, tools         |
+| BACKBOARD VIRTUAL PLANNING DEPARTMENT                     |
+| 54 named assistants; flagship run activates ~19-24        |
 +-----------------------------------------------------------+
-| CITY TWIN AND POPULATION SERVICES                         |
-| typed patches, exact features, acceptance distribution    |
+| LOCAL DETERMINISTIC TRANSIT SIMULATOR                     |
+| minute ticks, queues, boarding, stress tests              |
 +-----------------------------------------------------------+
-| DATA PROVIDERS                                            |
-| Toronto files, optional MongoDB, live FreeSolo             |
+| PROVIDER BOUNDARIES (mock on this branch)                 |
+| CitizenReactionProvider | TransitRepository               |
 +-----------------------------------------------------------+
 ```
 
-## Provider requirements
+## What this branch requires
 
-- Backboard is live only and requires `BACKBOARD_API_KEY`.
-- TechTO citizen reactions are live FreeSolo only.
-- The open-city `score_population`/`run_twin_analysis` tools and TechTO
-  citizen reactions share one real pipeline (`src/lib/citizen-reaction`):
-  real resident personas, the trained opinion model, and the real-vote-
-  trained embedding probe. No synthetic/census fallback.
-- TechTO repository reads support local labelled fixtures or MongoDB Atlas.
-- Deterministic simulator output remains the numerical authority for the
-  TechTO operational demonstration.
+- `BACKBOARD_API_KEY` for live mode; without it, mock mode is automatic
+- Local synthetic fixtures under `src/data/transit/`
+- No MongoDB, FreeSolo, or Cesium credentials
 
-There is no automatic mock Backboard mode and no mock citizen-reaction
-provider. Local fixture data remains allowed where it is visibly labelled
-`synthetic-fixture`.
+## Mock vs live
 
-## Output boundary
+| Concern | Mock | Live |
+| --- | --- | --- |
+| Backboard assistants | `MockBackboardAdapter` | Rest API |
+| Citizen reactions | `MockCitizenReactionProvider` | FreeSolo later |
+| Transit data | `FixtureTransitRepository` | Mongo later |
+| Simulation | Always local, deterministic | Always local |
 
-Recommendations are human-readable Markdown. Relevant project recommendations
-separate the recommendation, location evidence, sustainability mechanisms,
-screening metrics, ROI and value case, validation KPIs, and next steps. Simple
-conversation is not forced into that template.
+UI badges must label mock Backboard, mock CitizenReactionLM, and
+`synthetic-fixture` data. Never present fixture numbers as real TTC
+measurements or mock reactions as real public opinion.
 
-ROI analysis belongs to the general feasibility specialist. It may compute a
-return only from evidenced lifecycle costs and validated monetized benefits.
-Unknown inputs remain explicit assumptions and scenario ranges.
+## Orchestration stages
 
-The browser exports answers and conversations as escaped, print-ready HTML.
-The browser print dialog creates the PDF. Export is a presentation boundary;
-it does not alter evidence, run additional agents, or turn modeled claims into
-measured facts.
+```
+run.started
+problem -> baseline -> context (parallel)
+policy.generated
+citizens -> simulation -> impact (parallel)
+stress -> debate
+recommendation.ready -> operator.ready
+run.completed
+```
+
+Final authority is deterministic: unsafe platform crowding, impossible
+schedules, accessibility failures, infeasible capacity, malformed
+simulation, or missing evidence override the judge.
+
+## Assistant bundles
+
+- `CORE_SCHEDULE_BUNDLE`: flagship schedule analysis (~19 roles)
+- `CONCERT_BUNDLE`: event / safety stress roles
+- `WEATHER_BUNDLE`: weather / surface-transit roles
+
+Do not call all 54 assistants on every run. Use `selectAssistantBundle`.
 
 ## Key paths
 
 | Path | Role |
 | --- | --- |
-| `src/lib/planner/orchestrator.ts` | Open-city free-form planning turn |
-| `src/lib/backboard/` | Live adapter, principled roster, tools, staged TechTO orchestration |
-| `src/lib/population/` | Open-city population provider |
-| `src/lib/citizen-reaction/` | Live FreeSolo TechTO citizen reactions |
-| `src/lib/transit/` | TechTO simulator, metrics, ranking, repository |
-| `src/lib/export/chat-report.ts` | Safe print-ready chat reports |
-| `src/components/chat/` | Main and selected-place chat UI |
-| `docs/backboard/knowledge/` | Indexed planning knowledge documents |
+| `src/lib/backboard/` | Adapter, roster, tools, orchestrator, SSE |
+| `src/lib/transit/` | Simulator, metrics, ranker, repository |
+| `src/lib/citizen-reaction/` | Provider boundary + mock |
+| `src/data/transit/` | Synthetic fixtures |
+| `src/components/map/` | MapLibre Toronto map |
+| `src/components/twinto/` | Product UI |
+| `docs/backboard/knowledge/` | Indexed transit knowledge docs |
+| `docs/archive/gridtwin/` | Archived battery product docs |
+
+## Scripts
+
+```bash
+npm run backboard:bootstrap          # create TwinTO assistants + upload docs
+npm run backboard:status             # roster / mode status
+npm run backboard:smoke              # live smoke (needs API key)
+npm run backboard:cleanup-gridtwin   # dry-run list of old GridTwin assistants
+npm run backboard:cleanup-gridtwin -- --confirm   # delete them
+```
+
+Cleanup requires `--confirm`. Create TwinTO assistants and verify smoke
+before deleting GridTwin ones.

@@ -13,5 +13,5 @@
 - Live fleet / operator feasibility model
 - Reward logging into Mongo `evaluation_runs`
 
-The Planning Orchestrator and feasibility role interpret optimization output;
-the deterministic simulator remains numerical authority.
+Backboard's Simulation and Optimization agent remains the interpreter; the
+deterministic simulator remains numerical authority.

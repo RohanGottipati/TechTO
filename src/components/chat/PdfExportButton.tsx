@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Check, FileDown } from "lucide-react";
-
 import {
   exportChatReportToPdf,
   type ChatReportInput,
@@ -28,7 +27,12 @@ export function PdfExportButton({
     window.setTimeout(() => setStatus("idle"), 2500);
   }
 
-  const label = status === "blocked" ? "Allow pop-ups to export" : status === "opened" ? "Print dialog opened" : "Export PDF";
+  const label =
+    status === "blocked"
+      ? "Allow pop-ups to export"
+      : status === "opened"
+        ? "Print dialog opened"
+        : "Export PDF";
 
   return (
     <button
@@ -48,7 +52,9 @@ export function PdfExportButton({
       ) : (
         <FileDown className="h-3.5 w-3.5" aria-hidden />
       )}
-      {!compact && <span>{status === "blocked" ? "Pop-up blocked" : "Export PDF"}</span>}
+      {!compact && (
+        <span>{status === "blocked" ? "Pop-up blocked" : "Export PDF"}</span>
+      )}
     </button>
   );
 }

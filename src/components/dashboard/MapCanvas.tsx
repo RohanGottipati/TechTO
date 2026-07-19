@@ -13,17 +13,6 @@ import {
   polygonCentroid,
 } from "@/lib/techto/place-context";
 import { buildTrainRouteConfigs, trainCollection } from "@/lib/map/trains";
-import {
-  BUILDING_BASE_EXPRESSION,
-  BUILDING_HEIGHT_EXPRESSION,
-  LOCALIZED_3D_BEARING,
-  LOCALIZED_3D_PITCH,
-  LOCALIZED_BUILDINGS_3D_LAYER,
-  localized3DOffset,
-  localized3DZoom,
-  localizedBuildingFilter,
-  localizedBuildingLayer,
-} from "@/lib/map/localized-3d";
 import type {
   NeighbourhoodCollection,
   Persona,
@@ -40,19 +29,9 @@ import {
 import { AgentOverlayLayer } from "@/components/map/AgentOverlayLayer";
 import { CandidateMarkerLayer } from "@/components/map/CandidateMarkerLayer";
 
-const SELECTED_BUILDING_SOURCE = "techto-selected-building";
-const SELECTED_BUILDING_FILL = "techto-selected-building-fill";
-const SELECTED_BUILDING_LINE = "techto-selected-building-line";
-const SELECTED_BUILDING_EXTRUSION =
-  "techto-selected-building-extrusion";
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+const SELECTED_BUILDING_SOURCE = "torontwin-selected-building";
+const SELECTED_BUILDING_FILL = "torontwin-selected-building-fill";
+const SELECTED_BUILDING_LINE = "torontwin-selected-building-line";
 
 function buildingLayerIds(map: maplibregl.Map): string[] {
   const style = map.getStyle();
@@ -166,12 +145,6 @@ export function MapCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
-  const lastCameraTargetRef = useRef<
-    ReturnType<typeof useMapStore.getState>["cameraTarget"]
-  >(null);
-  const lastBoundsTargetRef = useRef<
-    ReturnType<typeof useMapStore.getState>["boundsTarget"]
-  >(null);
   const [ready, setReady] = useState(false);
   const displayedA = useRef<Float32Array>(
     new Float32Array(personas.length).fill(0.5)
@@ -201,8 +174,6 @@ export function MapCanvas({
   const cameraTarget = useMapStore((s) => s.cameraTarget);
   const boundsTarget = useMapStore((s) => s.boundsTarget);
   const highlightedNeighbourhoodIds = useMapStore((s) => s.highlightedNeighbourhoodIds);
-  const agent3DFocus = useMapStore((s) => s.agent3DFocus);
-  const clearAgent3DFocus = useMapStore((s) => s.clearAgent3DFocus);
   const layersRef = useRef(layers);
   layersRef.current = layers;
 
@@ -216,11 +187,11 @@ export function MapCanvas({
       bounds: TORONTO_BOUNDS,
       fitBoundsOptions: { padding: 40 },
       minZoom: 9,
-      maxZoom: 18,
+      maxZoom: 16,
       maxBounds: [-80.4, 43.2, -78.4, 44.3],
       attributionControl: false,
       dragRotate: false,
-      pitchWithRotate: true,
+      pitchWithRotate: false,
     });
     map.touchZoomRotate.disableRotation();
     map.addControl(
@@ -274,15 +245,6 @@ export function MapCanvas({
         },
         firstSymbol
       );
-      if (map.getSource("carto")) {
-        map.addLayer(localizedBuildingLayer(), firstSymbol);
-        map.setLight({
-          anchor: "viewport",
-          color: "#d6f7f3",
-          intensity: 0.34,
-          position: [1.15, 210, 32],
-        });
-      }
       map.addLayer(
         {
           id: "bus-glow",
@@ -596,20 +558,6 @@ export function MapCanvas({
         },
       });
       map.addLayer({
-        id: SELECTED_BUILDING_EXTRUSION,
-        type: "fill-extrusion",
-        source: SELECTED_BUILDING_SOURCE,
-        minzoom: 12.75,
-        layout: { visibility: "none" },
-        paint: {
-          "fill-extrusion-color": "#5BA3F5",
-          "fill-extrusion-height": BUILDING_HEIGHT_EXPRESSION,
-          "fill-extrusion-base": BUILDING_BASE_EXPRESSION,
-          "fill-extrusion-opacity": 0.7,
-          "fill-extrusion-vertical-gradient": true,
-        },
-      });
-      map.addLayer({
         id: SELECTED_BUILDING_LINE,
         type: "line",
         source: SELECTED_BUILDING_SOURCE,
@@ -781,10 +729,7 @@ export function MapCanvas({
             features: [
               {
                 type: "Feature",
-                properties: (feature.properties ?? {}) as Record<
-                  string,
-                  unknown
-                >,
+                properties: {},
                 geometry: feature.geometry as GeoJSON.Geometry,
               },
             ],
@@ -985,99 +930,57 @@ export function MapCanvas({
     requestAnimationFrame(tick);
   }, [result, neighbourhoods, personas, ready]);
 
-  // Agent camera fly / fit. A focus-only update changes the aspect without
-  // replaying an old camera command, so the 2D control preserves user panning.
+  // ---- pedestrian wander: residents amble around their home block ---------
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    const cameraChanged =
-      cameraTarget !== lastCameraTargetRef.current ||
-      boundsTarget !== lastBoundsTargetRef.current;
-    lastCameraTargetRef.current = cameraTarget;
-    lastBoundsTargetRef.current = boundsTarget;
+    let rafId: number | undefined;
+    let cancelled = false;
 
-    const pitch = agent3DFocus ? LOCALIZED_3D_PITCH : 0;
-    const bearing = agent3DFocus ? LOCALIZED_3D_BEARING : 0;
-    const focusOffset = localized3DOffset(
-      map.getContainer().clientHeight,
-    );
-    if (cameraChanged && boundsTarget) {
-      if (agent3DFocus) {
-        const fitted = map.cameraForBounds(boundsTarget.bounds, {
-          padding: boundsTarget.padding ?? 48,
-          bearing,
-          maxZoom: 17,
-          offset: focusOffset,
-        });
-        if (fitted) {
-          map.flyTo({
-            center: fitted.center,
-            zoom: localized3DZoom(
-              fitted.zoom ?? map.getZoom(),
-              map.getMaxZoom(),
-            ),
-            duration: reducedMotion ? 0 : (boundsTarget.durationMs ?? 900),
-            pitch,
-            bearing,
-            essential: true,
-          });
-          return;
+    // Runs every animation frame (cheap at 2k dots) so the wander reads as
+    // continuous motion rather than discrete hops.
+    const tick = () => {
+      if (cancelled) return;
+      if (!reducedMotionRef.current && layersRef.current.personas) {
+        const source = map.getSource<maplibregl.GeoJSONSource>("personas");
+        const walk = currentWalk();
+        if (source && walk) {
+          source.setData(personaCollection(personas, displayedA.current, walk));
         }
       }
-      map.fitBounds(boundsTarget.bounds, {
-        padding: boundsTarget.padding ?? 48,
-        duration: reducedMotion ? 0 : (boundsTarget.durationMs ?? 900),
-        pitch,
-        bearing,
-        essential: true,
-      });
-      return;
-    }
-    if (cameraChanged && cameraTarget) {
-      map.flyTo({
-        center: cameraTarget.center,
-        zoom: agent3DFocus
-          ? localized3DZoom(cameraTarget.zoom, map.getMaxZoom())
-          : cameraTarget.zoom,
-        offset: agent3DFocus ? focusOffset : [0, 0],
-        duration: reducedMotion ? 0 : (cameraTarget.durationMs ?? 900),
-        pitch,
-        bearing,
-        essential: true,
-      });
-      return;
-    }
-    map.easeTo({
-      pitch,
-      bearing,
-      duration: reducedMotion ? 0 : 550,
-      essential: true,
-    });
-  }, [agent3DFocus, boundsTarget, cameraTarget, ready, reducedMotion]);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
 
-  // Clip extrusions to the active focus and expose rotation only in 3D mode.
+    return () => {
+      cancelled = true;
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+    // reducedMotion/layers are read live via refs so the loop doesn't restart
+    // on every toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, personas]);
+
+  // Agent camera fly / fit
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
-    if (map.getLayer(LOCALIZED_BUILDINGS_3D_LAYER)) {
-      map.setFilter(
-        LOCALIZED_BUILDINGS_3D_LAYER,
-        localizedBuildingFilter(agent3DFocus, neighbourhoods),
-      );
-    }
-    map.setLayoutProperty(
-      SELECTED_BUILDING_EXTRUSION,
-      "visibility",
-      agent3DFocus ? "visible" : "none",
-    );
-    if (agent3DFocus) {
-      map.dragRotate.enable();
-      map.touchZoomRotate.enableRotation();
-    } else {
-      map.dragRotate.disable();
-      map.touchZoomRotate.disableRotation();
-    }
-  }, [agent3DFocus, neighbourhoods, ready]);
+    if (!map || !ready || !cameraTarget) return;
+    map.flyTo({
+      center: cameraTarget.center,
+      zoom: cameraTarget.zoom,
+      duration: cameraTarget.durationMs ?? 900,
+      essential: true,
+    });
+  }, [cameraTarget, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !boundsTarget) return;
+    map.fitBounds(boundsTarget.bounds, {
+      padding: boundsTarget.padding ?? 48,
+      duration: boundsTarget.durationMs ?? 900,
+    });
+  }, [boundsTarget, ready]);
 
   // Neighbourhood highlight by Coolness `code`
   useEffect(() => {
@@ -1197,17 +1100,6 @@ export function MapCanvas({
             </div>
           ))}
         </div>
-      )}
-      {agent3DFocus && (
-        <button
-          type="button"
-          data-testid="localized-3d-exit"
-          onClick={clearAgent3DFocus}
-          className="absolute bottom-20 right-3 z-20 border border-white/10 bg-[#14181a]/95 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-[#98a29b] backdrop-blur transition-colors hover:text-[#e8ede9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 md:bottom-16"
-          aria-label="Return to 2D overview"
-        >
-          2D overview
-        </button>
       )}
     </div>
   );

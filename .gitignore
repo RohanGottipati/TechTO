@@ -17,7 +17,6 @@ public/cesium/
 
 # next.js
 /.next/
-/.next-playwright/
 /out/
 
 # production

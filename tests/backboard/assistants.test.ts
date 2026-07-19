@@ -80,13 +80,6 @@ describe("ASSISTANT_ROSTER principled city department", () => {
     expect(listAssistantRoles()).toHaveLength(11);
   });
 
-  it("assigns evidence-safe ROI analysis to the feasibility role", () => {
-    const prompt = ASSISTANT_ROSTER.feasibility.systemPrompt;
-    expect(prompt).toContain("validated monetized benefits");
-    expect(prompt).toContain("lifecycle costs");
-    expect(prompt).toContain("Never invent a return");
-  });
-
   it("OPEN_CITY_ASK uses the full principled bundle", () => {
     expect(selectAssistantsForIntent("OPEN_CITY_ASK")).toEqual([...PRINCIPLED_CITY_BUNDLE]);
   });

@@ -67,7 +67,6 @@ Atlas Search / Vector index definitions: `atlas/search-indexes.json`
 
 ## Collection catalog
 
-Canonical collection names live in `src/lib/mongodb/collections.ts`. Schema and
-persistence behavior live beside their consumers under `src/lib/mongodb/`.
-The core demonstration can use normal collections plus labelled seeded
-fixtures; Atlas Search falls back to regex when its index is unavailable.
+See `docs/twinto-implementation.md` §14 for the full Atlas collection list,
+time-series names, geospatial/search/vector intent, and transaction rules.
+Core hackathon path uses normal collections plus seeded fixtures.

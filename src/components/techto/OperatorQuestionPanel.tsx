@@ -6,9 +6,7 @@ import { GlassPanel } from "@/components/primitives/GlassPanel";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { createRunStreamClient } from "@/lib/backboard/stream-parser";
 import { cn } from "@/lib/utils/cn";
-import type { TechTORunResult } from "@/lib/techto/types";
-import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
-import { PdfExportButton } from "@/components/chat/PdfExportButton";
+import type { TwinTORunResult } from "@/lib/twinto/types";
 
 export interface OperatorQuestionPanelProps {
   scenarioId: string;
@@ -106,26 +104,8 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
   return (
     <GlassPanel className="flex h-full flex-col p-4" data-testid="operator-question-panel">
       <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4 text-techto-accent" />
-        <h3 className="text-sm font-semibold text-techto-text">Ask the TTC Operator Explanation Agent</h3>
-        {entries.length > 0 && (
-          <PdfExportButton
-            report={{
-              title: "TechTO operator questions",
-              subtitle: "Questions and evidence-grounded answers",
-              messages: entries.flatMap((entry) => [
-                { role: "user" as const, content: entry.question },
-                {
-                  role: "assistant" as const,
-                  content: entry.answer ?? entry.error ?? "Answer pending.",
-                  citedEvidence: entry.citedEvidence,
-                },
-              ]),
-            }}
-            className="ml-auto"
-            testId="operator-conversation-export-pdf"
-          />
-        )}
+        <MessageSquare className="h-4 w-4 text-twinto-accent" />
+        <h3 className="text-sm font-semibold text-twinto-text">Ask the TTC Operator Explanation Agent</h3>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -152,10 +132,8 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
         )}
         {entries.map((entry, index) => (
           <div key={index} className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5" data-testid="operator-answer">
-            <p className="text-xs font-medium text-techto-text">{entry.question}</p>
-            {entry.answer && (
-              <ChatMarkdown content={entry.answer} className="mt-1 text-xs text-techto-muted" />
-            )}
+            <p className="text-xs font-medium text-twinto-text">{entry.question}</p>
+            {entry.answer && <p className="mt-1 text-xs leading-relaxed text-twinto-muted">{entry.answer}</p>}
             {entry.citedEvidence.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {entry.citedEvidence.map((cite, citeIndex) => (
@@ -171,26 +149,6 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Thinking...
               </p>
-            )}
-            {(entry.answer || entry.error) && (
-              <div className="mt-1 flex justify-end border-t border-white/5 pt-1">
-                <PdfExportButton
-                  report={{
-                    title: "TechTO operator answer",
-                    subtitle: "Question and evidence-grounded response",
-                    messages: [
-                      { role: "user", content: entry.question },
-                      {
-                        role: "assistant",
-                        content: entry.answer ?? entry.error ?? "No answer returned.",
-                        citedEvidence: entry.citedEvidence,
-                      },
-                    ],
-                  }}
-                  compact
-                  testId={`operator-answer-export-pdf-${index}`}
-                />
-              </div>
             )}
           </div>
         ))}

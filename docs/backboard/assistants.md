@@ -1,47 +1,39 @@
-# TechTO assistants
+# TwinTO assistants (consolidated roster)
 
-TechTO uses exactly 11 named Backboard roles under `rosterVersion:
-principled-11` and manifest schema version 4. The design keeps competence in
-general city tools and avoids one-use-case specialists.
+TwinTO uses exactly **16** named Backboard assistants (`rosterVersion:
+consolidated-16`, manifest schemaVersion 3). The previous 54-specialist roster
+was architectural over-fragmentation: responsibilities were consolidated, not
+removed. Backboard features (tools, RAG, memory modes, streaming, model
+routing, structured outputs) remain fully in use.
 
-## Canonical roles
+## Why 16
 
-1. `city-copilot`: conversation and intent-aware handoff.
-2. `planning-orchestrator`: free-form planning, tools, and delegation.
-3. `geospatial-twin`: Toronto place and network context.
-4. `scenario-designer`: typed city intervention alternatives.
-5. `citizen-response`: legible simulated day-one opinions and distributions.
-6. `equity-impact`: distributional and accessibility analysis.
-7. `feasibility`: lifecycle cost, infrastructure, operations, safety, carbon,
-   and evidence-based ROI or value case.
-8. `adversarial-reviewer`: failure modes and stress tests.
-9. `evidence-auditor`: provenance, missing evidence, and claim limits.
-10. `final-policy-judge`: constrained comparison and decision status.
-11. `explanation-map`: concise explanation and allowlisted map actions.
+Specialist micro-roles made every run look like dozens of agents were
+required, even for simple map questions. The consolidated roster keeps clear
+ownership (City Copilot, Planning Orchestrator, Final Policy Judge, etc.)
+while dynamic intent bundles activate only the specialists needed.
 
-The exact keys and prompts live in `src/lib/backboard/assistants.ts`.
+## Canonical keys
+
+See `TWINTO_ASSISTANT_KEYS` in `src/lib/backboard/assistants.ts`.
 
 ## Dynamic activation
 
-The open-city Planning Orchestrator can answer directly or invoke only the roles
-needed for the turn. Simple navigation uses a small bundle. A full intervention
-can use the principled city bundle. The TechTO flagship scenario can use all 11
-roles, but no role is activated merely to make a run appear more elaborate.
+Intents: `SIMPLE_MAP_NAVIGATION`, `SIMPLE_EXPLANATION`, `NEW_STATION_LOCATION`,
+`SCHEDULE_CHANGE`, `EVENT_RESPONSE`, `COMPARE_EXISTING_CANDIDATES`.
 
-ROI does not require another assistant. The feasibility role already owns cost,
-infrastructure, carbon, safety, operational constraints, and value analysis.
-Its prompt forbids an ROI figure unless lifecycle costs and monetized benefits
-are evidenced.
+Simple navigation activates three assistants. Full planning questions activate
+the larger analysis/validation set. Events are added only when relevant.
 
-## Bootstrap and reconciliation
+## Bootstrap and cleanup
 
 ```bash
 npm run backboard:bootstrap
-npm run backboard:status
 npm run backboard:smoke
-npm run backboard:consolidate-roster
+npm run backboard:consolidate-roster              # dry run
 npm run backboard:consolidate-roster -- --confirm
 ```
 
-The consolidation command is retained as the controlled migration utility.
-Run it without `--confirm` first. Unknown remote assistants are never deleted.
+Do not rename old 54-agent specialists in place: create the clean 16, verify
+smoke, then delete obsolete TwinTO and GridTwin assistants with confirmation.
+Unknown assistants are never deleted.

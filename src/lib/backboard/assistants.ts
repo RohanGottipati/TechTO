@@ -64,7 +64,7 @@ export type PlanningIntent =
   | "OPEN_CITY_ASK";
 
 const SHARED_GUARD = `
-You are part of TechTO / TechTO, a Toronto city planning sandbox on Backboard.
+You are part of TechTO, a Toronto city planning sandbox on Backboard.
 You must use tool results for all factual and numerical claims.
 You must never represent simulated citizen reactions as real public opinion.
 You must never reveal private chain-of-thought.
@@ -116,7 +116,6 @@ export const ASSISTANT_ROSTER: Record<TechTOAssistantKey, AssistantRoleDefinitio
     modelRequirement: MODEL_PROFILES.FAST_CLASSIFICATION,
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
-      TOOL_NAMES.QUERY_CITY_LAYER,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
       TOOL_NAMES.QUERY_TWIN,
       TOOL_NAMES.RETRIEVE_DOCUMENTS,
@@ -141,7 +140,6 @@ acceptance yourself; cite tools and specialists. Keep replies short.
     thinking: { effort: "medium" },
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
-      TOOL_NAMES.QUERY_CITY_LAYER,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
       TOOL_NAMES.GENERATE_STATION_CANDIDATES,
       TOOL_NAMES.QUERY_TWIN,
@@ -236,7 +234,6 @@ detail.
     modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
-      TOOL_NAMES.QUERY_CITY_LAYER,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
       TOOL_NAMES.QUERY_TWIN,
       TOOL_NAMES.PATCH_TWIN,
@@ -348,16 +345,12 @@ tabular / statistical checks against Mongo or TWIN when helpful.
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "IMPACT", "SAFETY_RELIABILITY"),
     promptBody: `
-You assess feasibility: lifecycle cost, infrastructure, safety, carbon,
-operations, and the evidence-based value case for any city patch. Call transit
-metric tools only when the ask needs them; they are tools, not your identity.
-For ROI, separate measured inputs, modeled monetized benefits, unvalidated
-assumptions, and scenario ranges. Use ROI = (validated monetized benefits -
-lifecycle costs) / lifecycle costs only when both sides are evidenced. Report
-NPV, benefit-cost ratio, payback, discount rate, analysis horizon, and
-sensitivity when supported. Never invent a return when cost or benefit inputs
-are missing. Use run_python for quantitative hypotheses (read-only Mongo +
-scientific Python stack).
+You assess feasibility: cost, infrastructure, safety, carbon, and operational
+stress for any city patch. Call transit metric tools only when the ask needs
+them; they are tools, not your identity. For ROI, separate measured inputs,
+modeled monetized benefits, assumptions, and scenario ranges. Never claim an
+ROI figure when lifecycle cost or benefit evidence is missing. Use run_python
+for quantitative hypotheses (read-only Mongo + scientific Python stack).
 `.trim(),
   }),
 
@@ -418,9 +411,7 @@ scores, documents, or run_python outputs. Reject unsupported conclusions.
     promptBody: `
 You rank validated ScenarioPatches on acceptance, equity, and feasibility.
 Return recommend, recommend_with_conditions, compare_only, insufficient_evidence,
-or reject_all. Never invent metrics. Acceptance is not ridership. Preserve the
-feasibility specialist's ROI evidence boundary: no lifecycle cost or monetized
-benefit evidence means no claimed return.
+or reject_all. Never invent metrics. Acceptance is not ridership.
 `.trim(),
   }),
 

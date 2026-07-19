@@ -50,7 +50,6 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
   const selectedPlace = useMapStore((s) => s.selectedPlace);
   const layers = useMapStore((s) => s.layers);
   const cameraTarget = useMapStore((s) => s.cameraTarget);
-  const boundsTarget = useMapStore((s) => s.boundsTarget);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -174,14 +173,6 @@ export function TorontoMap({ stationCrowd }: TorontoMapProps) {
       essential: true,
     });
   }, [map, cameraTarget]);
-
-  useEffect(() => {
-    if (!map || !boundsTarget) return;
-    map.fitBounds(boundsTarget.bounds, {
-      padding: boundsTarget.padding ?? 48,
-      duration: boundsTarget.durationMs ?? 1200,
-    });
-  }, [map, boundsTarget]);
 
   useEffect(() => {
     if (!map) return;

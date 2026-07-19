@@ -41,10 +41,6 @@ function tableCells(line: string): string[] {
     .map((cell) => inlineMarkdown(cell.trim()));
 }
 
-/**
- * Converts the small Markdown subset used by chat answers into escaped report
- * markup. Model output is escaped before any report-owned tags are inserted.
- */
 export function chatMarkdownToReportHtml(markdown: string): string {
   const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
   const html: string[] = [];
@@ -234,7 +230,6 @@ export function buildChatReportHtml(input: ChatReportInput): string {
 </html>`;
 }
 
-/** Opens a print-ready report. The browser print dialog provides Save as PDF. */
 export function exportChatReportToPdf(input: ChatReportInput): boolean {
   const reportWindow = window.open("", "_blank");
   if (!reportWindow) return false;

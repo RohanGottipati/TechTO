@@ -10,8 +10,9 @@ reading for real public opinion (AGENTS.md section 2).
 A per-cohort language-model persona, conditioned on a cohort's demographics
 and the deterministic before/after effect features a candidate intervention
 produces, asked to write a legible opinion and produce an acceptance reading
-derived from that opinion (AGENTS.md section 3.1). The TechTO product path uses
-the live FreeSolo provider; `provider` in every result records the source.
+derived from that opinion (AGENTS.md section 3.1). In this demo it may be
+served by a mock heuristic provider or a live model provider; `provider` in
+every result states which.
 
 ## What it is not
 
@@ -37,5 +38,5 @@ validated against a retrodiction backtest.
 Any time a citizen-reaction reading (single, aggregated, or summarized for a
 public-facing document) is surfaced, the surrounding text must state plainly
 that it is a simulated reading from a population model, not real public
-opinion. This applies to the Citizen Response role and every downstream
-summary, report, or map.
+opinion. This applies to the Citizen Response Coordinator, Public Sentiment
+Agent, and Public Consultation Summary Agent in particular.

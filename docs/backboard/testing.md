@@ -1,37 +1,31 @@
-# TechTO testing
+# TwinTO testing
 
-## Unit and static checks
+## Unit
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
+npm run test
 npm run test:backboard
 ```
 
-The suite covers the principled 11 role roster, tool allowlists, Toronto scope,
-intent selection, simulation, population providers, candidate ranking, SSE
-parsing, run history, manifest schema version 4, map actions, neighbourhood
-screening, evidence-safe ROI language, and safe print-report generation.
+Covers: exactly 16 assistant keys, no GridTwin or old 54-agent keys in the
+active roster, no battery tools, intent bundles, mock citizen reaction,
+queue/boarding, departure load imbalance, wait metrics, event surge,
+accessibility, ranker, SSE parser, run history, manifest schema v3,
+map-action allowlist, security (server-only key, unknown tools, body
+limits, knowledge path allowlist), mock orchestration, API routes.
 
-Unit tests use injected adapters and repositories where isolation is required.
-They do not silently enable a product mock mode and do not call live Backboard.
+Default tests never call live Backboard.
 
-## Browser tests
+## E2E
 
 ```bash
-npm run test:e2e
-npm run test:e2e:techto
+npm run test:e2e:twinto
 ```
 
-Playwright checks the open-city map, chat behavior, map actions, TechTO shell,
-scenario playback, and visible provider labels. Network routes are stubbed only
-where the test is validating browser behavior instead of live model quality.
-The `.next-playwright` build directory is isolated from a running development
-server cache.
-
-PDF content is tested as escaped print-ready HTML. Browser automation verifies
-export controls without opening the operating system print dialog.
+Forces `BACKBOARD_MOCK_MODE=true`. Exercises map load, scenario select,
+baseline playback, full mock planning run, stress panel, recommendation,
+operator question, previous runs, and asserts no battery/Cesium/GridTwin
+copy.
 
 ## Live smoke
 
@@ -39,6 +33,6 @@ export controls without opening the operating system print dialog.
 npm run backboard:smoke
 ```
 
-This requires `BACKBOARD_API_KEY`. It checks live model capabilities, a
-principled roster assistant, indexed knowledge retrieval, a harmless tool call,
-and read-only memory behavior. It can incur provider latency and cost.
+Requires `BACKBOARD_API_KEY` and live mode. Lists models, verifies a TwinTO
+assistant, retrieves an indexed transit document, calls one harmless tool,
+checks read-only memory, reports tokens.

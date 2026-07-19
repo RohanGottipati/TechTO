@@ -6,9 +6,7 @@ import { GlassPanel } from "@/components/primitives/GlassPanel";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { StatusPill } from "@/components/primitives/StatusPill";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
-import type { TechTORunResult } from "@/lib/techto/types";
-import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
-import { PdfExportButton } from "@/components/chat/PdfExportButton";
+import type { TwinTORunResult } from "@/lib/twinto/types";
 
 const ACTION_LABEL: Record<string, string> = {
   approve: "Approve",
@@ -28,31 +26,8 @@ export function FinalRecommendation({ result }: FinalRecommendationProps) {
   return (
     <GlassPanel className="flex h-full flex-col p-4" data-testid="final-recommendation">
       <div className="flex items-center gap-2">
-        <Award className="h-4 w-4 text-techto-red" />
-        <h3 className="text-sm font-semibold text-techto-text">Final Recommendation</h3>
-        {result && (
-          <PdfExportButton
-            report={{
-              title: result.effectiveRecommendation.headline,
-              subtitle: "TechTO final planning recommendation",
-              messages: [
-                {
-                  role: "assistant",
-                  content: [
-                    result.effectiveRecommendation.reasoning,
-                    result.effectiveRecommendation.tradeoffs.length
-                      ? `## Tradeoffs\n${result.effectiveRecommendation.tradeoffs.map((item) => `- ${item}`).join("\n")}`
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join("\n\n"),
-                },
-              ],
-            }}
-            className="ml-auto"
-            testId="final-recommendation-export-pdf"
-          />
-        )}
+        <Award className="h-4 w-4 text-twinto-red" />
+        <h3 className="text-sm font-semibold text-twinto-text">Final Recommendation</h3>
       </div>
 
       {!result ? (
@@ -89,10 +64,7 @@ export function FinalRecommendation({ result }: FinalRecommendationProps) {
             </p>
           </div>
 
-          <ChatMarkdown
-            content={result.effectiveRecommendation.reasoning}
-            className="text-sm text-techto-text/90"
-          />
+          <p className="text-sm leading-relaxed text-twinto-text/90">{result.effectiveRecommendation.reasoning}</p>
 
           {result.effectiveRecommendation.tradeoffs.length > 0 && (
             <div>
