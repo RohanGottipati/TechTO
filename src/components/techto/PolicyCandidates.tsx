@@ -24,8 +24,8 @@ export function PolicyCandidates({ candidates, ranking, selectedCandidateId, onS
   return (
     <GlassPanel className="flex h-full flex-col p-4" data-testid="policy-candidates">
       <div className="flex items-center gap-2">
-        <ListChecks className="h-4 w-4 text-twinto-accent" />
-        <h3 className="text-sm font-semibold text-twinto-text">Policy Candidates</h3>
+        <ListChecks className="h-4 w-4 text-techto-accent" />
+        <h3 className="text-sm font-semibold text-techto-text">Policy Candidates</h3>
       </div>
 
       {candidates.length === 0 ? (
@@ -36,7 +36,7 @@ export function PolicyCandidates({ candidates, ranking, selectedCandidateId, onS
           />
         </div>
       ) : (
-        <ul className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1 twinto-scroll">
+        <ul className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1 techto-scroll">
           {candidates.map((candidate, index) => {
             const rank = rankByInterventionId.get(candidate.id);
             const isSelected = candidate.id === selectedCandidateId;
@@ -53,12 +53,12 @@ export function PolicyCandidates({ candidates, ranking, selectedCandidateId, onS
                   className={cn(
                     "w-full rounded-lg border px-3 py-2.5 text-left transition-colors",
                     isSelected
-                      ? "border-twinto-accent/50 bg-twinto-accent/[0.08]"
+                      ? "border-techto-accent/50 bg-techto-accent/[0.08]"
                       : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05]",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-twinto-text">{candidate.label}</span>
+                    <span className="text-xs font-medium text-techto-text">{candidate.label}</span>
                     {rank?.disqualified ? (
                       <StatusPill tone="error">Disqualified</StatusPill>
                     ) : rank ? (
@@ -66,17 +66,17 @@ export function PolicyCandidates({ candidates, ranking, selectedCandidateId, onS
                     ) : null}
                   </div>
                   {candidate.description && (
-                    <p className="mt-1 text-[11px] leading-relaxed text-twinto-muted">{candidate.description}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-techto-muted">{candidate.description}</p>
                   )}
                   {rank?.disqualified && rank.disqualifyReason && (
-                    <p className="mt-1 inline-flex items-start gap-1 text-[11px] text-twinto-error">
+                    <p className="mt-1 inline-flex items-start gap-1 text-[11px] text-techto-error">
                       <AlertOctagon className="mt-0.5 h-3 w-3 shrink-0" />
                       {rank.disqualifyReason}
                     </p>
                   )}
                   {rank && !rank.disqualified && (
-                    <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-twinto-muted">
-                      <CheckCircle2 className="h-3 w-3 text-twinto-teal" />
+                    <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-techto-muted">
+                      <CheckCircle2 className="h-3 w-3 text-techto-teal" />
                       score {rank.score.toFixed(2)} · {rank.violationCount} violation(s)
                     </p>
                   )}

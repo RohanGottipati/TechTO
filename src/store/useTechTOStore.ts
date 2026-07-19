@@ -1,30 +1,30 @@
 import { create } from "zustand";
 
-/** Which panel the TwinTO chat/results UI should bring to the foreground. */
-export type TwinTOPanelFocus = "chat" | "citizens" | "map" | "recommendation" | "history";
+/** Which panel the TechTO chat/results UI should bring to the foreground. */
+export type TechTOPanelFocus = "chat" | "citizens" | "map" | "recommendation" | "history";
 
-interface TwinTOState {
+interface TechTOState {
   activeRunId: string | null;
   selectedCandidateId: string | null;
-  panelFocus: TwinTOPanelFocus;
+  panelFocus: TechTOPanelFocus;
 }
 
-interface TwinTOActions {
+interface TechTOActions {
   setActiveRun: (runId: string | null) => void;
   setSelectedCandidate: (candidateId: string | null) => void;
-  setPanelFocus: (focus: TwinTOPanelFocus) => void;
+  setPanelFocus: (focus: TechTOPanelFocus) => void;
   reset: () => void;
 }
 
-export type TwinTOStore = TwinTOState & TwinTOActions;
+export type TechTOStore = TechTOState & TechTOActions;
 
-const initialState: TwinTOState = {
+const initialState: TechTOState = {
   activeRunId: null,
   selectedCandidateId: null,
   panelFocus: "chat",
 };
 
-export const useTwinTOStore = create<TwinTOStore>((set) => ({
+export const useTechTOStore = create<TechTOStore>((set) => ({
   ...initialState,
 
   // Switching runs invalidates any candidate selection from the previous run.

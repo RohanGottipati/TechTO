@@ -2,10 +2,10 @@ import type { ChatToolDefinition } from "@/lib/backboard/client";
 
 /**
  * Canonical tool names shared by assistant definitions (which tools an
- * assistant is offered) and the tool dispatcher (which TwinTO transit
+ * assistant is offered) and the tool dispatcher (which TechTO transit
  * function each name executes). Keeping this as a const object (not a plain
  * string union) lets both sides import the same runtime values. See
- * docs/twinto-implementation.md section 13.6 for the canonical catalogue.
+ * docs/techto-implementation.md section 13.6 for the canonical catalogue.
  */
 export const TOOL_NAMES = {
   GET_CURRENT_MAP_CONTEXT: "get_current_map_context",
@@ -236,7 +236,7 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
   [TOOL_NAMES.GET_CURRENT_MAP_CONTEXT]: {
     name: TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
     description:
-      "Read the current TwinTO map context: center, zoom, selected station/neighbourhood, visible layers, and any highlighted candidates. Fixture-backed when no live map state is supplied.",
+      "Read the current TechTO map context: center, zoom, selected station/neighbourhood, visible layers, and any highlighted candidates. Fixture-backed when no live map state is supplied.",
     parameters: {
       type: "object",
       properties: {
@@ -853,7 +853,7 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
   [TOOL_NAMES.INVOKE_ASSISTANT]: {
     name: TOOL_NAMES.INVOKE_ASSISTANT,
     description:
-      "Ask another ToronTwin Backboard assistant to do one focused task with its tools. Use when you need a specialist lens; do not invent niche one-off agents. Pass a clear task string.",
+      "Ask another TechTO Backboard assistant to do one focused task with its tools. Use when you need a specialist lens; do not invent niche one-off agents. Pass a clear task string.",
     parameters: {
       type: "object",
       properties: {

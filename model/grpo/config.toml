@@ -20,5 +20,5 @@ max_completion_tokens = 256
 init_from_adapter = "flash-1784401342-0d51be72"
 
 [wandb]
-project = "torontwin-grpo"
+project = "techto-grpo"
 run_name = "mcq-judge-qwen7b-16x8-backoff"

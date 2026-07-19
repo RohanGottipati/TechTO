@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   isInsideToronto,
   torontoScopeViolationMessage,
-} from "@/lib/twinto/toronto-scope";
+} from "@/lib/techto/toronto-scope";
 
 /**
  * Allowlisted MapLibre actions. Frontend validates with Zod and remains the

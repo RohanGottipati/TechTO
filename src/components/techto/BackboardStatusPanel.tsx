@@ -65,8 +65,8 @@ export function BackboardStatusPanel({ onCapabilitiesLoaded }: BackboardStatusPa
     <GlassPanel className="flex h-full flex-col p-4" data-testid="backboard-status-panel">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ServerCog className="h-4 w-4 text-twinto-accent" />
-          <h3 className="text-sm font-semibold text-twinto-text">Backboard Status</h3>
+          <ServerCog className="h-4 w-4 text-techto-accent" />
+          <h3 className="text-sm font-semibold text-techto-text">Backboard Status</h3>
         </div>
         {capabilities && (
           <StatusPill tone="ready">
@@ -76,21 +76,21 @@ export function BackboardStatusPanel({ onCapabilitiesLoaded }: BackboardStatusPa
       </div>
 
       {isLoading && (
-        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-twinto-muted">
+        <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-techto-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Resolving assistant roster...
         </p>
       )}
 
       {error && (
-        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-twinto-error">
+        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-techto-error">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {error}
         </p>
       )}
 
       {capabilities && (
-        <div className="mt-3 space-y-2 text-xs text-twinto-muted">
+        <div className="mt-3 space-y-2 text-xs text-techto-muted">
           <p className="inline-flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5" />
             Roster {capabilities.rosterVersion ?? "unknown"} ·{" "}
@@ -102,15 +102,15 @@ export function BackboardStatusPanel({ onCapabilitiesLoaded }: BackboardStatusPa
             {capabilities.modelCatalogSize} models in catalog
           </p>
           {(capabilities.missingAssistants?.length ?? 0) > 0 && (
-            <p className="text-twinto-amber">
+            <p className="text-techto-amber">
               Missing: {capabilities.missingAssistants?.join(", ")}
             </p>
           )}
-          <ul className="max-h-40 space-y-1 overflow-y-auto twinto-scroll pr-1">
+          <ul className="max-h-40 space-y-1 overflow-y-auto techto-scroll pr-1">
             {capabilities.assistants.map((assistant) => (
               <li key={assistant.role} className="rounded border border-white/5 bg-white/[0.02] px-2 py-1.5">
-                <span className="font-medium text-twinto-text">{assistant.name.replace(/^TwinTO — /, "")}</span>
-                <span className="block text-[10px] text-twinto-muted">
+                <span className="font-medium text-techto-text">{assistant.name.replace(/^TechTO — /, "")}</span>
+                <span className="block text-[10px] text-techto-muted">
                   {assistant.model.provider}/{assistant.model.name} · {assistant.memory} · {assistant.toolNames.length} tools
                 </span>
               </li>

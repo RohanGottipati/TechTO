@@ -1,5 +1,5 @@
 /**
- * TwinTO MongoDB Atlas collection names (docs/twinto-implementation.md §14).
+ * TechTO MongoDB Atlas collection names (docs/techto-implementation.md §14).
  * `transit_scenarios` and `stress_overlays` are demo operational collections
  * required for the flagship schedule scenario; they are not live TTC feeds.
  */
@@ -63,9 +63,9 @@ export const TIME_SERIES_COLLECTIONS = {
 
 export const DEMO_PROVENANCE = {
   sourceType: "synthetic" as const,
-  sourceName: "TwinTO demo fixtures (src/data/transit)",
+  sourceName: "TechTO demo fixtures (src/data/transit)",
   sourceUrl: null as string | null,
   retrievedAt: null as string | null,
-  transformationVersion: "twinto-demo-1",
+  transformationVersion: "techto-demo-1",
   syntheticFields: ["*"],
 };

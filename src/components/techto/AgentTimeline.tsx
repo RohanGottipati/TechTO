@@ -6,9 +6,9 @@ import { Loader2, Radio } from "lucide-react";
 import { GlassPanel } from "@/components/primitives/GlassPanel";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
-import type { TwinTORunEvent } from "@/lib/twinto/types";
+import type { TechTORunEvent } from "@/lib/techto/types";
 
-function describeEvent(event: TwinTORunEvent): { title: string; detail?: string; tone: "info" | "success" | "error" } {
+function describeEvent(event: TechTORunEvent): { title: string; detail?: string; tone: "info" | "success" | "error" } {
   switch (event.type) {
     case "run.started":
       return { title: `Run started`, detail: event.scenarioId, tone: "info" };
@@ -79,12 +79,12 @@ function describeEvent(event: TwinTORunEvent): { title: string; detail?: string;
 
 const TONE_COLOR: Record<"info" | "success" | "error", string> = {
   info: "border-white/5 bg-white/[0.02]",
-  success: "border-twinto-teal/20 bg-twinto-teal/[0.05]",
-  error: "border-twinto-error/30 bg-twinto-error/[0.06]",
+  success: "border-techto-teal/20 bg-techto-teal/[0.05]",
+  error: "border-techto-error/30 bg-techto-error/[0.06]",
 };
 
 export interface AgentTimelineProps {
-  events: TwinTORunEvent[];
+  events: TechTORunEvent[];
   isRunning: boolean;
 }
 
@@ -102,11 +102,11 @@ export function AgentTimeline({ events, isRunning }: AgentTimelineProps) {
     <GlassPanel className="flex h-full flex-col p-4" data-testid="agent-timeline">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Radio className="h-4 w-4 text-twinto-accent" />
-          <h3 className="text-sm font-semibold text-twinto-text">Agent Timeline</h3>
+          <Radio className="h-4 w-4 text-techto-accent" />
+          <h3 className="text-sm font-semibold text-techto-text">Agent Timeline</h3>
         </div>
         {isRunning && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-twinto-teal">
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-techto-teal">
             <Loader2 className="h-3 w-3 animate-spin" />
             live
           </span>
@@ -118,7 +118,7 @@ export function AgentTimeline({ events, isRunning }: AgentTimelineProps) {
           <EmptyState title="No run yet" description="Start a run to watch the planning department work through this scenario." />
         </div>
       ) : (
-        <ul ref={scrollRef} className="mt-3 flex-1 space-y-1.5 overflow-y-auto pr-1 twinto-scroll">
+        <ul ref={scrollRef} className="mt-3 flex-1 space-y-1.5 overflow-y-auto pr-1 techto-scroll">
           <AnimatePresence initial={false}>
             {events.map((event, index) => {
               const { title, detail, tone } = describeEvent(event);
@@ -130,8 +130,8 @@ export function AgentTimeline({ events, isRunning }: AgentTimelineProps) {
                   transition={{ duration: 0.18 }}
                   className={`rounded-lg border px-2.5 py-1.5 ${TONE_COLOR[tone]}`}
                 >
-                  <p className="text-xs font-medium text-twinto-text">{title}</p>
-                  {detail && <p className="mt-0.5 truncate text-[11px] text-twinto-muted">{detail}</p>}
+                  <p className="text-xs font-medium text-techto-text">{title}</p>
+                  {detail && <p className="mt-0.5 truncate text-[11px] text-techto-muted">{detail}</p>}
                 </motion.li>
               );
             })}

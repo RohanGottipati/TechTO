@@ -101,7 +101,7 @@ export function placeFromBuildingFeature(input: {
   };
 }
 
-/** Neighbourhood click on the ToronTwin dashboard map. */
+/** Neighbourhood click on the TechTO dashboard map. */
 export function placeFromNeighbourhoodArea(input: {
   code: string;
   name: string;

@@ -17,7 +17,7 @@ export interface SeedSummary {
 }
 
 /**
- * Upserts TwinTO demo fixtures into Atlas. All records carry synthetic
+ * Upserts TechTO demo fixtures into Atlas. All records carry synthetic
  * provenance; this is not a live GTFS or census load.
  */
 export async function seedMongoFromFixtures(databaseName?: string): Promise<SeedSummary> {

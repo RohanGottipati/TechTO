@@ -1,15 +1,15 @@
-# ToronTwin: Toronto planning decision support
+# TechTO: Toronto planning decision support
 
-ToronTwin is a Next.js and MapLibre decision-support application for City of
+TechTO is a Next.js and MapLibre decision-support application for City of
 Toronto planning. The map and chat let a planner ask free-form questions,
 inspect an area, compare options, request map changes, and examine a simulated
 distribution of day-one acceptance.
 
 The product has two web surfaces:
 
-- `/` is the open-city ToronTwin dashboard. Its chat runs the live Backboard
+- `/` is the open-city TechTO dashboard. Its chat runs the live Backboard
   Planning Orchestrator with optional twin tools and specialist calls.
-- `/twinto` is the separate TwinTO transit demonstration. It retains its
+- `/techto` is the separate TechTO transit demonstration. It retains its
   clearly labelled synthetic flagship schedule scenario and deterministic
   transit checks.
 
@@ -56,13 +56,17 @@ by the surface you are running:
 
 - `BACKBOARD_API_KEY` is required for live Backboard chat. There is no mock
   Backboard adapter.
-- `TORONTWIN_POPULATION_PROVIDER=synthetic|census` selects the open-city
+- `TECHTO_POPULATION_PROVIDER=synthetic|census` selects the open-city
   population provider.
-- `TWINTO_CITIZEN_REACTION_PROVIDER=freesolo` and the FreeSolo variables are
-  required for TwinTO citizen reactions. There is no mock reaction provider.
-- `TWINTO_REPOSITORY_PROVIDER=fixture|mongo` selects local transit fixtures or
-  MongoDB Atlas for TwinTO repository reads.
+- `TECHTO_CITIZEN_REACTION_PROVIDER=freesolo` and the FreeSolo variables are
+  required for TechTO citizen reactions. There is no mock reaction provider.
+- `TECHTO_REPOSITORY_PROVIDER=fixture|mongo` selects local transit fixtures or
+  MongoDB Atlas for TechTO repository reads.
+- `MONGODB_DATABASE` defaults to `techto`. If an older Atlas cluster still uses
+  `twinto`, either set `MONGODB_DATABASE=twinto` or re-run
+  `npm run mongo:bootstrap` against the new database name.
 - `NEXT_PUBLIC_MAP_STYLE_URL` optionally overrides the MapLibre base style.
+- Legacy `/twinto` URLs redirect to `/techto`.
 
 Never expose Backboard, FreeSolo, or MongoDB credentials through a
 `NEXT_PUBLIC_` variable.
@@ -78,7 +82,7 @@ Never expose Backboard, FreeSolo, or MongoDB credentials through a
 Generated web map inputs live under `public/data/`. Data preparation and the
 research population pipeline live under `scripts/data/`, `data/`, and
 `population/`. See `AGENTS.md` for provenance, calibration requirements, and
-the distinction between the research population files and TwinTO fixtures.
+the distinction between the research population files and TechTO fixtures.
 
 ## Commands
 

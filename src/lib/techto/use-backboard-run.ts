@@ -6,17 +6,17 @@ import { createRunStreamClient, type RunStreamHandle } from "@/lib/backboard/str
 import {
   upsertRun,
   type StoredRunStatus,
-  type StoredTwinTORun,
-} from "@/lib/twinto/run-history";
-import type { TwinTORunEvent, TwinTORunResult } from "@/lib/twinto/types";
+  type StoredTechTORun,
+} from "@/lib/techto/run-history";
+import type { TechTORunEvent, TechTORunResult } from "@/lib/techto/types";
 
 const RUN_ENDPOINT = "/api/backboard/run";
 
 export interface UseBackboardRunState {
   isRunning: boolean;
   runId: string | null;
-  events: TwinTORunEvent[];
-  result: TwinTORunResult | null;
+  events: TechTORunEvent[];
+  result: TechTORunResult | null;
   error: string | null;
 }
 
@@ -39,21 +39,21 @@ const INITIAL_STATE: UseBackboardRunState = {
   error: null,
 };
 
-function isTwinTORunEvent(value: unknown): value is TwinTORunEvent {
+function isTechTORunEvent(value: unknown): value is TechTORunEvent {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   return typeof record.type === "string" && typeof record.runId === "string";
 }
 
 function toStoredRun(params: {
-  previous: StoredTwinTORun | null;
+  previous: StoredTechTORun | null;
   runId: string;
   scenarioId: string;
   status: StoredRunStatus;
-  events: TwinTORunEvent[];
-  result: TwinTORunResult | null;
+  events: TechTORunEvent[];
+  result: TechTORunResult | null;
   error: string | null;
-}): StoredTwinTORun {
+}): StoredTechTORun {
   const terminal = params.status !== "running";
   return {
     runId: params.runId,
@@ -70,16 +70,16 @@ function toStoredRun(params: {
 }
 
 /**
- * Wraps a StoredTwinTORun mutable cell behind function calls (rather than
+ * Wraps a StoredTechTORun mutable cell behind function calls (rather than
  * bare `.current` reads), which keeps `if (cell.get())` narrowing simple and
  * avoids relying on TypeScript's control-flow narrowing across the
  * intervening closures a streaming hook like this one inevitably has.
  */
 function createStoredRunCell(): {
-  get: () => StoredTwinTORun | null;
-  set: (value: StoredTwinTORun | null) => void;
+  get: () => StoredTechTORun | null;
+  set: (value: StoredTechTORun | null) => void;
 } {
-  let value: StoredTwinTORun | null = null;
+  let value: StoredTechTORun | null = null;
   return {
     get: () => value,
     set: (next) => {
@@ -89,10 +89,10 @@ function createStoredRunCell(): {
 }
 
 /**
- * Drives one TwinTO planner-agent run end-to-end via the shared
+ * Drives one TechTO planner-agent run end-to-end via the shared
  * src/lib/backboard/stream-parser.ts client: POSTs to /api/backboard/run,
  * consumes the validated BackboardRunEventEnvelope stream, and unwraps
- * `envelope.payload` back into a TwinTORunEvent. See src/lib/twinto/types.ts
+ * `envelope.payload` back into a TechTORunEvent. See src/lib/techto/types.ts
  * for why the event/result types live outside `@/lib/backboard/orchestrator` for
  * now. Run state is also mirrored into localStorage (via run-history.ts) as
  * it progresses, so a reload mid-run still shows something in Previous Runs.
@@ -122,8 +122,8 @@ export function useBackboardRun(): UseBackboardRunResult {
     const storedRunCell = storedRunCellRef.current;
     storedRunCell.set(null);
 
-    let events: TwinTORunEvent[] = [];
-    let result: TwinTORunResult | null = null;
+    let events: TechTORunEvent[] = [];
+    let result: TechTORunResult | null = null;
     let error: string | null = null;
     let runId: string | null = null;
 
@@ -148,7 +148,7 @@ export function useBackboardRun(): UseBackboardRunResult {
       url: RUN_ENDPOINT,
       body: input,
       onEvent: (envelope) => {
-        if (!isTwinTORunEvent(envelope.payload)) {
+        if (!isTechTORunEvent(envelope.payload)) {
           return;
         }
         const event = envelope.payload;

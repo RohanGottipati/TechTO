@@ -27,23 +27,23 @@ export function ScenarioPanel({
   return (
     <GlassPanel className="flex flex-col gap-3 p-4" data-testid="scenario-panel">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-twinto-text">{scenario.label}</h2>
+        <h2 className="text-sm font-semibold text-techto-text">{scenario.label}</h2>
         <StatusPill tone="warning" data-testid="synthetic-fixture-badge">synthetic-fixture</StatusPill>
       </div>
-      <p className="text-xs leading-relaxed text-twinto-muted">{scenario.description}</p>
+      <p className="text-xs leading-relaxed text-techto-muted">{scenario.description}</p>
 
       <dl className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
-          <dt className="text-[10px] uppercase tracking-wide text-twinto-muted">Station</dt>
-          <dd className="text-twinto-text">{scenario.stationId}</dd>
+          <dt className="text-[10px] uppercase tracking-wide text-techto-muted">Station</dt>
+          <dd className="text-techto-text">{scenario.stationId}</dd>
         </div>
         <div className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
-          <dt className="text-[10px] uppercase tracking-wide text-twinto-muted">Route</dt>
-          <dd className="text-twinto-text">{scenario.routeId}</dd>
+          <dt className="text-[10px] uppercase tracking-wide text-techto-muted">Route</dt>
+          <dd className="text-techto-text">{scenario.routeId}</dd>
         </div>
         <div className="col-span-2 rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
-          <dt className="text-[10px] uppercase tracking-wide text-twinto-muted">Baseline departures</dt>
-          <dd className="text-twinto-text">{scenario.baselineDepartures.join(", ")}</dd>
+          <dt className="text-[10px] uppercase tracking-wide text-techto-muted">Baseline departures</dt>
+          <dd className="text-techto-text">{scenario.baselineDepartures.join(", ")}</dd>
         </div>
       </dl>
 
@@ -61,8 +61,8 @@ export function ScenarioPanel({
         data-testid="start-run-button"
         className={
           isRunning
-            ? "inline-flex items-center justify-center gap-2 rounded-xl border border-twinto-error/50 bg-twinto-error/10 px-4 py-2.5 text-sm font-semibold text-twinto-error transition-colors hover:bg-twinto-error/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twinto-error"
-            : "inline-flex items-center justify-center gap-2 rounded-xl border border-twinto-red/50 bg-twinto-red/15 px-4 py-2.5 text-sm font-semibold text-twinto-red transition-colors hover:bg-twinto-red/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-twinto-red"
+            ? "inline-flex items-center justify-center gap-2 rounded-xl border border-techto-error/50 bg-techto-error/10 px-4 py-2.5 text-sm font-semibold text-techto-error transition-colors hover:bg-techto-error/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-techto-error"
+            : "inline-flex items-center justify-center gap-2 rounded-xl border border-techto-red/50 bg-techto-red/15 px-4 py-2.5 text-sm font-semibold text-techto-red transition-colors hover:bg-techto-red/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-techto-red"
         }
       >
         {isRunning ? (
@@ -78,7 +78,7 @@ export function ScenarioPanel({
         )}
       </button>
       {isRunning && (
-        <p className="inline-flex items-center gap-1.5 text-[11px] text-twinto-muted">
+        <p className="inline-flex items-center gap-1.5 text-[11px] text-techto-muted">
           <Square className="h-3 w-3" />
           The virtual planning department is working through this scenario.
         </p>

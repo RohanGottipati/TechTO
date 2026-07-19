@@ -24,7 +24,7 @@ CKAN_BASE = "https://ckan0.cf.opendata.inter.prod-toronto.ca"
 ACTION_BASE = f"{CKAN_BASE}/api/3/action"
 
 _SESSION = requests.Session()
-_SESSION.headers.update({"User-Agent": "torontwin-ingest/0.1 (Phase 0 twin ingestion)"})
+_SESSION.headers.update({"User-Agent": "techto-ingest/0.1 (Phase 0 twin ingestion)"})
 
 
 def package_show(package_id: str) -> dict[str, Any]:

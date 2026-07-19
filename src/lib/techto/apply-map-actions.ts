@@ -1,10 +1,10 @@
 "use client";
 
-import type { MapAction } from "@/lib/twinto/map-actions";
-import type { AgentMapOverlay } from "@/lib/twinto/map-overlays";
+import type { MapAction } from "@/lib/techto/map-actions";
+import type { AgentMapOverlay } from "@/lib/techto/map-overlays";
 import { deriveAgent3DFocus } from "@/lib/map/localized-3d";
 import { useMapStore } from "@/store/useMapStore";
-import { useTwinTOStore } from "@/store/useTwinTOStore";
+import { useTechTOStore } from "@/store/useTechTOStore";
 
 /**
  * Frontend executor for allowlisted MapActions. Shared by map chat surfaces.
@@ -67,7 +67,7 @@ export function applyMapActions(actions: MapAction[]): void {
         map.setLayerVisibility({ [key]: action.visible });
       }
     } else if (action.type === "select_candidate") {
-      useTwinTOStore.getState().setSelectedCandidate(action.candidateId);
+      useTechTOStore.getState().setSelectedCandidate(action.candidateId);
     } else if (action.type === "open_panel") {
       const focus =
         action.panel === "citizen_reactions"
@@ -75,7 +75,7 @@ export function applyMapActions(actions: MapAction[]): void {
           : action.panel === "candidate_details" || action.panel === "policy_comparison"
             ? "recommendation"
             : "chat";
-      useTwinTOStore.getState().setPanelFocus(focus);
+      useTechTOStore.getState().setPanelFocus(focus);
     }
   }
 

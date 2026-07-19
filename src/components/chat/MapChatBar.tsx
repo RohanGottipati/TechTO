@@ -12,11 +12,11 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
-import { parseMapActions } from "@/lib/twinto/map-actions";
-import { applyMapActions } from "@/lib/twinto/apply-map-actions";
+import { parseMapActions } from "@/lib/techto/map-actions";
+import { applyMapActions } from "@/lib/techto/apply-map-actions";
 import { useMapStore } from "@/store/useMapStore";
-import { useTwinTOStore } from "@/store/useTwinTOStore";
-import type { UseBackboardRunResult } from "@/lib/twinto/use-backboard-run";
+import { useTechTOStore } from "@/store/useTechTOStore";
+import type { UseBackboardRunResult } from "@/lib/techto/use-backboard-run";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { cn } from "@/lib/utils/cn";
 import type { CityPlanRankingRow } from "@/components/planner/CityPlanStrip";
@@ -35,7 +35,7 @@ const EXAMPLE_ASK =
   "Should I place a new train station in Wychwood or in Ionview?";
 
 export interface MapChatBarProps {
-  /** Optional TwinTO planning run. Omit on the ToronTwin dashboard. */
+  /** Optional TechTO planning run. Omit on the TechTO dashboard. */
   run?: UseBackboardRunResult;
   includeWebSearch?: boolean;
   /** When false, chat answers only (no Backboard planning kickoff). Default true if `run` is provided. */
@@ -312,11 +312,11 @@ export function MapChatBar({
           )}
         >
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-            <p className="text-[11px] font-medium text-white">ToronTwin</p>
+            <p className="text-[11px] font-medium text-white">TechTO</p>
             <div className="flex items-center gap-1">
               <PdfExportButton
                 report={{
-                  title: "ToronTwin conversation",
+                  title: "TechTO conversation",
                   subtitle: "Toronto planning questions and responses",
                   messages,
                 }}
@@ -345,7 +345,7 @@ export function MapChatBar({
               </button>
             </div>
           </div>
-          <div ref={transcriptRef} className="min-h-0 space-y-2 overflow-y-auto pr-1 twinto-scroll">
+          <div ref={transcriptRef} className="min-h-0 space-y-2 overflow-y-auto pr-1 techto-scroll">
             {messages.map((message, index) => (
               <div
                 key={message.id}
@@ -371,7 +371,7 @@ export function MapChatBar({
                       <div className="mt-1.5 flex justify-end border-t border-white/10 pt-1">
                         <PdfExportButton
                           report={{
-                            title: "ToronTwin planning answer",
+                            title: "TechTO planning answer",
                             subtitle: "Question and response",
                             messages: answerReportMessages(index),
                           }}
@@ -430,7 +430,7 @@ export function MapChatBar({
         {run ? (
           <button
             type="button"
-            onClick={() => useTwinTOStore.getState().setPanelFocus("chat")}
+            onClick={() => useTechTOStore.getState().setPanelFocus("chat")}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
             aria-label="Open council panel"
           >

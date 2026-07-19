@@ -6,13 +6,13 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import {
   ASSISTANT_ROSTER,
   ASSISTANT_UI_GROUPS,
-  type TwinTOAssistantKey,
+  type TechTOAssistantKey,
 } from "@/lib/backboard/assistants";
-import type { TwinTORunEvent } from "@/lib/twinto/types";
+import type { TechTORunEvent } from "@/lib/techto/types";
 
 type AgentStatus = "idle" | "started" | "completed" | "failed";
 
-function statusFromEvents(events: TwinTORunEvent[]): Map<string, AgentStatus> {
+function statusFromEvents(events: TechTORunEvent[]): Map<string, AgentStatus> {
   const status = new Map<string, AgentStatus>();
   for (const event of events) {
     if (event.type === "agent.started") status.set(event.role, "started");
@@ -30,14 +30,14 @@ const STATUS_ICON: Record<AgentStatus, typeof CheckCircle2> = {
 };
 
 const STATUS_COLOR: Record<AgentStatus, string> = {
-  idle: "text-twinto-muted",
-  started: "text-twinto-amber",
-  completed: "text-twinto-teal",
-  failed: "text-twinto-error",
+  idle: "text-techto-muted",
+  started: "text-techto-amber",
+  completed: "text-techto-teal",
+  failed: "text-techto-error",
 };
 
 export interface AgentCouncilProps {
-  events: TwinTORunEvent[];
+  events: TechTORunEvent[];
 }
 
 /**
@@ -52,10 +52,10 @@ export function AgentCouncil({ events }: AgentCouncilProps) {
     <GlassPanel className="flex h-full flex-col p-4" data-testid="agent-council">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Users2 className="h-4 w-4 text-twinto-accent" />
-          <h3 className="text-sm font-semibold text-twinto-text">Agent Council</h3>
+          <Users2 className="h-4 w-4 text-techto-accent" />
+          <h3 className="text-sm font-semibold text-techto-text">Agent Council</h3>
         </div>
-        <span className="text-[11px] text-twinto-muted" data-testid="roster-version">
+        <span className="text-[11px] text-techto-muted" data-testid="roster-version">
           roster v3 · 16 assistants · {activated} active
         </span>
       </div>
@@ -68,14 +68,14 @@ export function AgentCouncil({ events }: AgentCouncilProps) {
           />
         </div>
       ) : (
-        <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1 twinto-scroll">
-          {(Object.entries(ASSISTANT_UI_GROUPS) as [string, readonly TwinTOAssistantKey[]][]).map(
+        <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1 techto-scroll">
+          {(Object.entries(ASSISTANT_UI_GROUPS) as [string, readonly TechTOAssistantKey[]][]).map(
             ([group, keys]) => {
               const activeInGroup = keys.filter((key) => statusByRole.has(key));
               if (activeInGroup.length === 0) return null;
               return (
                 <section key={group}>
-                  <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-twinto-muted">
+                  <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-techto-muted">
                     {group}
                   </h4>
                   <ul className="space-y-1.5">
@@ -90,14 +90,14 @@ export function AgentCouncil({ events }: AgentCouncilProps) {
                           data-testid={`agent-${key}`}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-twinto-text">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-techto-text">
                               <Icon
                                 className={`h-3 w-3 ${STATUS_COLOR[status]} ${status === "started" ? "animate-spin" : ""}`}
                               />
-                              {definition.name.replace(/^TwinTO — /, "")}
+                              {definition.name.replace(/^TechTO — /, "")}
                             </span>
                           </div>
-                          <p className="mt-0.5 text-[11px] text-twinto-muted">{definition.shortDescription}</p>
+                          <p className="mt-0.5 text-[11px] text-techto-muted">{definition.shortDescription}</p>
                         </li>
                       );
                     })}

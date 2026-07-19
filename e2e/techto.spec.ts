@@ -1,15 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Shell smoke for TwinTO. Full planning runs hit live Backboard and are not
+ * Shell smoke for TechTO. Full planning runs hit live Backboard and are not
  * covered here (cost / latency); use npm run backboard:smoke for that.
  */
 
-test.describe("TwinTO", () => {
+test.describe("TechTO", () => {
   test("loads the app shell, the map, and the flagship scenario", async ({ page }) => {
-    await page.goto("/twinto");
+    await page.goto("/techto");
 
-    await expect(page.getByTestId("twinto-app")).toBeVisible();
+    await expect(page.getByTestId("techto-app")).toBeVisible();
     await expect(page.getByTestId("toronto-map")).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(".maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
 
@@ -18,8 +18,8 @@ test.describe("TwinTO", () => {
   });
 
   test("has no battery, GridTwin, Cesium, or 54-agent roster text on the page", async ({ page }) => {
-    await page.goto("/twinto");
-    await expect(page.getByTestId("twinto-app")).toBeVisible();
+    await page.goto("/techto");
+    await expect(page.getByTestId("techto-app")).toBeVisible();
 
     const bodyText = await page.locator("body").innerText();
     expect(bodyText).not.toMatch(/gridtwin/i);
@@ -30,7 +30,7 @@ test.describe("TwinTO", () => {
   });
 
   test("shows City Copilot chat and consolidated roster messaging", async ({ page }) => {
-    await page.goto("/twinto");
+    await page.goto("/techto");
     await expect(page.getByTestId("city-copilot-chat")).toBeVisible();
     await expect(page.getByTestId("city-copilot-input")).toBeVisible();
     await page.getByTestId("city-copilot-input").fill("Show Liberty Village on the map");
@@ -42,8 +42,8 @@ test.describe("TwinTO", () => {
   });
 
   test("plays the baseline scrubber", async ({ page }) => {
-    await page.goto("/twinto");
-    await expect(page.getByTestId("twinto-app")).toBeVisible();
+    await page.goto("/techto");
+    await expect(page.getByTestId("techto-app")).toBeVisible();
 
     const playback = page.getByTestId("playback-controls");
     await expect(playback).toBeVisible();

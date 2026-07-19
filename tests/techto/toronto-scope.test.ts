@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isInsideToronto, TORONTO_SCOPE_SHORT } from "@/lib/twinto/toronto-scope";
+import { isInsideToronto, TORONTO_SCOPE_SHORT } from "@/lib/techto/toronto-scope";
 
 describe("toronto-scope", () => {
   it("accepts downtown Toronto and rejects Vancouver", () => {

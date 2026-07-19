@@ -4,7 +4,7 @@ import { createSseResponse, createSseStream } from "@/lib/backboard/sse";
 import { runCityOrchestration, type CityRunEvent } from "@/lib/planner/orchestrator";
 import { plannerRunBodySchema } from "@/lib/planner/request";
 import { getPopulationProviderMode } from "@/lib/population/provider";
-import type { TwinTORunEventEnvelope } from "@/lib/transit/schemas";
+import type { TechTORunEventEnvelope } from "@/lib/transit/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ function envelope(
   sequence: number,
   type: string,
   payload: Record<string, unknown>,
-): TwinTORunEventEnvelope {
+): TechTORunEventEnvelope {
   return {
     eventId: `${runId}:${sequence}`,
     runId,

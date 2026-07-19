@@ -6,13 +6,13 @@ import { GlassPanel } from "@/components/primitives/GlassPanel";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { createRunStreamClient } from "@/lib/backboard/stream-parser";
 import { cn } from "@/lib/utils/cn";
-import type { TwinTORunResult } from "@/lib/twinto/types";
+import type { TechTORunResult } from "@/lib/techto/types";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 import { PdfExportButton } from "@/components/chat/PdfExportButton";
 
 export interface OperatorQuestionPanelProps {
   scenarioId: string;
-  result: TwinTORunResult | null;
+  result: TechTORunResult | null;
 }
 
 interface QaEntry {
@@ -30,7 +30,7 @@ const EXAMPLE_PROMPTS = [
   "Which cohort is least happy with this candidate, and why?",
 ];
 
-function runContextFor(result: TwinTORunResult): string {
+function runContextFor(result: TechTORunResult): string {
   return [
     `Effective recommendation: ${result.effectiveRecommendation.headline}`,
     result.effectiveRecommendation.reasoning,
@@ -106,12 +106,12 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
   return (
     <GlassPanel className="flex h-full flex-col p-4" data-testid="operator-question-panel">
       <div className="flex items-center gap-2">
-        <MessageSquare className="h-4 w-4 text-twinto-accent" />
-        <h3 className="text-sm font-semibold text-twinto-text">Ask the TTC Operator Explanation Agent</h3>
+        <MessageSquare className="h-4 w-4 text-techto-accent" />
+        <h3 className="text-sm font-semibold text-techto-text">Ask the TTC Operator Explanation Agent</h3>
         {entries.length > 0 && (
           <PdfExportButton
             report={{
-              title: "TwinTO operator questions",
+              title: "TechTO operator questions",
               subtitle: "Questions and evidence-grounded answers",
               messages: entries.flatMap((entry) => [
                 { role: "user" as const, content: entry.question },
@@ -136,14 +136,14 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
             onClick={() => ask(prompt)}
             disabled={isAsking}
             data-testid="operator-example-prompt"
-            className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-twinto-muted transition-colors hover:bg-white/[0.07] hover:text-twinto-text disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-techto-muted transition-colors hover:bg-white/[0.07] hover:text-techto-text disabled:cursor-not-allowed disabled:opacity-50"
           >
             {prompt}
           </button>
         ))}
       </div>
 
-      <div className="mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1 twinto-scroll">
+      <div className="mt-3 flex-1 space-y-2.5 overflow-y-auto pr-1 techto-scroll">
         {entries.length === 0 && (
           <EmptyState
             title="No questions yet"
@@ -152,22 +152,22 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
         )}
         {entries.map((entry, index) => (
           <div key={index} className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5" data-testid="operator-answer">
-            <p className="text-xs font-medium text-twinto-text">{entry.question}</p>
+            <p className="text-xs font-medium text-techto-text">{entry.question}</p>
             {entry.answer && (
-              <ChatMarkdown content={entry.answer} className="mt-1 text-xs text-twinto-muted" />
+              <ChatMarkdown content={entry.answer} className="mt-1 text-xs text-techto-muted" />
             )}
             {entry.citedEvidence.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {entry.citedEvidence.map((cite, citeIndex) => (
-                  <li key={citeIndex} className="text-[10px] text-twinto-accent/80">
+                  <li key={citeIndex} className="text-[10px] text-techto-accent/80">
                     &middot; {cite}
                   </li>
                 ))}
               </ul>
             )}
-            {entry.error && <p className="mt-1 text-[11px] text-twinto-amber">{entry.error}</p>}
+            {entry.error && <p className="mt-1 text-[11px] text-techto-amber">{entry.error}</p>}
             {entry.streaming && !entry.answer && !entry.error && (
-              <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-twinto-muted">
+              <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-techto-muted">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Thinking...
               </p>
@@ -176,7 +176,7 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
               <div className="mt-1 flex justify-end border-t border-white/5 pt-1">
                 <PdfExportButton
                   report={{
-                    title: "TwinTO operator answer",
+                    title: "TechTO operator answer",
                     subtitle: "Question and evidence-grounded response",
                     messages: [
                       { role: "user", content: entry.question },
@@ -207,7 +207,7 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ask about this run..."
-          className="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-twinto-text placeholder:text-twinto-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-twinto-accent"
+          className="flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-techto-text placeholder:text-techto-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-techto-accent"
         />
         <button
           type="submit"
@@ -215,8 +215,8 @@ export function OperatorQuestionPanel({ scenarioId, result }: OperatorQuestionPa
           className={cn(
             "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
             canAsk
-              ? "border-twinto-accent/50 bg-twinto-accent/10 text-twinto-accent hover:bg-twinto-accent/20"
-              : "border-white/10 bg-white/[0.03] text-twinto-muted",
+              ? "border-techto-accent/50 bg-techto-accent/10 text-techto-accent hover:bg-techto-accent/20"
+              : "border-white/10 bg-white/[0.03] text-techto-muted",
           )}
           aria-label="Ask"
         >

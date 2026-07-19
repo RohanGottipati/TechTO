@@ -12,7 +12,7 @@ export interface CitizenReactionProvider {
 }
 
 export function getCitizenReactionProviderMode(): string {
-  return process.env.TWINTO_CITIZEN_REACTION_PROVIDER?.trim().toLowerCase() || "freesolo";
+  return process.env.TECHTO_CITIZEN_REACTION_PROVIDER?.trim().toLowerCase() || "freesolo";
 }
 
 export function getCitizenReactionProvider(): CitizenReactionProvider {
@@ -21,6 +21,6 @@ export function getCitizenReactionProvider(): CitizenReactionProvider {
     return new FreeSoloCitizenReactionProvider();
   }
   throw new CitizenReactionProviderConfigError(
-    `Unknown TWINTO_CITIZEN_REACTION_PROVIDER "${mode}". Supported: "freesolo" (live only; no mock).`,
+    `Unknown TECHTO_CITIZEN_REACTION_PROVIDER "${mode}". Supported: "freesolo" (live only; no mock).`,
   );
 }

@@ -7,7 +7,7 @@ import type { BackboardAdapter } from "@/lib/backboard/client";
 import { runToolLoop } from "@/lib/backboard/run-tool-loop";
 import { createRunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dispatcher";
 import { getToolDefinitions, TOOL_NAMES } from "@/lib/backboard/tools";
-import type { TwinTOAssistantKey } from "@/lib/backboard/assistants";
+import type { TechTOAssistantKey } from "@/lib/backboard/assistants";
 import type { ScenarioPatch } from "@/lib/planner/scenario";
 import { emptyTwinSnapshot, patchTwin } from "@/lib/planner/state";
 import {
@@ -15,18 +15,18 @@ import {
   type PopulationProvider,
 } from "@/lib/population/provider";
 import type { PopulationScoreResult } from "@/lib/population/score";
-import type { MapAction } from "@/lib/twinto/map-actions";
-import type { AgentMapOverlay } from "@/lib/twinto/map-overlays";
-import { parseMapActions } from "@/lib/twinto/map-actions";
+import type { MapAction } from "@/lib/techto/map-actions";
+import type { AgentMapOverlay } from "@/lib/techto/map-overlays";
+import { parseMapActions } from "@/lib/techto/map-actions";
 
 export type CityRunEvent =
   | { type: "run.started"; runId: string; question: string }
-  | { type: "agent.started"; runId: string; role: TwinTOAssistantKey; name: string }
+  | { type: "agent.started"; runId: string; role: TechTOAssistantKey; name: string }
   | { type: "assistant.delta"; runId: string; content: string }
   | { type: "assistant.clear"; runId: string }
   | { type: "status"; runId: string; message: string }
-  | { type: "tool.requested"; runId: string; role: TwinTOAssistantKey; toolName: string }
-  | { type: "tool.completed"; runId: string; role: TwinTOAssistantKey; toolName: string; ok: boolean }
+  | { type: "tool.requested"; runId: string; role: TechTOAssistantKey; toolName: string }
+  | { type: "tool.completed"; runId: string; role: TechTOAssistantKey; toolName: string; ok: boolean }
   | { type: "scenarios.proposed"; runId: string; patches: ScenarioPatch[] }
   | {
       type: "citizens.scored";
@@ -54,7 +54,7 @@ export interface CityCandidateResult {
 export interface CityOrchestrationResult {
   runId: string;
   question: string;
-  participatingAgents: TwinTOAssistantKey[];
+  participatingAgents: TechTOAssistantKey[];
   candidates: CityCandidateResult[];
   ranking: Array<{ id: string; title: string; mean: number; supportShare: number }>;
   chosenId: string;
@@ -198,7 +198,7 @@ export async function runCityOrchestration(
   const content = [
     `User message: ${input.question}`,
     "",
-    "Respond as ToronTwin's planning agent (Claude Code for the city).",
+    "Respond as TechTO's planning agent (Claude Code for the city).",
     "You decide the whole turn: reply in prose, call tools, invoke specialists, or any mix.",
     "Tools are available and optional; use them only when they help.",
     "For location screening, use query_city_layer before choosing an official Toronto neighbourhood.",
@@ -340,10 +340,10 @@ export async function runCityOrchestration(
   });
   emit(events, onEvent, { type: "run.completed", runId });
 
-  const participatingAgents: TwinTOAssistantKey[] = ["planning-orchestrator"];
+  const participatingAgents: TechTOAssistantKey[] = ["planning-orchestrator"];
   for (const role of context.invokedAssistants) {
-    if (!participatingAgents.includes(role as TwinTOAssistantKey)) {
-      participatingAgents.push(role as TwinTOAssistantKey);
+    if (!participatingAgents.includes(role as TechTOAssistantKey)) {
+      participatingAgents.push(role as TechTOAssistantKey);
     }
   }
 

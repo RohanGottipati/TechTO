@@ -1,6 +1,6 @@
-# TwinTO implementation
+# TechTO implementation
 
-TwinTO is the transit demonstration at `/twinto`. It shares ToronTwin's live
+TechTO is the transit demonstration at `/techto`. It shares TechTO's live
 Backboard infrastructure and principled 11 role department, but it is not the
 open-city product at `/` and it is not a substitute for the research
 calibration and retrodiction requirements in `AGENTS.md`.
@@ -11,14 +11,14 @@ system invariants, provider rules, model training, and open research questions,
 
 ## Product boundary
 
-TwinTO demonstrates a fictional and clearly labelled Union Station schedule
+TechTO demonstrates a fictional and clearly labelled Union Station schedule
 imbalance: passenger arrivals make the 16:06 departure relatively underused and
 the 16:12 departure crowded. A live Backboard planning department can propose
 schedule interventions, collect simulated citizen reactions, run deterministic
 transit checks, stress-test candidates, and produce a constrained
 recommendation.
 
-TwinTO may show:
+TechTO may show:
 
 - a synthetic transit scenario and deterministic simulation results;
 - weighted synthetic cohort reactions, explicitly labelled as simulated;
@@ -26,7 +26,7 @@ TwinTO may show:
 - Backboard roles and tool lifecycle events;
 - hard-constraint overrides of an AI recommendation.
 
-TwinTO must not describe synthetic reactions as public consultation, claim it
+TechTO must not describe synthetic reactions as public consultation, claim it
 controls TTC operations, provide certified safety advice, or guarantee
 ridership, mode shift, emissions, financial returns, or other future outcomes.
 
@@ -69,7 +69,7 @@ turn needs them.
 
 ## Staged planning run
 
-The TwinTO staged orchestrator in `src/lib/backboard/orchestrator.ts` emits a
+The TechTO staged orchestrator in `src/lib/backboard/orchestrator.ts` emits a
 frontend-safe lifecycle:
 
 ```text
@@ -101,7 +101,7 @@ The final result keeps both values:
 
 ## Chat and selected places
 
-TwinTO includes the shared map chat and selected-place mini chat. Simple
+TechTO includes the shared map chat and selected-place mini chat. Simple
 questions do not trigger the full staged run. The selected-place chat grounds
 answers in the clicked building, station, or neighbourhood and its nearest
 Toronto context.
@@ -130,7 +130,7 @@ synthetic fixtures. They must remain visibly labelled `synthetic-fixture` in
 the interface and reports. They are separate from the census, PUMF, CES, and
 consultation data pipeline described in `AGENTS.md`.
 
-`TWINTO_REPOSITORY_PROVIDER=fixture|mongo` selects transit repository reads.
+`TECHTO_REPOSITORY_PROVIDER=fixture|mongo` selects transit repository reads.
 MongoDB credentials are server only. The FreeSolo citizen-reaction path is live
 only and requires its server-side credentials.
 
@@ -138,8 +138,8 @@ only and requires its server-side credentials.
 
 | Path | Responsibility |
 | --- | --- |
-| `src/app/twinto/page.tsx` | TwinTO route |
-| `src/components/twinto/TwinTOAppShell.tsx` | Desktop and mobile product shell |
+| `src/app/techto/page.tsx` | TechTO route |
+| `src/components/techto/TechTOAppShell.tsx` | Desktop and mobile product shell |
 | `src/lib/backboard/orchestrator.ts` | Staged planning run |
 | `src/lib/backboard/assistants.ts` | Principled 11 role roster |
 | `src/lib/backboard/tools.ts` | Tool definitions |
@@ -156,11 +156,11 @@ Minimum live service configuration:
 
 ```text
 BACKBOARD_API_KEY=...
-TWINTO_CITIZEN_REACTION_PROVIDER=freesolo
+TECHTO_CITIZEN_REACTION_PROVIDER=freesolo
 FREESOLO_API_KEY=...
 FREESOLO_BASE_URL=...
 FREESOLO_REACTION_MODEL_ALIAS=...
-TWINTO_REPOSITORY_PROVIDER=fixture
+TECHTO_REPOSITORY_PROVIDER=fixture
 ```
 
 Set MongoDB variables from `.env.example` when using the Mongo repository.

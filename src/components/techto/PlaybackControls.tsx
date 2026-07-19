@@ -78,10 +78,10 @@ export function PlaybackControls({ scenario }: PlaybackControlsProps) {
           max={totalMinutes}
           value={playbackMinute}
           onChange={(event) => setPlaybackMinute(Number(event.target.value))}
-          className="flex-1 accent-twinto-red"
+          className="flex-1 accent-techto-red"
           aria-label="Playback time"
         />
-        <span className="w-12 shrink-0 text-right font-mono text-xs text-twinto-text">
+        <span className="w-12 shrink-0 text-right font-mono text-xs text-techto-text">
           {minuteToClock(scenario, playbackMinute)}
         </span>
       </div>

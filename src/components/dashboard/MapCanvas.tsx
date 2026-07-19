@@ -11,7 +11,7 @@ import {
   placeFromBuildingFeature,
   placeFromNeighbourhoodArea,
   polygonCentroid,
-} from "@/lib/twinto/place-context";
+} from "@/lib/techto/place-context";
 import { buildTrainRouteConfigs, trainCollection } from "@/lib/map/trains";
 import {
   BUILDING_BASE_EXPRESSION,
@@ -40,11 +40,11 @@ import {
 import { AgentOverlayLayer } from "@/components/map/AgentOverlayLayer";
 import { CandidateMarkerLayer } from "@/components/map/CandidateMarkerLayer";
 
-const SELECTED_BUILDING_SOURCE = "torontwin-selected-building";
-const SELECTED_BUILDING_FILL = "torontwin-selected-building-fill";
-const SELECTED_BUILDING_LINE = "torontwin-selected-building-line";
+const SELECTED_BUILDING_SOURCE = "techto-selected-building";
+const SELECTED_BUILDING_FILL = "techto-selected-building-fill";
+const SELECTED_BUILDING_LINE = "techto-selected-building-line";
 const SELECTED_BUILDING_EXTRUSION =
-  "torontwin-selected-building-extrusion";
+  "techto-selected-building-extrusion";
 
 function escapeHtml(value: string): string {
   return value

@@ -1,6 +1,6 @@
 /**
  * Dry-run (default) or confirmed cleanup of obsolete Backboard assistants
- * after the TwinTO roster consolidated from 54 specialists to 16.
+ * after the TechTO roster consolidated from 54 specialists to 16.
  *
  * Usage:
  *   npm run backboard:consolidate-roster
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   const confirm = process.argv.includes("--confirm");
   const { getBackboardBaseUrl } = await import("@/lib/backboard/env");
   const { getBackboardAdapter } = await import("@/lib/backboard/adapter");
-  const { ASSISTANT_ROSTER, TWINTO_ASSISTANT_KEYS } = await import("@/lib/backboard/assistants");
+  const { ASSISTANT_ROSTER, TECHTO_ASSISTANT_KEYS } = await import("@/lib/backboard/assistants");
   const { getAssistantManifest } = await import("@/lib/backboard/assistant-manifest");
   const { MANIFEST_ROSTER_VERSION, buildAssistantManifestFile } = await import(
     "@/lib/backboard/manifest-schema"
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   console.log(`Backboard mode: LIVE`);
   console.log(`Base URL: ${getBackboardBaseUrl()}`);
   console.log(`Mode: ${confirm ? "CONFIRM DELETE" : "DRY RUN"}`);
-  console.log(`Target roster: ${MANIFEST_ROSTER_VERSION} (${TWINTO_ASSISTANT_KEYS.length} assistants)`);
+  console.log(`Target roster: ${MANIFEST_ROSTER_VERSION} (${TECHTO_ASSISTANT_KEYS.length} assistants)`);
   console.log("");
 
   const adapter = getBackboardAdapter();
@@ -61,13 +61,13 @@ async function main(): Promise<void> {
     let classification: Classification = "UNKNOWN";
     if (keepNames.has(assistant.name)) classification = "UPDATE";
     else if (assistant.name.startsWith("GridTwin")) classification = "REMOVE_GRIDTWIN";
-    else if (assistant.name.startsWith("TwinTO —") || assistant.name.startsWith("TwinTO -")) {
+    else if (assistant.name.startsWith("TechTO —") || assistant.name.startsWith("TechTO -")) {
       classification = "REMOVE_OLD_TWINTO";
     }
     rows.push({ name: assistant.name, id: assistant.assistantId, classification });
   }
 
-  for (const key of TWINTO_ASSISTANT_KEYS) {
+  for (const key of TECHTO_ASSISTANT_KEYS) {
     const name = ASSISTANT_ROSTER[key].name;
     if (!existing.some((assistant) => assistant.name === name)) {
       rows.push({ name, id: "(missing)", classification: "CREATE" });
