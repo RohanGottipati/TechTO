@@ -26,15 +26,15 @@ export interface CityPlanRunSummary {
   events: string[];
 }
 
-/** One line of the live trace: agent lifecycle, tool calls, or scoring. */
+/** One line of the live trace: agent lifecycle, tool calls, thinking, or scoring. */
 export interface CityPlanTraceLine {
   id: string;
   /** Human label without status icon (icon comes from `status`). */
   label: string;
-  status: "running" | "ok" | "fail" | "info";
+  status: "running" | "ok" | "fail" | "info" | "thinking";
   /** Args preview (tool start). */
   argsDetail?: string;
-  /** Output preview (tool end); keeps args so expand can show both. */
+  /** Output preview (tool end) or accumulated thinking text. */
   resultDetail?: string;
 }
 
@@ -43,6 +43,8 @@ export interface CityPlanRunHandlers {
   onDelta?: (chunk: string) => void;
   /** Model thinking / reasoning tokens (separate from the user-facing reply). */
   onReasoning?: (chunk: string) => void;
+  /** Current thinking segment finished (start a new one on the next chunk). */
+  onReasoningEnded?: () => void;
   /** Wipe partial prose when a mid-turn tool round starts. */
   onClear?: () => void;
   /**
@@ -64,11 +66,19 @@ function rolePrefix(role: unknown): string {
 function traceLineFor(event: { type: string; [key: string]: unknown }): CityPlanTraceLine | null {
   const detail = typeof event.detail === "string" ? event.detail : undefined;
   switch (event.type) {
+    case "run.started":
+      return {
+        id: "run-started",
+        label: "run started",
+        status: "info",
+        resultDetail: typeof event.question === "string" ? event.question : undefined,
+      };
     case "agent.started":
       return {
         id: `agent-${event.role ?? "main"}`,
         label: `${event.name as string} started`,
         status: "info",
+        resultDetail: typeof event.role === "string" ? `role: ${event.role}` : undefined,
       };
     case "tool.requested": {
       const toolCallId = String(event.toolCallId ?? "");
@@ -90,30 +100,85 @@ function traceLineFor(event: { type: string; [key: string]: unknown }): CityPlan
         resultDetail: detail,
       };
     }
-    case "scenarios.proposed":
+    case "scenarios.proposed": {
+      const patches = (event.patches as Array<Record<string, unknown>>) ?? [];
       return {
-        id: "",
-        label: `${(event.patches as unknown[]).length} scenario patch(es) proposed`,
+        id: `scenarios-${patches.map((p) => p.id).join("-") || "batch"}`,
+        label: `${patches.length} scenario patch(es) proposed`,
         status: "info",
+        resultDetail: JSON.stringify(
+          patches.map((p) => ({
+            id: p.id,
+            title: p.title,
+            rationale: p.rationale,
+            edits: p.edits,
+          })),
+          null,
+          2,
+        ),
       };
+    }
     case "citizens.scored": {
       const mean = Number(event.mean).toFixed(2);
       const support = (Number(event.supportShare) * 100).toFixed(0);
+      const candidateId = String(event.candidateId ?? "score");
+      const n = event.sampleSize != null ? ` n=${event.sampleSize}` : "";
+      const stop = event.stopReason ? ` ${event.stopReason}` : "";
       return {
-        id: "",
-        label: `acceptance scored: mean ${mean}, ${support}% support`,
-        status: "info",
+        id: `citizens-${candidateId}`,
+        label: `acceptance ${candidateId}: mean ${mean}, ${support}% support${n}${stop}`,
+        status: "ok",
+        resultDetail: JSON.stringify(
+          {
+            candidateId,
+            mean: event.mean,
+            supportShare: event.supportShare,
+            opposeShare: event.opposeShare,
+            sampleSize: event.sampleSize,
+            ciHalfWidth: event.ciHalfWidth,
+            stopReason: event.stopReason,
+            provider: event.provider,
+            weakest: event.weakest,
+            strongest: event.strongest,
+            byNeighbourhood: event.byNeighbourhood,
+          },
+          null,
+          2,
+        ),
       };
     }
-    case "recommendation.ready":
-      return { id: "", label: "recommendation ready", status: "info" };
+    case "recommendation.ready": {
+      const ranking = (event.ranking as Array<Record<string, unknown>>) ?? [];
+      return {
+        id: "recommendation-ready",
+        label: "recommendation ready",
+        status: "ok",
+        resultDetail: JSON.stringify(
+          {
+            chosenId: event.chosenId,
+            ranking,
+            summary: event.summary,
+          },
+          null,
+          2,
+        ),
+      };
+    }
     case "map.actions":
-    case "planner.map_actions":
+    case "planner.map_actions": {
+      const actions = (event.actions as unknown[]) ?? [];
       return {
         id: "",
-        label: `map ← ${(event.actions as unknown[]).length} action(s)`,
+        label: `map ← ${actions.length} action(s)`,
         status: "info",
-        resultDetail: detail ?? JSON.stringify(event.actions, null, 2),
+        resultDetail: JSON.stringify(actions, null, 2),
+      };
+    }
+    case "run.completed":
+      return {
+        id: "run-completed",
+        label: "run completed",
+        status: "ok",
       };
     case "status":
       return { id: "", label: event.message as string, status: "info" };
@@ -127,11 +192,26 @@ export function useCityPlanRun() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const traceSeq = useRef(0);
+  const sampleBuf = useRef<Map<string, { n: number; lines: string[] }>>(new Map());
 
   function start(question: string, handlers: CityPlanRunHandlers = {}): Promise<Record<string, unknown>> {
     setIsRunning(true);
     setError(null);
+    traceSeq.current = 0;
+    sampleBuf.current = new Map();
     const agentOverlays = useMapStore.getState().agentOverlays;
+
+    const sealSamples = () => {
+      for (const [key, buf] of sampleBuf.current) {
+        if (buf.n <= 0) continue;
+        handlers.onTrace?.({
+          id: `persona-sample-${key}`,
+          label: `Sampled ${buf.n} residents${key !== "_" ? ` (${key})` : ""}`,
+          status: "ok",
+          resultDetail: buf.lines.join("\n"),
+        });
+      }
+    };
 
     return new Promise((resolve, reject) => {
       createRunStreamClient({
@@ -147,7 +227,12 @@ export function useCityPlanRun() {
             handlers.onReasoning?.(payload.content);
             return;
           }
+          if (envelope.type === "planner.reasoning_ended") {
+            handlers.onReasoningEnded?.();
+            return;
+          }
           if (envelope.type === "planner.clear") {
+            handlers.onReasoningEnded?.();
             handlers.onClear?.();
             return;
           }
@@ -162,23 +247,52 @@ export function useCityPlanRun() {
           if (envelope.type === "planner.map_actions") {
             const actions = (payload.actions as MapAction[]) ?? [];
             if (actions.length) handlers.onMapActions?.(actions);
-            // no extra trace row: the compose_map_actions line already updates in place
+            const line = traceLineFor({ type: "planner.map_actions", actions });
+            if (line) {
+              handlers.onTrace?.({
+                ...line,
+                id: `map-${traceSeq.current++}`,
+              });
+            }
             return;
           }
           if (envelope.type === "planner.persona_scored") {
-            const { personaId, code, acceptance, opinionText } = payload as {
+            const { personaId, code, acceptance, opinionText, scenarioId } = payload as {
               personaId?: string;
               code?: string;
               acceptance?: number;
               opinionText?: string;
+              scenarioId?: string;
             };
             if (typeof personaId === "string" && typeof code === "string" && typeof acceptance === "number") {
-              handlers.onPersonaScored?.({ personaId, code, acceptance, opinionText: opinionText ?? "" });
+              handlers.onPersonaScored?.({
+                personaId,
+                code,
+                acceptance,
+                opinionText: opinionText ?? "",
+              });
+              const key = typeof scenarioId === "string" && scenarioId ? scenarioId : "_";
+              let buf = sampleBuf.current.get(key);
+              if (!buf) {
+                buf = { n: 0, lines: [] };
+                sampleBuf.current.set(key, buf);
+              }
+              buf.n += 1;
+              const snip = (opinionText ?? "").trim().replace(/\s+/g, " ");
+              buf.lines.push(
+                `${code}  ${acceptance.toFixed(2)}  ${personaId}${snip ? `  ${snip}` : ""}`,
+              );
+              handlers.onTrace?.({
+                id: `persona-sample-${key}`,
+                label: `Sampled ${buf.n} residents${key !== "_" ? ` (${key})` : ""}`,
+                status: "running",
+                resultDetail: buf.lines.join("\n"),
+              });
             }
-            // no trace row: this is a per-resident sampling detail, not a lifecycle line
             return;
           }
           if (envelope.type === "planner.completed") {
+            sealSamples();
             const next: CityPlanRunSummary = {
               question: (payload.question as string) ?? question,
               ranking: (payload.ranking as CityPlanRankingRow[]) ?? [],
@@ -202,6 +316,19 @@ export function useCityPlanRun() {
           }
           const line = traceLineFor({ type: envelope.type, ...payload });
           if (line) {
+            if (envelope.type === "citizens.scored") {
+              const cand = String(payload.candidateId ?? "_");
+              const buf = sampleBuf.current.get(cand) ?? sampleBuf.current.get("_");
+              if (buf && buf.n > 0) {
+                const key = sampleBuf.current.has(cand) ? cand : "_";
+                handlers.onTrace?.({
+                  id: `persona-sample-${key}`,
+                  label: `Sampled ${buf.n} residents${key !== "_" ? ` (${key})` : ""}`,
+                  status: "ok",
+                  resultDetail: buf.lines.join("\n"),
+                });
+              }
+            }
             handlers.onTrace?.({
               ...line,
               id: line.id || `t-${traceSeq.current++}`,

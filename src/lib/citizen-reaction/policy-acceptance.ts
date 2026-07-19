@@ -43,7 +43,13 @@ export interface ScorePolicyOptions {
    * for. Omit for a citywide read.
    */
   neighbourhoodCodes?: string[];
-  onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void;
+  onPersonaScored?: (result: {
+    personaId: string;
+    code: string;
+    acceptance: number;
+    opinionText: string;
+    scenarioId: string;
+  }) => void;
 }
 
 /** Same rendering convention as neighbourhood-acceptance.ts's scenarioPolicyText, for an open-city ScenarioPatch. */
@@ -113,7 +119,13 @@ export async function scoreRealPolicyAcceptance(
       batch.map((persona) => async () => {
         const opinionText = await getOrGenerateOpinion(persona.persona_id, persona.text, policyText);
         const acceptance = await scoreOpinionWithEmbeddingProbe(opinionText);
-        onPersonaScored?.({ personaId: persona.persona_id, code: persona.neighbourhood_code, acceptance, opinionText });
+        onPersonaScored?.({
+          personaId: persona.persona_id,
+          code: persona.neighbourhood_code,
+          acceptance,
+          opinionText,
+          scenarioId,
+        });
         return { code: persona.neighbourhood_code, acceptance };
       }),
       CONCURRENCY,

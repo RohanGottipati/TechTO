@@ -24,6 +24,7 @@ export type CityRunEvent =
   | { type: "agent.started"; runId: string; role: TechTOAssistantKey; name: string }
   | { type: "assistant.delta"; runId: string; content: string }
   | { type: "assistant.reasoning"; runId: string; content: string }
+  | { type: "assistant.reasoning_ended"; runId: string }
   | { type: "assistant.clear"; runId: string }
   | { type: "status"; runId: string; message: string }
   | {
@@ -53,6 +54,7 @@ export type CityRunEvent =
       code: string;
       acceptance: number;
       opinionText: string;
+      scenarioId?: string;
     }
   | {
       type: "citizens.scored";
@@ -61,6 +63,14 @@ export type CityRunEvent =
       mean: number;
       supportShare: number;
       provider: string;
+      // full eval readout for collapsed chat detail
+      opposeShare?: number;
+      sampleSize?: number;
+      ciHalfWidth?: number;
+      stopReason?: string;
+      weakest?: Array<{ code: string; mean: number; n: number }>;
+      strongest?: Array<{ code: string; mean: number; n: number }>;
+      byNeighbourhood?: Record<string, { mean: number; count: number }>;
     }
   | {
       type: "recommendation.ready";
@@ -129,9 +139,40 @@ function emit(
   onEvent?.(event);
 }
 
+function scoreNhRows(score: PolicyAcceptanceResult) {
+  return Object.entries(score.byNeighbourhood)
+    .map(([code, v]) => ({ code, mean: Number(v.mean.toFixed(3)), n: v.count }))
+    .sort((a, b) => a.mean - b.mean);
+}
+
+function citizensScoredPayload(runId: string, score: PolicyAcceptanceResult): Extract<CityRunEvent, { type: "citizens.scored" }> {
+  const nh = scoreNhRows(score);
+  return {
+    type: "citizens.scored",
+    runId,
+    candidateId: score.scenarioId,
+    mean: score.citywide.mean,
+    supportShare: score.citywide.supportShare,
+    provider: score.provider,
+    opposeShare: score.citywide.opposeShare,
+    sampleSize: score.citywide.sampleSize,
+    ciHalfWidth: score.citywide.ciHalfWidth,
+    stopReason: score.citywide.stopReason,
+    weakest: nh.slice(0, 3),
+    strongest: nh.slice(-3).reverse(),
+    byNeighbourhood: score.byNeighbourhood,
+  };
+}
+
 async function harvestScores(
   patches: ScenarioPatch[],
-  onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void,
+  onPersonaScored?: (result: {
+    personaId: string;
+    code: string;
+    acceptance: number;
+    opinionText: string;
+    scenarioId: string;
+  }) => void,
 ): Promise<CityCandidateResult[]> {
   return Promise.all(
     patches.map(async (patch) => {
@@ -240,6 +281,12 @@ export async function runCityOrchestration(
         scenarioId?: string;
         mean?: number;
         support?: number;
+        oppose?: number;
+        n?: number;
+        ciHalfWidth?: number;
+        stopReason?: string;
+        weakest?: Array<{ code: string; mean: number; n: number }>;
+        strongest?: Array<{ code: string; mean: number; n: number }>;
       };
       if (out.scenarioId && typeof out.mean === "number") {
         emit(events, onEvent, {
@@ -249,6 +296,40 @@ export async function runCityOrchestration(
           mean: out.mean,
           supportShare: out.support ?? 0,
           provider: "real-opinion-model",
+          opposeShare: out.oppose,
+          sampleSize: out.n,
+          ciHalfWidth: out.ciHalfWidth,
+          stopReason: out.stopReason,
+          weakest: out.weakest,
+          strongest: out.strongest,
+        });
+      }
+    }
+    if (outcome.ok && outcome.toolName === TOOL_NAMES.RUN_TWIN_ANALYSIS) {
+      const out = outcome.output as {
+        mean?: number;
+        support?: number;
+        oppose?: number;
+        n?: number;
+        ciHalfWidth?: number;
+        stopReason?: string;
+        weakest?: Array<{ code: string; mean: number; n: number }>;
+        strongest?: Array<{ code: string; mean: number; n: number }>;
+      };
+      if (typeof out.mean === "number") {
+        emit(events, onEvent, {
+          type: "citizens.scored",
+          runId,
+          candidateId: `twin-analysis-${outcome.toolCallId}`,
+          mean: out.mean,
+          supportShare: out.support ?? 0,
+          provider: "real-opinion-model",
+          opposeShare: out.oppose,
+          sampleSize: out.n,
+          ciHalfWidth: out.ciHalfWidth,
+          stopReason: out.stopReason,
+          weakest: out.weakest,
+          strongest: out.strongest,
         });
       }
     }
@@ -343,6 +424,9 @@ export async function runCityOrchestration(
           content: streamEvent.content,
         });
       }
+      if (streamEvent.type === "reasoning_ended") {
+        emit(events, onEvent, { type: "assistant.reasoning_ended", runId });
+      }
       // mid-turn tool round: wipe any partial prose so the final reply streams clean
       if (streamEvent.type === "tool_submit_required") {
         streamedAssistantText = "";
@@ -397,6 +481,9 @@ export async function runCityOrchestration(
             content: streamEvent.content,
           });
         }
+        if (streamEvent.type === "reasoning_ended") {
+          emit(events, onEvent, { type: "assistant.reasoning_ended", runId });
+        }
       },
     );
     finalContent = (closeout.content || streamedAssistantText).trim();
@@ -419,6 +506,9 @@ export async function runCityOrchestration(
     candidates = await harvestScores(patches, (result) => {
       emit(events, onEvent, { type: "persona.scored", runId, ...result });
     });
+    for (const c of candidates) {
+      emit(events, onEvent, citizensScoredPayload(runId, c.score));
+    }
     emit(events, onEvent, {
       type: "status",
       runId,

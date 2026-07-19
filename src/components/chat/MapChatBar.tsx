@@ -29,10 +29,8 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  /** Live tool/agent/scoring trace lines for a city-plan run, shown above the prose. */
+  /** Live tool/agent/thinking/scoring trace lines for a city-plan run, shown above the prose. */
   trace?: CityPlanTraceLine[];
-  /** Accumulated model thinking tokens for this turn (click to expand). */
-  reasoning?: string;
   /** True while this message is still streaming in. */
   streaming?: boolean;
 }
@@ -168,6 +166,25 @@ export function MapChatBar({
         const liveId = `plan-${Date.now()}`;
         appliedMapMidstream.current = false;
         resetMapActionQueue();
+        // each Backboard thinking episode becomes its own toggleable trace row
+        let thinkSeq = 0;
+        let thinkId: string | null = null;
+
+        const sealThinking = () => {
+          if (!thinkId) return;
+          const id = thinkId;
+          thinkId = null;
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== liveId) return m;
+              const trace = (m.trace ?? []).map((t) =>
+                t.id === id && t.status === "thinking" ? { ...t, status: "ok" as const } : t,
+              );
+              return { ...m, trace };
+            }),
+          );
+        };
+
         setMessages((prev) => [...prev, { id: liveId, role: "assistant", content: "", trace: [], streaming: true }]);
 
         const payload = await onCityPlanQuestion(text, {
@@ -177,13 +194,39 @@ export function MapChatBar({
             );
           },
           onReasoning: (chunk) => {
+            if (!thinkId) {
+              thinkSeq += 1;
+              thinkId = `think-${thinkSeq}`;
+            }
+            const id = thinkId;
+            const label = thinkSeq > 1 ? `Thinking ${thinkSeq}` : "Thinking";
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === liveId ? { ...m, reasoning: (m.reasoning ?? "") + chunk } : m,
-              ),
+              prev.map((m) => {
+                if (m.id !== liveId) return m;
+                const trace = [...(m.trace ?? [])];
+                const idx = trace.findIndex((t) => t.id === id);
+                if (idx < 0) {
+                  trace.push({
+                    id,
+                    label,
+                    status: "thinking",
+                    resultDetail: chunk,
+                  });
+                } else {
+                  trace[idx] = {
+                    ...trace[idx],
+                    resultDetail: (trace[idx].resultDetail ?? "") + chunk,
+                  };
+                }
+                return { ...m, trace };
+              }),
             );
           },
+          onReasoningEnded: () => {
+            sealThinking();
+          },
           onClear: () => {
+            sealThinking();
             setMessages((prev) =>
               prev.map((m) => (m.id === liveId ? { ...m, content: "" } : m)),
             );
@@ -215,6 +258,7 @@ export function MapChatBar({
           },
         });
 
+        sealThinking();
         // fallback only if the agent never streamed map.actions mid-turn
         if (!appliedMapMidstream.current) {
           const mapParsed = parseMapActions(payload?.mapActions ?? []);
@@ -388,42 +432,15 @@ export function MapChatBar({
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed">{message.content}</p>
                 ) : (
                   <>
-                    {message.reasoning && (
-                      <div className="mb-1.5 border-b border-white/10 pb-1.5 font-mono text-[10px] leading-snug text-white/45">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setOpenTraceIds((prev) => ({
-                              ...prev,
-                              [`${message.id}:reasoning`]: !prev[`${message.id}:reasoning`],
-                            }))
-                          }
-                          className="flex w-full items-start gap-1.5 text-left hover:text-white/70"
-                          aria-expanded={Boolean(openTraceIds[`${message.id}:reasoning`])}
-                        >
-                          <span className="shrink-0">…</span>
-                          <span>
-                            Thinking
-                            {message.streaming && !message.content ? "…" : ""}
-                            <span className="ml-1 text-white/30">
-                              {openTraceIds[`${message.id}:reasoning`] ? "▾" : "▸"}
-                            </span>
-                          </span>
-                        </button>
-                        {openTraceIds[`${message.id}:reasoning`] && (
-                          <pre className="mt-0.5 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-black/25 px-1.5 py-1 text-[9px] text-white/40">
-                            {message.reasoning}
-                          </pre>
-                        )}
-                      </div>
-                    )}
                     {message.trace && message.trace.length > 0 && (
                       <ul className="mb-1.5 space-y-0.5 border-b border-white/10 pb-1.5 font-mono text-[10px] leading-snug text-white/50">
                         {message.trace.map((line) => {
                           const hasDetail = Boolean(line.argsDetail || line.resultDetail);
                           const open = Boolean(openTraceIds[line.id]);
-                          const icon =
-                            line.status === "running"
+                          const isThink = line.status === "thinking" || line.label.startsWith("Thinking");
+                          const icon = isThink
+                            ? "…"
+                            : line.status === "running"
                               ? "⚙"
                               : line.status === "ok"
                                 ? "✓"
@@ -452,7 +469,7 @@ export function MapChatBar({
                                 <span className="shrink-0 tabular-nums">{icon}</span>
                                 <span>
                                   {line.label}
-                                  {line.status === "running" ? "…" : ""}
+                                  {line.status === "running" || line.status === "thinking" ? "…" : ""}
                                   {hasDetail && (
                                     <span className="ml-1 text-white/30">{open ? "▾" : "▸"}</span>
                                   )}

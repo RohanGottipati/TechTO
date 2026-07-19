@@ -113,7 +113,13 @@ export interface RunContext {
   onNestedToolStart?: (call: ChatToolCall, role: string) => void;
   onNestedToolEnd?: (outcome: ToolCallOutcome, role: string) => void;
   /** Bubble each real Monte-Carlo-sampled resident's score.population/run_twin_analysis result up to the map so its dot can be coloured live. */
-  onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void;
+  onPersonaScored?: (result: {
+    personaId: string;
+    code: string;
+    acceptance: number;
+    opinionText: string;
+    scenarioId: string;
+  }) => void;
   /** Push accepted map actions to the UI without echoing geometry into model context. */
   onMapActions?: (actions: MapAction[]) => void;
 }
@@ -136,7 +142,13 @@ export function createRunContext(
     agentOverlays?: AgentMapOverlay[];
     onNestedToolStart?: (call: ChatToolCall, role: string) => void;
     onNestedToolEnd?: (outcome: ToolCallOutcome, role: string) => void;
-    onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void;
+    onPersonaScored?: (result: {
+    personaId: string;
+    code: string;
+    acceptance: number;
+    opinionText: string;
+    scenarioId: string;
+  }) => void;
     onMapActions?: (actions: MapAction[]) => void;
   },
 ): RunContext {

@@ -72,6 +72,10 @@ export async function POST(request: Request) {
             send("planner.reasoning", { content: event.content }, event.runId);
             return;
           }
+          if (event.type === "assistant.reasoning_ended") {
+            send("planner.reasoning_ended", {}, event.runId);
+            return;
+          }
           if (event.type === "assistant.clear") {
             send("planner.clear", {}, event.runId);
             return;
@@ -94,6 +98,7 @@ export async function POST(request: Request) {
                 code: event.code,
                 acceptance: event.acceptance,
                 opinionText: event.opinionText,
+                scenarioId: event.scenarioId,
               },
               event.runId,
             );
