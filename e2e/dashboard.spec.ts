@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("ToronTwin dashboard", () => {
+test.describe("TechTO dashboard", () => {
   test("loads the map and core panels", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: "ToronTwin" })
+      page.getByRole("heading", { name: "TechTO" })
     ).toBeVisible();
     // Map layers appear once geodata is loaded. Scenario controls, the map
     // legend, and the artificial idle caret are intentionally absent.
@@ -43,38 +43,48 @@ test.describe("ToronTwin dashboard", () => {
         mapErrors.push(text);
       }
     });
-    await page.route("**/api/planner/run", async (route) => {
+    await page.route("**/api/planner/stream", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          question: "Focus Wychwood",
-          summary: "Focused Wychwood on the map.",
-          ranking: [],
-          chosenId: null,
-          backboardMode: "test",
-          populationMode: "test",
-          participatingAgents: [],
-          events: [],
-          mapActions: [
-            {
-              type: "fit_bounds",
-              bounds: [-79.438, 43.67, -79.403, 43.696],
-              padding: 80,
-              durationMs: 0,
-            },
-            {
-              type: "highlight_neighbourhoods",
-              neighbourhoodIds: ["024"],
-            },
-          ],
-        }),
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({
+          eventId: "test-run:1",
+          runId: "test-run",
+          sequence: 1,
+          type: "planner.completed",
+          timestamp: new Date().toISOString(),
+          payload: {
+            question: "Focus Wychwood",
+            summary: "Focused Wychwood on the map.",
+            ranking: [],
+            chosenId: null,
+            backboardMode: "test",
+            populationMode: "test",
+            participatingAgents: [],
+            events: [],
+            mapActions: [
+              {
+                type: "fit_bounds",
+                bounds: [-79.438, 43.67, -79.403, 43.696],
+                padding: 80,
+                durationMs: 0,
+              },
+              {
+                type: "highlight_neighbourhoods",
+                neighbourhoodIds: ["024"],
+              },
+            ],
+          },
+        })}\n\n`,
       });
     });
 
     await page.goto("/");
     await page.getByTestId("city-copilot-input").fill("Focus Wychwood");
     await page.getByTestId("city-copilot-send").click();
+
+    await expect(page.getByTestId("city-chat-export-pdf")).toBeVisible();
+    await expect(page.getByTestId(/^city-answer-export-pdf-/)).toBeVisible();
 
     const exit = page.getByTestId("localized-3d-exit");
     await expect(exit).toBeVisible({ timeout: 30_000 });

@@ -1,20 +1,31 @@
-# TwinTO Backboard tools
+# TechTO Backboard tools
 
-Canonical names are in `src/lib/backboard/tools.ts` (`TOOL_NAMES`). The
-dispatcher in `tool-dispatcher.ts` executes every tool against local
-fixture repositories on this branch.
+Canonical tool names live in `src/lib/backboard/tools.ts`. The dispatcher in
+`src/lib/backboard/tool-dispatcher.ts` validates inputs and executes calls
+against the configured city, transit, population, and repository services.
 
-Categories:
+Tool categories include:
 
-- Network reads: snapshot, schedules, loads, arrivals, OD flows, crowding,
-  transfers, delays, capacity, fleet
-- Context: demographics, accessibility, events, weather, incidents
-- Policy: similar interventions, propose variants
-- Citizens: call mock CitizenReactionLM, aggregate
-- Evaluate: simulate, wait/load/reliability/equity/accessibility/cost/carbon
-- Stress and compare: stress test, compare interventions
-- Memory: save iteration, retrieve documents, write approved memory,
-  create training examples
+- City and network reads: typed twin queries, schedules, loads, arrivals,
+  crowding, transfers, delays, capacity, fleet, and land use.
+- Toronto geography: official neighbourhood screening and map context.
+- Population: legible opinion generation, aggregation, and day-one acceptance.
+- Evaluation: simulation, reliability, equity, accessibility, lifecycle cost,
+  carbon, load, and stress tests.
+- Planning: typed scenario proposals, policy comparison, and allowlisted map
+  action composition.
+- Analysis: read-only scientific Python for selected analytical roles.
+- Memory and evidence: document retrieval and approved iteration records.
 
-Unknown tool names are rejected. Numerical claims in agent prose must come
-from tool results.
+`query_city_layer` should precede official Toronto location recommendations.
+`run_python` uses a read-only MongoDB binding and fails hard on runner errors.
+Unknown tool names and invalid inputs are rejected.
+
+Numerical claims must come from tool output or cited data. The feasibility role
+may derive ROI, NPV, benefit-cost ratio, or payback only when lifecycle costs,
+monetized benefits, time horizon, and discount assumptions are available. A
+missing input is reported as a validation need, not replaced with an invented
+number.
+
+The PDF exporter is not an agent tool. It formats the already visible response
+and citations in the browser, escapes model text, and opens the print dialog.

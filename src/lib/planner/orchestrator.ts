@@ -7,7 +7,7 @@ import type { BackboardAdapter } from "@/lib/backboard/client";
 import { runToolLoop } from "@/lib/backboard/run-tool-loop";
 import { createRunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dispatcher";
 import { getToolDefinitions, TOOL_NAMES } from "@/lib/backboard/tools";
-import type { TwinTOAssistantKey } from "@/lib/backboard/assistants";
+import type { TechTOAssistantKey } from "@/lib/backboard/assistants";
 import type { ScenarioPatch } from "@/lib/planner/scenario";
 import { emptyTwinSnapshot, patchTwin } from "@/lib/planner/state";
 import {
@@ -15,27 +15,27 @@ import {
   type PopulationProvider,
 } from "@/lib/population/provider";
 import type { PopulationScoreResult } from "@/lib/population/score";
-import type { MapAction } from "@/lib/twinto/map-actions";
-import type { AgentMapOverlay } from "@/lib/twinto/map-overlays";
-import { parseMapActions } from "@/lib/twinto/map-actions";
+import type { MapAction } from "@/lib/techto/map-actions";
+import type { AgentMapOverlay } from "@/lib/techto/map-overlays";
+import { parseMapActions } from "@/lib/techto/map-actions";
 
 export type CityRunEvent =
   | { type: "run.started"; runId: string; question: string }
-  | { type: "agent.started"; runId: string; role: TwinTOAssistantKey; name: string }
+  | { type: "agent.started"; runId: string; role: TechTOAssistantKey; name: string }
   | { type: "assistant.delta"; runId: string; content: string }
   | { type: "assistant.clear"; runId: string }
   | { type: "status"; runId: string; message: string }
   | {
       type: "tool.requested";
       runId: string;
-      role: TwinTOAssistantKey;
+      role: TechTOAssistantKey;
       toolName: string;
       toolCallId: string;
     }
   | {
       type: "tool.completed";
       runId: string;
-      role: TwinTOAssistantKey;
+      role: TechTOAssistantKey;
       toolName: string;
       toolCallId: string;
       ok: boolean;
@@ -68,7 +68,7 @@ export interface CityOrchestrationResult {
   runId: string;
   threadId: string;
   question: string;
-  participatingAgents: TwinTOAssistantKey[];
+  participatingAgents: TechTOAssistantKey[];
   candidates: CityCandidateResult[];
   ranking: Array<{ id: string; title: string; mean: number; supportShare: number }>;
   chosenId: string;
@@ -225,7 +225,7 @@ export async function runCityOrchestration(
       : "",
     `User message: ${input.question}`,
     "",
-    "You are City Code, ToronTwin's planning colleague (Claude Code for the city).",
+    "You are City Code, TechTO's planning colleague (Claude Code for the city).",
     "You have real agency this turn: ask a clarifying question, push back, propose options,",
     "call tools, draw on the map, or answer. Do not force a full analysis when the ask is vague.",
     "If the goal, geography, constraints, or tradeoffs are unclear, ask 1-3 concrete questions and stop.",
@@ -233,7 +233,11 @@ export async function runCityOrchestration(
     "For location screening, use query_city_layer before choosing an official Toronto neighbourhood.",
     "Never invent ScenarioPatches or fake rankings just to fill a pipeline.",
     "If you score population acceptance, say it is simulated day-one feel, not ridership.",
-    "When comparing places or proposing geometry, use compose_map_actions so the user can see it.",
+    "When comparing places or proposing geometry, use compose_map_actions to fly/highlight/draw on the map so the user can see it.",
+    "For recommendations, use concise Markdown sections when relevant: Recommendation, Why this area, Sustainability potential, Screening metrics, ROI and value case, Success KPIs to validate, and What to validate next.",
+    "Separate measured screening indicators from proposed KPIs. Sustainability outcomes are potential mechanisms until validated, not forecasts or promises.",
+    "For capital or operating recommendations where a value case is material, invoke the feasibility specialist when lifecycle cost or monetized-benefit evidence is needed.",
+    "In ROI and value case, separate measured inputs, modeled monetized benefits, unvalidated assumptions, and scenario ranges. Calculate ROI as (validated monetized benefits - lifecycle costs) / lifecycle costs only when both sides are evidenced. Otherwise state that no ROI figure is claimed until demand, lifecycle cost, and benefit assumptions are validated. Include NPV, benefit-cost ratio, payback period, discount rate, analysis horizon, and sensitivity range when evidence supports them.",
     hintPatches.length
       ? `Caller supplied optional starter patches (use or ignore):\n${JSON.stringify(hintPatches)}`
       : "",
@@ -361,10 +365,10 @@ export async function runCityOrchestration(
   });
   emit(events, onEvent, { type: "run.completed", runId });
 
-  const participatingAgents: TwinTOAssistantKey[] = ["planning-orchestrator"];
+  const participatingAgents: TechTOAssistantKey[] = ["planning-orchestrator"];
   for (const role of context.invokedAssistants) {
-    if (!participatingAgents.includes(role as TwinTOAssistantKey)) {
-      participatingAgents.push(role as TwinTOAssistantKey);
+    if (!participatingAgents.includes(role as TechTOAssistantKey)) {
+      participatingAgents.push(role as TechTOAssistantKey);
     }
   }
 

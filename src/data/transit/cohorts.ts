@@ -1,6 +1,6 @@
 /**
- * Cohort types for the TwinTO transit domain layer (see AGENTS.md section
- * 4.3 and docs/twinto-implementation.md section 9.1). Real cohort data
+ * Cohort types for the TechTO transit domain layer (see AGENTS.md section
+ * 4.3 and docs/techto-implementation.md section 9.1). Real cohort data
  * lives in MongoDB's `citizen_cohorts` collection, aggregated from real
  * StatCan-census-grounded `resident_personas` records by
  * `population/build_neighbourhood_cohorts.py` -- one cohort per Toronto

@@ -1,7 +1,7 @@
 import {
   ASSISTANT_ROSTER,
   type PlanningIntent,
-  type TwinTOAssistantKey,
+  type TechTOAssistantKey,
 } from "@/lib/backboard/assistants";
 import { getBackboardAdapter } from "@/lib/backboard/adapter";
 import { resolveAssistant } from "@/lib/backboard/assistant-manifest";
@@ -9,10 +9,10 @@ import type { BackboardAdapter, WebSearchMode } from "@/lib/backboard/client";
 import { runToolLoop } from "@/lib/backboard/run-tool-loop";
 import { createRunContext, type MapContextState } from "@/lib/backboard/tool-dispatcher";
 import { getToolDefinitions } from "@/lib/backboard/tools";
-import { classifyPlanningIntent } from "@/lib/twinto/intent";
-import type { SelectedMapPlace } from "@/lib/twinto/place-context";
-import { parseMapActions, type MapAction } from "@/lib/twinto/map-actions";
-import { TORONTO_SCOPE_SHORT } from "@/lib/twinto/toronto-scope";
+import { classifyPlanningIntent } from "@/lib/techto/intent";
+import type { SelectedMapPlace } from "@/lib/techto/place-context";
+import { parseMapActions, type MapAction } from "@/lib/techto/map-actions";
+import { TORONTO_SCOPE_SHORT } from "@/lib/techto/toronto-scope";
 import { z } from "zod";
 
 export class PlaceChatError extends Error {}
@@ -30,12 +30,12 @@ export type PlaceChatAnswer = z.output<typeof placeChatAnswerSchema>;
 /**
  * Pick the single best conversational specialist for a place-scoped or
  * map-bar question. Full planning bundles still go through the orchestrator;
- * this path answers with one tool-enabled assistant grounded in TwinTO data.
+ * this path answers with one tool-enabled assistant grounded in TechTO data.
  */
 export function selectChatAgentForTask(input: {
   intent: PlanningIntent;
   placeScoped: boolean;
-}): TwinTOAssistantKey {
+}): TechTOAssistantKey {
   if (input.placeScoped) {
     if (input.intent === "SCHEDULE_CHANGE") return "geospatial-twin";
     if (input.intent === "EVENT_RESPONSE") return "adversarial-reviewer";
@@ -65,12 +65,12 @@ export interface AskPlaceChatResult {
   answer: PlaceChatAnswer;
   threadId: string;
   assistantId: string;
-  assistantKey: TwinTOAssistantKey;
+  assistantKey: TechTOAssistantKey;
   intent: PlanningIntent;
   mapActions: MapAction[];
 }
 
-function buildPlacePrompt(input: AskPlaceChatInput, intent: PlanningIntent, agentKey: TwinTOAssistantKey): string {
+function buildPlacePrompt(input: AskPlaceChatInput, intent: PlanningIntent, agentKey: TechTOAssistantKey): string {
   const place = input.place;
   const placeBlock = place
     ? [
@@ -100,14 +100,15 @@ ${conversationBlock}
 User question: ${input.question}
 
 Rules:
-- Use your tools to read TwinTO / Mongo-backed transit and neighbourhood data before answering.
+- Use your tools to read TechTO / Mongo-backed transit and neighbourhood data before answering.
 - Ground every factual claim in tool results. Label synthetic fixture data clearly.
 - Never present simulated citizen reactions as real public opinion.
 - If the question is about this building or place, relate it to the nearest station and neighbourhood from tools.
 - Answer the user's actual question directly. Do not substitute a generic description of what you can explain.
 - Make the answer easy to scan with short Markdown paragraphs, headings, and bullet lists when useful.
-- For a location, intervention, or policy recommendation, separate: recommendation, why it fits, sustainability potential, measured screening metrics, proposed success KPIs, and next validation steps.
+- For a location, intervention, or policy recommendation, separate: recommendation, why it fits, sustainability potential, measured screening metrics, ROI and value case, proposed success KPIs, and next validation steps.
 - Keep measured indicators separate from projected KPIs. Frame sustainability outcomes as potential mechanisms until validated, not forecasts or promises.
+- In ROI and value case, separate measured inputs, modeled monetized benefits, unvalidated assumptions, and scenario ranges. Use ROI = (validated monetized benefits - lifecycle costs) / lifecycle costs only when both sides are evidenced. Otherwise state that no ROI figure is claimed until demand, lifecycle cost, and benefit assumptions are validated. Include NPV, benefit-cost ratio, payback, discount rate, horizon, and sensitivity when available.
 
 Respond with ONLY JSON matching:
 {"answer": string, "citedEvidence": string[], "mapActions": unknown[]}
@@ -140,7 +141,7 @@ function parsePlaceAnswer(raw: string | null): { ok: true; value: PlaceChatAnswe
 /**
  * Live Backboard turn for map-bar or building mini-chat. Resolves the best
  * roster assistant for the classified intent, runs its tool loop against the
- * TwinTO repository (Mongo when configured), and returns a structured answer.
+ * TechTO repository (Mongo when configured), and returns a structured answer.
  */
 export async function askPlaceChat(input: AskPlaceChatInput): Promise<AskPlaceChatResult> {
   const adapter = input.adapter ?? getBackboardAdapter();

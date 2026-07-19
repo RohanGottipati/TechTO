@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 
 # match step size (16x8=128); keep many HTTP judges in flight
-DEFAULT_WORKERS = int(os.environ.get("TORONTWIN_REWARD_WORKERS", "32"))
+DEFAULT_WORKERS = int(os.environ.get("TECHTO_REWARD_WORKERS", "32"))
 
 _reward_pool: ThreadPoolExecutor | None = None
 
@@ -54,7 +54,7 @@ def _wrap_reward_fn(reward_fn, *, max_workers: int = DEFAULT_WORKERS):
         for fut in as_completed(futs):
             i, r = fut.result()
             out[i] = r
-        print(f"[torontwin] parallel reward_fn n={n} workers={workers}", flush=True)
+        print(f"[techto] parallel reward_fn n={n} workers={workers}", flush=True)
         return out
 
     return parallel_reward_fn
@@ -83,11 +83,11 @@ def install_parallel_grpo_reward(*, max_workers: int = DEFAULT_WORKERS) -> None:
     try:
         from trl import GRPOTrainer
     except Exception as e:
-        print(f"[torontwin] parallel reward: GRPOTrainer not ready yet ({e})", flush=True)
+        print(f"[techto] parallel reward: GRPOTrainer not ready yet ({e})", flush=True)
         # retry later from load_environment
         return
 
-    if getattr(GRPOTrainer, "_torontwin_parallel_reward", False):
+    if getattr(GRPOTrainer, "_techto_parallel_reward", False):
         return
 
     _orig_init = GRPOTrainer.__init__
@@ -98,9 +98,9 @@ def install_parallel_grpo_reward(*, max_workers: int = DEFAULT_WORKERS) -> None:
         return _orig_init(self, *args, **kwargs)
 
     GRPOTrainer.__init__ = _init  # type: ignore[method-assign]
-    GRPOTrainer._torontwin_parallel_reward = True
+    GRPOTrainer._techto_parallel_reward = True
     print(
-        f"[torontwin] parallel-first GRPO reward ON (workers={max_workers})",
+        f"[techto] parallel-first GRPO reward ON (workers={max_workers})",
         flush=True,
     )
 

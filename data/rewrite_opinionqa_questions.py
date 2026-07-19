@@ -81,8 +81,8 @@ def _client() -> OpenAI:
         base_url="https://openrouter.ai/api/v1",
         api_key=os.environ["OPENROUTER_API_KEY"],
         default_headers={
-            "HTTP-Referer": "https://github.com/torontwin",
-            "X-Title": "ToronTwin-q-rewrite",
+            "HTTP-Referer": "https://github.com/techto",
+            "X-Title": "TechTO-q-rewrite",
         },
     )
 

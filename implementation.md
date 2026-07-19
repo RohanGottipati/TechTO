@@ -23,10 +23,10 @@ Before writing code:
    ```
 4. Record the baseline result before changing anything.
 5. Preserve all working generic Cesium functionality unless this specification explicitly replaces it.
-6. Archive the obsolete ToronTwin population-sentiment documents before replacing them:
+6. Archive the obsolete TechTO population-sentiment documents before replacing them:
    ```text
-   docs/archive/torontwin/AGENTS.md
-   docs/archive/torontwin/implementation_plan.md
+   docs/archive/techto/AGENTS.md
+   docs/archive/techto/implementation_plan.md
    ```
 7. Replace the root `AGENTS.md` with project-specific engineering rules derived from this document.
 8. Add this file as the new root `implementation.md`.
@@ -259,7 +259,7 @@ Preserve the current frontend and add the following structure.
 │   │   ├── demo-script.md
 │   │   └── fallback-plan.md
 │   └── archive/
-│       └── torontwin/
+│       └── techto/
 │           ├── AGENTS.md
 │           └── implementation_plan.md
 │

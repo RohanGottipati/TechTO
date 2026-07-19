@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Working context and conventions for any agent (or human) building **ToronTwin**.
-`ToronTwin` is a placeholder codename: a population of individual voices producing a
+Working context and conventions for any agent (or human) building **TechTO**.
+`TechTO` is a placeholder codename: a population of individual voices producing a
 collective sound, where you can still hear each voice. Rename freely; it is not
 load-bearing.
 
@@ -9,9 +9,9 @@ Read this file fully before writing code. It encodes decisions that were argued
 through deliberately. Do not silently re-litigate them; if you think one is
 wrong, say so explicitly and wait.
 
-**Note on TwinTO and the open-city surface.** This repository also contains
-TwinTO (`src/lib/backboard`, `src/lib/transit`, `src/components/twinto`,
-`docs/twinto-implementation.md`): a simulated Toronto transit digital twin
+**Note on TechTO and the open-city surface.** This repository also contains
+TechTO (`src/lib/backboard`, `src/lib/transit`, `src/components/techto`,
+`docs/techto-implementation.md`): a simulated Toronto transit digital twin
 demo. The shared Backboard roster is now the **principled city-planning
 set** (`rosterVersion: principled-11` in `src/lib/backboard/manifest-schema.ts`
 and `src/lib/backboard/assistants.ts`): city-copilot, planning-orchestrator,
@@ -23,7 +23,7 @@ lives in general tools plus the twin.
 The Coolness MapLibre dashboard at `/` is the open-city front door. Chat
 there runs the **Planning Orchestrator** (`src/lib/planner/orchestrator.ts`,
 `POST /api/planner/run`): a free-form Backboard agent with twin tools, not a
-scripted scenario pipeline. TwinTO's schedule/stress-test path remains a
+scripted scenario pipeline. TechTO's schedule/stress-test path remains a
 separate demo; do not treat its synthetic-fixture citizen reactions as
 satisfying this file's calibration or retrodiction requirements. GridTwin
 is archived under `docs/archive/gridtwin/`.
@@ -31,20 +31,20 @@ is archived under `docs/archive/gridtwin/`.
 **Live Backboard only.** There is no `MockBackboardAdapter`, no
 `BACKBOARD_MOCK_MODE`, and no planner mock path. `BACKBOARD_API_KEY` is
 required. Citizen reactions use live FreeSolo
-(`TWINTO_CITIZEN_REACTION_PROVIDER=freesolo`); there is no mock citizen
+(`TECHTO_CITIZEN_REACTION_PROVIDER=freesolo`); there is no mock citizen
 provider. Open-city population scoring uses a pluggable
-`PopulationProvider` (`TORONTWIN_POPULATION_PROVIDER=synthetic|census`).
+`PopulationProvider` (`TECHTO_POPULATION_PROVIDER=synthetic|census`).
 
 **Geographic scope (hard):** City of Toronto only. Fixtures, map actions,
 chat assumptions, and every Backboard agent suggestion must stay inside
-Toronto (`src/lib/twinto/toronto-scope.ts`). Never propose locations,
+Toronto (`src/lib/techto/toronto-scope.ts`). Never propose locations,
 routes, or policies for other cities or regions.
 
 ---
 
 ## 1. What this project is
 
-ToronTwin is a decision-support tool for Toronto city planners. A planner works in
+TechTO is a decision-support tool for Toronto city planners. A planner works in
 a Cities-Skylines-style web view of the city and, through a chat agent, requests
 arbitrary changes ("add a tram from A to B, and raise parking tax 5% citywide to
 pay for it"). The system predicts **how residents would react**, returns a
@@ -288,7 +288,7 @@ print(r.choices[0].message.content)
   `flash export flash-1784401342-0d51be72` (managed checkpoints can be GC'd ~7
   days after last activity if never deployed/exported)
 
-Local client helper: `model/serving.py` (points at `TORONTWIN_LLM_*` env vars).
+Local client helper: `model/serving.py` (points at `TECHTO_LLM_*` env vars).
 Keys live in `.env` / `.env.example`: `FREESOLO_API_KEY`, plus
 `OPENROUTER_API_KEY` for the GRPO judge, `WANDB_API_KEY` for Flash `[wandb]`.
 
@@ -307,7 +307,7 @@ profile both (a) can be prompted for an open opinion and (b) has a gold MCQ
 option. Config: `model/grpo/config.toml`; env id `acmc/mcq-judge-env`; dataset
 `model/grpo/dataset/train.jsonl` (OpinionQA W92, question-holdouts in
 `holdout_questions.json`). A/B/C/D are **question-specific option labels**, not
-a fixed Likert scale. W&B project: `torontwin-grpo` (metrics include `success`,
+a fixed Likert scale. W&B project: `techto-grpo` (metrics include `success`,
 `judge_ok`, `empty_or_bad`). Warm-start: `init_from_adapter =
 "flash-1784401342-0d51be72"`.
 
@@ -440,7 +440,7 @@ The Python population pipeline (`population/sampler.py`, `population/ipf_fit.py`
 **A MongoDB Atlas structure already exists, but it is a separate, coarser
 system, not currently populated with this data.** `citizen_cohorts`
 (`src/lib/mongodb/collections.ts`, schema in
-`src/lib/citizen-reaction/schemas.ts`) backs the TwinTO web app's citizen-
+`src/lib/citizen-reaction/schemas.ts`) backs the TechTO web app's citizen-
 reaction demo. As of this writing it holds 11 hand-authored **synthetic
 fixture** cohorts (`src/data/transit/cohorts.ts`, explicitly
 `dataMode: "synthetic-fixture"`, its own docstring: "weights are
@@ -475,7 +475,7 @@ yet made -- log it here rather than silently pick one.
 /src
   /app       Next.js routes (incl. POST /api/planner/run)
   /components/dashboard  Coolness open-city UI at /
-  /components/twinto     TwinTO transit demo shell
+  /components/techto     TechTO transit demo shell
   /lib/backboard         live Backboard adapter, principled-11 roster, tools
   /lib/planner           open-city orchestrator, ScenarioPatch twin state
   /lib/population        PopulationProvider (synthetic | census)

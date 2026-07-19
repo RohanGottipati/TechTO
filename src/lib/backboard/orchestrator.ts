@@ -37,10 +37,10 @@ export class OrchestrationError extends Error {}
 
 export type EvidenceSource = "agent" | "local_fallback";
 
-/** The TwinTO agent-role key. Identical to AssistantRoleKey; kept as a named alias so orchestration code reads in domain terms. */
-export type TwinTOAgentRole = AssistantRoleKey;
+/** The TechTO agent-role key. Identical to AssistantRoleKey; kept as a named alias so orchestration code reads in domain terms. */
+export type TechTOAgentRole = AssistantRoleKey;
 
-export interface TwinTOIntervention {
+export interface TechTOIntervention {
   id: string;
   title: string;
   description: string;
@@ -48,14 +48,14 @@ export interface TwinTOIntervention {
 }
 
 /**
- * Frontend-safe lifecycle stream for one TwinTO planner-agent run: problem
+ * Frontend-safe lifecycle stream for one TechTO planner-agent run: problem
  * framing -> baseline -> parallel context gathering -> policy generation ->
  * citizen reaction -> simulation -> parallel impact review -> stress test ->
  * debate -> final judgment, mirrored by generic agent/tool events. Coarse by
  * design (AGENTS.md "keep the scored thing legible"): never carries raw
  * reasoning/thinking content, only lifecycle markers and domain evidence.
  */
-export type TwinTORunEvent =
+export type TechTORunEvent =
   | { type: "run.started"; runId: string; scenarioId: string }
   | { type: "problem.started"; runId: string }
   | { type: "problem.completed"; runId: string; summary: string }
@@ -82,13 +82,13 @@ export type TwinTORunEvent =
       overrideReason?: string;
     }
   | { type: "operator.ready"; runId: string; question: string }
-  | { type: "run.completed"; runId: string; result: TwinTORunResult }
+  | { type: "run.completed"; runId: string; result: TechTORunResult }
   | { type: "run.failed"; runId: string; error: string }
-  | { type: "agent.started"; runId: string; role: TwinTOAgentRole; name: string }
-  | { type: "agent.completed"; runId: string; role: TwinTOAgentRole; name: string; summary: string }
-  | { type: "agent.failed"; runId: string; role: TwinTOAgentRole; name: string; error: string }
-  | { type: "tool.requested"; runId: string; role: TwinTOAgentRole; toolName: string }
-  | { type: "tool.completed"; runId: string; role: TwinTOAgentRole; toolName: string; ok: boolean };
+  | { type: "agent.started"; runId: string; role: TechTOAgentRole; name: string }
+  | { type: "agent.completed"; runId: string; role: TechTOAgentRole; name: string; summary: string }
+  | { type: "agent.failed"; runId: string; role: TechTOAgentRole; name: string; error: string }
+  | { type: "tool.requested"; runId: string; role: TechTOAgentRole; toolName: string }
+  | { type: "tool.completed"; runId: string; role: TechTOAgentRole; toolName: string; ok: boolean };
 
 export interface CandidateEvaluation {
   candidateId: string;
@@ -101,7 +101,7 @@ export interface CandidateEvaluation {
   citizenReactionsSource: EvidenceSource;
 }
 
-export interface TwinTORunResult {
+export interface TechTORunResult {
   runId: string;
   scenarioId: string;
   problemSummary: string;
@@ -120,14 +120,14 @@ export interface TwinTORunResult {
   judgeAssistantId: string;
   judgeThreadId: string;
   /** Every assistant role that actually took part in this run, in invocation order (deduplicated). */
-  participatingAgents: TwinTOAgentRole[];
+  participatingAgents: TechTOAgentRole[];
 }
 
 export interface RunOrchestrationInput {
   scenarioId: string;
   includeWebSearch?: boolean;
   adapter?: BackboardAdapter;
-  onEvent?: (event: TwinTORunEvent) => void;
+  onEvent?: (event: TechTORunEvent) => void;
 }
 
 function generateRunId(): string {
@@ -263,7 +263,7 @@ interface FindingAgentParams {
   role: AssistantRoleKey;
   runId: string;
   prompt: string;
-  emit: (event: TwinTORunEvent) => void;
+  emit: (event: TechTORunEvent) => void;
   maxRounds?: number;
   fallbackSummary: string;
 }
@@ -598,7 +598,7 @@ function applyFinalAuthority(params: {
 // Main entry point
 // ---------------------------------------------------------------------------
 
-export async function runTwinTOOrchestration(input: RunOrchestrationInput): Promise<TwinTORunResult> {
+export async function runTechTOOrchestration(input: RunOrchestrationInput): Promise<TechTORunResult> {
   const adapter = input.adapter ?? getBackboardAdapter();
   const emit = input.onEvent ?? (() => {});
   const runId = generateRunId();
@@ -1065,7 +1065,7 @@ Respond with ONLY JSON matching:
       const judgeTurn = await runStructuredTurn({
         adapter,
         assistantId: judgeResolved.record.assistantId,
-        content: `${scenarioContextBlock(scenario)}\n\nDebate summary: ${debateSummary}\n\nDeterministic ranking (rank 1 = best; disqualified candidates failed hard validation and must never be recommended):\n${JSON.stringify(ranking)}\n\nStress-test results:\n${JSON.stringify(evaluations.map((evaluation) => ({ candidateId: evaluation.candidateId, invalidated: evaluation.stress?.invalidated ?? null })))}\n\nCall compare_interventions, calculate_accessibility, and calculate_equity as needed to confirm every claim before deciding.\n\nRespond with ONLY JSON matching:\n{"chosenCandidateId": string, "headline": string, "reasoning": string, "tradeoffs": string[], "confidence": number between 0 and 1, "recommendedAction": "approve"|"approve_with_monitoring"|"hold_for_operator"|"reject_unsafe"}\n\nNever choose a disqualified candidateId. Use "hold_for_operator" whenever every candidate has material unresolved concerns, and "reject_unsafe" whenever a candidate's own evidence shows it fails a hard check.`,
+        content: `${scenarioContextBlock(scenario)}\n\nDebate summary: ${debateSummary}\n\nDeterministic ranking (rank 1 = best; disqualified candidates failed hard validation and must never be recommended):\n${JSON.stringify(ranking)}\n\nImpact reviews, including feasibility and value evidence:\n${JSON.stringify(impactOutcomes.map((outcome) => ({ role: outcome.role, finding: outcome.finding })))}\n\nStress-test results:\n${JSON.stringify(evaluations.map((evaluation) => ({ candidateId: evaluation.candidateId, invalidated: evaluation.stress?.invalidated ?? null })))}\n\nCall compare_interventions, calculate_accessibility, and calculate_equity as needed to confirm every claim before deciding. Write the reasoning as concise Markdown with relevant sections for Why this option, Sustainability potential, Screening metrics, ROI and value case, Success KPIs to validate, and What to validate next. In ROI and value case, preserve the feasibility evidence boundary: separate measured inputs, modeled monetized benefits, assumptions, and scenario ranges; claim no ROI figure when lifecycle cost or benefit evidence is absent.\n\nRespond with ONLY JSON matching:\n{"chosenCandidateId": string, "headline": string, "reasoning": string, "tradeoffs": string[], "confidence": number between 0 and 1, "recommendedAction": "approve"|"approve_with_monitoring"|"hold_for_operator"|"reject_unsafe"}\n\nNever choose a disqualified candidateId. Use "hold_for_operator" whenever every candidate has material unresolved concerns, and "reject_unsafe" whenever a candidate's own evidence shows it fails a hard check.`,
         systemPrompt: judgeResolved.role.systemPrompt,
         modelName: judgeResolved.model.modelName,
         llmProvider: judgeResolved.model.provider,
@@ -1117,7 +1117,7 @@ Respond with ONLY JSON matching:
           : "Ask the TTC Operator Explanation Agent anything about this recommendation.",
     });
 
-    const result: TwinTORunResult = {
+    const result: TechTORunResult = {
       runId,
       scenarioId: input.scenarioId,
       problemSummary: problemOutcome.finding.summary,

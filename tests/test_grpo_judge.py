@@ -22,7 +22,7 @@ SEED = 2262
 
 
 def _have_openrouter() -> bool:
-    return bool(os.environ.get("OPENROUTER_API_KEY") or os.environ.get("TORONTWIN_LLM_API_KEY"))
+    return bool(os.environ.get("OPENROUTER_API_KEY") or os.environ.get("TECHTO_LLM_API_KEY"))
 
 
 # --- offline ---

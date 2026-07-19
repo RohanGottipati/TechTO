@@ -5,13 +5,13 @@ import {
   KNOWLEDGE_BUNDLES,
   type KnowledgeDocumentRef,
 } from "@/lib/backboard/knowledge-bundles";
-import { TORONTO_SCOPE_AGENT_RULE } from "@/lib/twinto/toronto-scope";
+import { TORONTO_SCOPE_AGENT_RULE } from "@/lib/techto/toronto-scope";
 
 /**
  * Principled city-planning roster (~11). Competence lives in tools + twin;
  * no niche one-use-case agents (no NuclearSitingAgent, no schedule-only roles).
  */
-export const TWINTO_ASSISTANT_KEYS = [
+export const TECHTO_ASSISTANT_KEYS = [
   "city-copilot",
   "planning-orchestrator",
   "geospatial-twin",
@@ -25,14 +25,14 @@ export const TWINTO_ASSISTANT_KEYS = [
   "explanation-map",
 ] as const;
 
-export type TwinTOAssistantKey = (typeof TWINTO_ASSISTANT_KEYS)[number];
-/** @deprecated Prefer TwinTOAssistantKey */
-export type AssistantRoleKey = TwinTOAssistantKey;
+export type TechTOAssistantKey = (typeof TECHTO_ASSISTANT_KEYS)[number];
+/** @deprecated Prefer TechTOAssistantKey */
+export type AssistantRoleKey = TechTOAssistantKey;
 
 export type { KnowledgeDocumentRef };
 
 export interface AssistantRoleDefinition {
-  key: TwinTOAssistantKey;
+  key: TechTOAssistantKey;
   name: string;
   shortDescription: string;
   systemPrompt: string;
@@ -64,7 +64,7 @@ export type PlanningIntent =
   | "OPEN_CITY_ASK";
 
 const SHARED_GUARD = `
-You are part of ToronTwin / TwinTO, a Toronto city planning sandbox on Backboard.
+You are part of TechTO / TechTO, a Toronto city planning sandbox on Backboard.
 You must use tool results for all factual and numerical claims.
 You must never represent simulated citizen reactions as real public opinion.
 You must never reveal private chain-of-thought.
@@ -106,10 +106,10 @@ function role(
   };
 }
 
-export const ASSISTANT_ROSTER: Record<TwinTOAssistantKey, AssistantRoleDefinition> = {
+export const ASSISTANT_ROSTER: Record<TechTOAssistantKey, AssistantRoleDefinition> = {
   "city-copilot": role({
     key: "city-copilot",
-    name: "ToronTwin — City Copilot",
+    name: "TechTO — City Copilot",
     shortDescription: "Front-door chat; intent handoff to the planning department.",
     uiGroup: "Conversation",
     memory: "Readonly",
@@ -133,7 +133,7 @@ acceptance yourself; cite tools and specialists. Keep replies short.
 
   "planning-orchestrator": role({
     key: "planning-orchestrator",
-    name: "ToronTwin — Planning Orchestrator",
+    name: "TechTO — Planning Orchestrator",
     shortDescription: "Unopinionated coordinator agent: tools over fixed city workflows.",
     uiGroup: "Planning",
     memory: "Readonly",
@@ -157,7 +157,7 @@ acceptance yourself; cite tools and specialists. Keep replies short.
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "PLANNING"),
     promptBody: `
-You are City Code, ToronTwin's Planning Orchestrator: a free-form colleague for
+You are City Code, TechTO's Planning Orchestrator: a free-form colleague for
 Toronto city planning, analogous to Claude Code for a city twin.
 
 You have real agency. You may ask clarifying questions, refuse a bad framing,
@@ -193,7 +193,7 @@ Keep replies short. If clarifying, ask 1-3 pointed questions and wait.
 
   "geospatial-twin": role({
     key: "geospatial-twin",
-    name: "ToronTwin — Geospatial Twin",
+    name: "TechTO — Geospatial Twin",
     shortDescription: "Query/patch city geometry, land use, networks via twin verbs.",
     uiGroup: "Planning",
     memory: "Readonly",
@@ -222,7 +222,7 @@ final winner.
 
   "scenario-designer": role({
     key: "scenario-designer",
-    name: "ToronTwin — Scenario Designer",
+    name: "TechTO — Scenario Designer",
     shortDescription: "Proposes N general ScenarioPatches for any city ask.",
     uiGroup: "Planning",
     memory: "Readonly",
@@ -246,7 +246,7 @@ plus a counterfactual when useful. Never declare the final winner.
 
   "citizen-response": role({
     key: "citizen-response",
-    name: "ToronTwin — Citizen Response",
+    name: "TechTO — Citizen Response",
     shortDescription: "Scores census-weighted population acceptance for patches.",
     uiGroup: "Analysis",
     memory: "Readonly",
@@ -267,7 +267,7 @@ are the audit trail; scores are readouts.
 
   "equity-impact": role({
     key: "equity-impact",
-    name: "ToronTwin — Equity Impact",
+    name: "TechTO — Equity Impact",
     shortDescription: "Who wins/loses across neighbourhoods and groups for any policy.",
     uiGroup: "Analysis",
     memory: "Readonly",
@@ -292,7 +292,7 @@ tabular / statistical checks against Mongo or TWIN when helpful.
 
   feasibility: role({
     key: "feasibility",
-    name: "ToronTwin — Feasibility",
+    name: "TechTO — Feasibility",
     shortDescription: "Cost, infra, safety, carbon, ops constraints for any proposal.",
     uiGroup: "Analysis",
     memory: "Readonly",
@@ -312,16 +312,22 @@ tabular / statistical checks against Mongo or TWIN when helpful.
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "IMPACT", "SAFETY_RELIABILITY"),
     promptBody: `
-You assess feasibility: cost, infrastructure, safety, carbon, and operational
-stress for any city patch. Call transit metric tools only when the ask needs
-them; they are tools, not your identity. Use run_python for quantitative
-hypotheses (read-only Mongo + scientific Python stack).
+You assess feasibility: lifecycle cost, infrastructure, safety, carbon,
+operations, and the evidence-based value case for any city patch. Call transit
+metric tools only when the ask needs them; they are tools, not your identity.
+For ROI, separate measured inputs, modeled monetized benefits, unvalidated
+assumptions, and scenario ranges. Use ROI = (validated monetized benefits -
+lifecycle costs) / lifecycle costs only when both sides are evidenced. Report
+NPV, benefit-cost ratio, payback, discount rate, analysis horizon, and
+sensitivity when supported. Never invent a return when cost or benefit inputs
+are missing. Use run_python for quantitative hypotheses (read-only Mongo +
+scientific Python stack).
 `.trim(),
   }),
 
   "adversarial-reviewer": role({
     key: "adversarial-reviewer",
-    name: "ToronTwin — Adversarial Reviewer",
+    name: "TechTO — Adversarial Reviewer",
     shortDescription: "Attacks proposals; finds failure modes. Memory off.",
     uiGroup: "Validation",
     memory: "off",
@@ -343,7 +349,7 @@ hidden harms (including event/surge stress). Memory is off.
 
   "evidence-auditor": role({
     key: "evidence-auditor",
-    name: "ToronTwin — Evidence Auditor",
+    name: "TechTO — Evidence Auditor",
     shortDescription: "Audit trail: claims must cite twin/population tool outputs.",
     uiGroup: "Validation",
     memory: "Readonly",
@@ -365,7 +371,7 @@ scores, documents, or run_python outputs. Reject unsupported conclusions.
 
   "final-policy-judge": role({
     key: "final-policy-judge",
-    name: "ToronTwin — Final Policy Judge",
+    name: "TechTO — Final Policy Judge",
     shortDescription: "Ranks validated ScenarioPatches; never invents metrics.",
     uiGroup: "Decision",
     memory: "Readonly",
@@ -376,13 +382,15 @@ scores, documents, or run_python outputs. Reject unsupported conclusions.
     promptBody: `
 You rank validated ScenarioPatches on acceptance, equity, and feasibility.
 Return recommend, recommend_with_conditions, compare_only, insufficient_evidence,
-or reject_all. Never invent metrics. Acceptance is not ridership.
+or reject_all. Never invent metrics. Acceptance is not ridership. Preserve the
+feasibility specialist's ROI evidence boundary: no lifecycle cost or monetized
+benefit evidence means no claimed return.
 `.trim(),
   }),
 
   "explanation-map": role({
     key: "explanation-map",
-    name: "ToronTwin — Explanation and Map",
+    name: "TechTO — Explanation and Map",
     shortDescription: "Plain-language explain + allowlisted map actions.",
     uiGroup: "Conversation",
     memory: "Readonly",
@@ -402,7 +410,7 @@ opinions. Coordinates must stay in Toronto.
 };
 
 /** Same agents for every open city ask (station / stadium / nuclear / …). */
-export const PRINCIPLED_CITY_BUNDLE: readonly TwinTOAssistantKey[] = [
+export const PRINCIPLED_CITY_BUNDLE: readonly TechTOAssistantKey[] = [
   "city-copilot",
   "planning-orchestrator",
   "geospatial-twin",
@@ -422,9 +430,9 @@ export const ASSISTANT_UI_GROUPS = {
   Analysis: ["citizen-response", "equity-impact", "feasibility"],
   Validation: ["adversarial-reviewer", "evidence-auditor"],
   Decision: ["final-policy-judge"],
-} as const satisfies Record<string, readonly TwinTOAssistantKey[]>;
+} as const satisfies Record<string, readonly TechTOAssistantKey[]>;
 
-export const INTENT_BUNDLES: Record<PlanningIntent, readonly TwinTOAssistantKey[]> = {
+export const INTENT_BUNDLES: Record<PlanningIntent, readonly TechTOAssistantKey[]> = {
   SIMPLE_MAP_NAVIGATION: ["city-copilot", "geospatial-twin", "explanation-map"],
   SIMPLE_EXPLANATION: ["city-copilot", "evidence-auditor", "explanation-map"],
   NEW_STATION_LOCATION: PRINCIPLED_CITY_BUNDLE,
@@ -443,14 +451,14 @@ export const INTENT_BUNDLES: Record<PlanningIntent, readonly TwinTOAssistantKey[
 export function selectAssistantsForIntent(
   intent: PlanningIntent,
   _options?: { includeEvents?: boolean },
-): TwinTOAssistantKey[] {
+): TechTOAssistantKey[] {
   return Array.from(new Set(INTENT_BUNDLES[intent]));
 }
 
 export function selectAssistantBundle(
   scenarioId: string,
   options?: { includeConcert?: boolean; includeWeather?: boolean },
-): TwinTOAssistantKey[] {
+): TechTOAssistantKey[] {
   const includeEvents =
     options?.includeConcert === true ||
     options?.includeWeather === true ||
@@ -470,13 +478,13 @@ export const CONCERT_BUNDLE = ["adversarial-reviewer"] as const;
 export const WEATHER_BUNDLE = ["feasibility"] as const;
 
 export function listAssistantRoles(): AssistantRoleDefinition[] {
-  return TWINTO_ASSISTANT_KEYS.map((key) => ASSISTANT_ROSTER[key]);
+  return TECHTO_ASSISTANT_KEYS.map((key) => ASSISTANT_ROSTER[key]);
 }
 
-export function getAssistantRole(key: TwinTOAssistantKey): AssistantRoleDefinition {
+export function getAssistantRole(key: TechTOAssistantKey): AssistantRoleDefinition {
   return ASSISTANT_ROSTER[key];
 }
 
-export function isTwinTOAssistantKey(value: string): value is TwinTOAssistantKey {
-  return (TWINTO_ASSISTANT_KEYS as readonly string[]).includes(value);
+export function isTechTOAssistantKey(value: string): value is TechTOAssistantKey {
+  return (TECHTO_ASSISTANT_KEYS as readonly string[]).includes(value);
 }

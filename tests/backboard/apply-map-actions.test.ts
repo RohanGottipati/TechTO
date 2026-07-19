@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { applyMapActions } from "@/lib/twinto/apply-map-actions";
+import { applyMapActions } from "@/lib/techto/apply-map-actions";
 import { useMapStore } from "@/store/useMapStore";
 
 describe("applyMapActions", () => {
