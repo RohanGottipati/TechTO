@@ -177,6 +177,7 @@ export function MapCanvas({
     new Float32Array(personas.length).fill(0.5)
   );
   const sweepToken = useRef(0);
+  const sampledIndices = useRef<Set<number>>(new Set());
   const hoveredNbhd = useRef<number | null>(null);
   const personaPopupRef = useRef<maplibregl.Popup | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -926,10 +927,20 @@ export function MapCanvas({
 
     // Real opinion text only exists for residents actually Monte-Carlo-sampled
     // this scenario -- mark those dots so the click popup can show a real
-    // quote instead of a bare acceptance percentage for everyone else.
-    for (const [i, text] of result.opinions ?? []) {
+    // quote instead of a bare acceptance percentage for everyone else. Clear
+    // stale markers left over from a previous scenario's sample first (a new
+    // scenario starts with an empty `opinions` map before any events stream in).
+    const nextSampled = result.opinions ?? new Map<number, string>();
+    for (const i of sampledIndices.current) {
+      if (!nextSampled.has(i)) {
+        map.removeFeatureState({ source: "personas", id: i }, "opinion");
+        map.removeFeatureState({ source: "personas", id: i }, "sampled");
+      }
+    }
+    for (const [i, text] of nextSampled) {
       map.setFeatureState({ source: "personas", id: i }, { opinion: text, sampled: true });
     }
+    sampledIndices.current = new Set(nextSampled.keys());
 
     const token = ++sweepToken.current;
     const target = result.acceptance;
