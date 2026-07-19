@@ -109,6 +109,9 @@ export interface RunContext {
   invokedAssistants: string[];
   /** Prevent nested invoke recursion. */
   invokeDepth: number;
+  /** Bubble nested specialist tool calls up to the city orchestrator UI. */
+  onNestedToolStart?: (call: ChatToolCall, role: string) => void;
+  onNestedToolEnd?: (outcome: ToolCallOutcome, role: string) => void;
 }
 
 const DEFAULT_MAP_CONTEXT: MapContextState = {
@@ -127,6 +130,8 @@ export function createRunContext(
   runId?: string,
   extras?: {
     agentOverlays?: AgentMapOverlay[];
+    onNestedToolStart?: (call: ChatToolCall, role: string) => void;
+    onNestedToolEnd?: (outcome: ToolCallOutcome, role: string) => void;
   },
 ): RunContext {
   return {
@@ -145,6 +150,8 @@ export function createRunContext(
     proposedCityPatches: [],
     invokedAssistants: [],
     invokeDepth: 0,
+    onNestedToolStart: extras?.onNestedToolStart,
+    onNestedToolEnd: extras?.onNestedToolEnd,
   };
 }
 
@@ -1266,6 +1273,8 @@ async function executeTool(
         context,
         maxRounds: 4,
         jsonOutput: true,
+        onToolCallStart: (call) => context.onNestedToolStart?.(call, parsed.role),
+        onToolCallEnd: (outcome) => context.onNestedToolEnd?.(outcome, parsed.role),
       });
       context.invokeDepth -= 1;
       return {

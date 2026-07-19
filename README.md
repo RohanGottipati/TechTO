@@ -52,10 +52,10 @@ by the surface you are running:
 
 - `BACKBOARD_API_KEY` is required for live Backboard chat. There is no mock
   Backboard adapter.
-- `TECHTO_POPULATION_PROVIDER=synthetic|census` selects the open-city
-  population provider.
-- `TECHTO_CITIZEN_REACTION_PROVIDER=freesolo` and the FreeSolo variables are
-  required for TechTO citizen reactions. There is no mock reaction provider.
+- `TECHTO_CITIZEN_REACTION_PROVIDER=real-opinion` (default) and the FreeSolo
+  variables drive both TechTO citizen reactions and the open-city
+  `score_population`/`run_twin_analysis` tools -- there is one real
+  opinion-model pipeline, no synthetic/mock fallback.
 - `TECHTO_REPOSITORY_PROVIDER=fixture|mongo` selects local transit fixtures or
   MongoDB Atlas for TechTO repository reads.
 - `NEXT_PUBLIC_MAP_STYLE_URL` optionally overrides the MapLibre base style.

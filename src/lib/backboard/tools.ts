@@ -839,7 +839,7 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
   [TOOL_NAMES.SCORE_POPULATION]: {
     name: TOOL_NAMES.SCORE_POPULATION,
     description:
-      "Score day-one citizen acceptance for a ScenarioPatch (or the current twin) via the PopulationProvider. Simulated; not real opinion.",
+      "Score real citizen acceptance for a ScenarioPatch (or a free-form question) by Monte-Carlo-sampling real Toronto residents and running the real trained opinion model. A model-predicted reaction based on real resident profiles, not an actual public survey or ridership figure.",
     parameters: {
       type: "object",
       properties: {

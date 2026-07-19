@@ -11,12 +11,17 @@ import {
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
 import { parseMapActions } from "@/lib/techto/map-actions";
 import { applyMapActions } from "@/lib/techto/apply-map-actions";
+import { enqueueMapActions, resetMapActionQueue } from "@/lib/techto/map-action-queue";
 import { useMapStore } from "@/store/useMapStore";
 import { useTechTOStore } from "@/store/useTechTOStore";
 import type { UseBackboardRunResult } from "@/lib/techto/use-backboard-run";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { cn } from "@/lib/utils/cn";
-import type { CityPlanRankingRow, CityPlanRunHandlers } from "@/components/planner/CityPlanStrip";
+import type {
+  CityPlanRankingRow,
+  CityPlanRunHandlers,
+  CityPlanTraceLine,
+} from "@/components/planner/CityPlanStrip";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 import { PdfExportButton } from "@/components/chat/PdfExportButton";
 
@@ -25,7 +30,7 @@ interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   /** Live tool/agent/scoring trace lines for a city-plan run, shown above the prose. */
-  trace?: string[];
+  trace?: CityPlanTraceLine[];
   /** True while this message is still streaming in. */
   streaming?: boolean;
 }
@@ -70,8 +75,11 @@ export function MapChatBar({
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  /** Show tool args / outputs under each trace line. */
+  const [showTraceDetail, setShowTraceDetail] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const appliedMapMidstream = useRef(false);
 
   const selectedPlace = useMapStore((s) => s.selectedPlace);
   const layers = useMapStore((s) => s.layers);
@@ -156,6 +164,8 @@ export function MapChatBar({
       // all appear as they happen instead of a spinner followed by one final blob.
       if (enableCityPlanRun && onCityPlanQuestion) {
         const liveId = `plan-${Date.now()}`;
+        appliedMapMidstream.current = false;
+        resetMapActionQueue();
         setMessages((prev) => [...prev, { id: liveId, role: "assistant", content: "", trace: [], streaming: true }]);
 
         const payload = await onCityPlanQuestion(text, {
@@ -164,15 +174,28 @@ export function MapChatBar({
               prev.map((m) => (m.id === liveId ? { ...m, content: m.content + chunk } : m)),
             );
           },
+          onClear: () => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === liveId ? { ...m, content: "" } : m)),
+            );
+          },
           onTrace: (line) => {
             setMessages((prev) =>
-              prev.map((m) => (m.id === liveId ? { ...m, trace: [...(m.trace ?? []), line.text] } : m)),
+              prev.map((m) => (m.id === liveId ? { ...m, trace: [...(m.trace ?? []), line] } : m)),
             );
+          },
+          onMapActions: (actions) => {
+            // play each compose batch as it lands; queue keeps camera moves sequential
+            appliedMapMidstream.current = true;
+            enqueueMapActions(actions);
           },
         });
 
-        const mapParsed = parseMapActions(payload?.mapActions ?? []);
-        if (mapParsed.ok) applyMapActions(mapParsed.actions);
+        // fallback only if the agent never streamed map.actions mid-turn
+        if (!appliedMapMidstream.current) {
+          const mapParsed = parseMapActions(payload?.mapActions ?? []);
+          if (mapParsed.ok) enqueueMapActions(mapParsed.actions);
+        }
         const ranking = payload?.ranking ?? [];
         const rankLines = ranking
           .slice(0, 5)
@@ -181,14 +204,23 @@ export function MapChatBar({
               `${i + 1}. ${r.title} (mean ${Number(r.mean).toFixed(2)}, support ${(Number(r.supportShare) * 100).toFixed(0)}%)`,
           )
           .join("\n");
-        let body =
-          payload?.summary?.trim() ||
-          "The planning agent finished without a written reply. Try asking again.";
-        if (ranking.length) {
-          body += `\n\nRanked scenarios:\n${rankLines}` + (payload?.chosenId ? `\n\nLeading: ${payload.chosenId}` : "");
-        }
+        // prefer live streamed prose; only replace if the agent left the bubble empty
         setMessages((prev) =>
-          prev.map((m) => (m.id === liveId ? { ...m, content: body, streaming: false } : m)),
+          prev.map((m) => {
+            if (m.id !== liveId) return m;
+            let body = m.content.trim();
+            if (!body) {
+              body =
+                payload?.summary?.trim() ||
+                "The planning agent finished without a written reply. Try asking again.";
+            }
+            if (ranking.length) {
+              body +=
+                `\n\nRanked scenarios:\n${rankLines}` +
+                (payload?.chosenId ? `\n\nLeading: ${payload.chosenId}` : "");
+            }
+            return { ...m, content: body, streaming: false };
+          }),
         );
         return;
       }
@@ -287,6 +319,18 @@ export function MapChatBar({
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <p className="text-[11px] font-medium text-white">TechTO</p>
             <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowTraceDetail((v) => !v)}
+                className={cn(
+                  "h-7 px-2 text-[11px] transition hover:bg-white/10",
+                  showTraceDetail ? "text-white" : "text-white/55 hover:text-white",
+                )}
+                aria-pressed={showTraceDetail}
+                title="Show tool args and outputs"
+              >
+                {showTraceDetail ? "Hide details" : "Details"}
+              </button>
               <PdfExportButton
                 report={{
                   title: "TechTO conversation",
@@ -334,8 +378,15 @@ export function MapChatBar({
                   <>
                     {message.trace && message.trace.length > 0 && (
                       <ul className="mb-1.5 space-y-0.5 border-b border-white/10 pb-1.5 font-mono text-[10px] leading-snug text-white/50">
-                        {message.trace.map((line, i) => (
-                          <li key={i}>{line}</li>
+                        {message.trace.map((line) => (
+                          <li key={line.id}>
+                            <span>{line.text}</span>
+                            {showTraceDetail && line.detail && (
+                              <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-sm bg-black/25 px-1.5 py-1 text-[9px] text-white/45">
+                                {line.detail}
+                              </pre>
+                            )}
+                          </li>
                         ))}
                       </ul>
                     )}

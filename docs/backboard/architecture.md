@@ -36,7 +36,10 @@ GridTwin is archived under `docs/archive/gridtwin/`.
 
 - Backboard is live only and requires `BACKBOARD_API_KEY`.
 - TechTO citizen reactions are live FreeSolo only.
-- The open-city `PopulationProvider` supports `synthetic` and `census` modes.
+- The open-city `score_population`/`run_twin_analysis` tools and TechTO
+  citizen reactions share one real pipeline (`src/lib/citizen-reaction`):
+  real resident personas, the trained opinion model, and the real-vote-
+  trained embedding probe. No synthetic/census fallback.
 - TechTO repository reads support local labelled fixtures or MongoDB Atlas.
 - Deterministic simulator output remains the numerical authority for the
   TechTO operational demonstration.

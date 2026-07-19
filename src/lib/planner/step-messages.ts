@@ -22,3 +22,8 @@ const TOOL_LABEL: Record<string, string> = {
 export function toolRunningLabel(toolName: string): string {
   return TOOL_LABEL[toolName] ?? toolName.replaceAll("_", " ");
 }
+
+export function toolDoneLabel(toolName: string, ok: boolean): string {
+  const label = TOOL_LABEL[toolName] ?? toolName.replaceAll("_", " ");
+  return ok ? `✓ ${label}` : `✗ ${label}`;
+}

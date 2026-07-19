@@ -2,9 +2,11 @@
 
 import { useRef, useState } from "react";
 import { CANNED_CITY_ASKS } from "@/lib/planner/canned";
+import { toolDoneLabel, toolRunningLabel } from "@/lib/planner/step-messages";
 import { cn } from "@/lib/utils/cn";
 import { useMapStore } from "@/store/useMapStore";
 import { createRunStreamClient } from "@/lib/backboard/stream-parser";
+import type { MapAction } from "@/lib/techto/map-actions";
 
 export interface CityPlanRankingRow {
   id: string;
@@ -24,40 +26,68 @@ export interface CityPlanRunSummary {
   events: string[];
 }
 
-/** One line of the live trace: agent lifecycle, tool calls, or scoring -- not just prose tokens. */
+/** One line of the live trace: agent lifecycle, tool calls, or scoring. */
 export interface CityPlanTraceLine {
   id: string;
   text: string;
+  /** Args / output preview; shown when the user toggles details. */
+  detail?: string;
 }
 
 export interface CityPlanRunHandlers {
   /** Fired for every text token as the agent composes its reply. */
   onDelta?: (chunk: string) => void;
+  /** Wipe partial prose when a mid-turn tool round starts. */
+  onClear?: () => void;
   /** Fired whenever a new trace line (tool call, subagent, scoring result) is ready. */
   onTrace?: (line: CityPlanTraceLine) => void;
+  /** Mid-stream map actions: apply as soon as compose_map_actions accepts them. */
+  onMapActions?: (actions: MapAction[]) => void;
 }
 
-function traceLineFor(event: { type: string; [key: string]: unknown }): string | null {
+function rolePrefix(role: unknown): string {
+  if (typeof role !== "string" || !role || role === "planning-orchestrator") return "";
+  return `[${role}] `;
+}
+
+function traceLineFor(event: { type: string; [key: string]: unknown }): CityPlanTraceLine | null {
+  const detail = typeof event.detail === "string" ? event.detail : undefined;
   switch (event.type) {
     case "agent.started":
-      return `→ ${event.name as string} started`;
+      return { id: "", text: `→ ${event.name as string} started` };
     case "tool.requested":
-      return `⚙ calling ${event.toolName as string}…`;
+      return {
+        id: "",
+        text: `⚙ ${rolePrefix(event.role)}${toolRunningLabel(event.toolName as string)}…`,
+        detail,
+      };
     case "tool.completed":
-      return `${event.ok ? "✓" : "✗"} ${event.toolName as string}`;
+      return {
+        id: "",
+        text: `${rolePrefix(event.role)}${toolDoneLabel(event.toolName as string, Boolean(event.ok))}`,
+        detail,
+      };
     case "scenarios.proposed":
-      return `${(event.patches as unknown[]).length} scenario patch(es) proposed`;
+      return { id: "", text: `${(event.patches as unknown[]).length} scenario patch(es) proposed` };
     case "citizens.scored": {
       const mean = Number(event.mean).toFixed(2);
       const support = (Number(event.supportShare) * 100).toFixed(0);
-      return `real acceptance scored: mean ${mean}, ${support}% support (${event.provider as string})`;
+      return {
+        id: "",
+        text: `real acceptance scored: mean ${mean}, ${support}% support (${event.provider as string})`,
+      };
     }
     case "recommendation.ready":
-      return "recommendation ready";
+      return { id: "", text: "recommendation ready" };
     case "map.actions":
-      return `${(event.actions as unknown[]).length} map action(s) applied`;
+    case "planner.map_actions":
+      return {
+        id: "",
+        text: `map ← ${(event.actions as unknown[]).length} action(s)`,
+        detail: detail ?? JSON.stringify(event.actions)?.slice(0, 500),
+      };
     case "status":
-      return event.message as string;
+      return { id: "", text: event.message as string };
     default:
       return null;
   }
@@ -84,8 +114,19 @@ export function useCityPlanRun() {
             handlers.onDelta?.(payload.content);
             return;
           }
+          if (envelope.type === "planner.clear") {
+            handlers.onClear?.();
+            return;
+          }
           if (envelope.type === "planner.status" && typeof payload.message === "string") {
             handlers.onTrace?.({ id: `t-${traceSeq.current++}`, text: payload.message });
+            return;
+          }
+          if (envelope.type === "planner.map_actions") {
+            const actions = (payload.actions as MapAction[]) ?? [];
+            if (actions.length) handlers.onMapActions?.(actions);
+            const line = traceLineFor({ type: "planner.map_actions", ...payload });
+            if (line) handlers.onTrace?.({ ...line, id: `t-${traceSeq.current++}` });
             return;
           }
           if (envelope.type === "planner.completed") {
@@ -111,7 +152,7 @@ export function useCityPlanRun() {
             return;
           }
           const line = traceLineFor({ type: envelope.type, ...payload });
-          if (line) handlers.onTrace?.({ id: `t-${traceSeq.current++}`, text: line });
+          if (line) handlers.onTrace?.({ ...line, id: `t-${traceSeq.current++}` });
         },
         onError: (err) => {
           setIsRunning(false);
