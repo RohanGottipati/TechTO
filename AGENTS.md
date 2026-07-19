@@ -217,16 +217,20 @@ spatial features), it returns a **first-person free-text opinion**. That text is
 the planner-facing artifact. It predicts **day-one acceptance / stance voice**,
 not ridership, mode choice, or other behavioral consequences (see §2).
 
-**Current SFT deploy (final adapter after ~3 epochs on Qwen3.5-9B):**
+**Current SFT deploy (picked by synth holdout: end of epoch 2, step-1850;
+final epoch-3 overfit on never-seen policies):**
 
 | Field | Value |
 | --- | --- |
 | Flash run id | `flash-1784401342-0d51be72` |
-| OpenAI `model` string | `flash-1784401342-0d51be72` |
+| Checkpoint | `step-1850` (end of epoch 2) |
+| OpenAI `model` string | `flash-1784401342-0d51be72` (same id; deploy swaps weights) |
+| Deploy command | `flash deploy flash-1784401342-0d51be72/step-1850` |
 | Base URL | `https://clado-ai--freesolo-lora-serving.modal.run/v1` |
 | Auth | `Authorization: Bearer $FREESOLO_API_KEY` |
 | Base weights | `Qwen/Qwen3.5-9B` + our SFT LoRA |
 | Train data | ~32k human open-ends (ANES + Toronto Core Service Review 2011 + Polis); see `model/sft/` |
+| Holdout pick | `eval/make_sft_holdout_synth.py` + `eval/output/sft_holdout_synth/`; e2 > e1 > e3 |
 
 Prompt contract (keep this shape so serving matches training):
 
@@ -279,14 +283,16 @@ print(r.choices[0].message.content)
 
 **Ops**
 
-- Deploy final adapter: `flash deploy flash-1784401342-0d51be72`
-- Deploy a mid-run checkpoint: `flash deploy flash-1784401342-0d51be72/step-N`
+- Preferred deploy (holdout-picked): `flash deploy flash-1784401342-0d51be72/step-1850`
+- Deploy final adapter (worse on synth holdout): `flash deploy flash-1784401342-0d51be72`
+- Deploy another mid-run checkpoint: `flash deploy flash-1784401342-0d51be72/step-N`
 - Status: `flash deployments` / smoke: `flash chat flash-1784401342-0d51be72 -m "..."`
 - Tear down when unused: `flash undeploy flash-1784401342-0d51be72` (serving is
   billed per token while the adapter is registered)
 - Export to HF if you need a durable copy outside Flash GC:
-  `flash export flash-1784401342-0d51be72` (managed checkpoints can be GC'd ~7
-  days after last activity if never deployed/exported)
+  `flash export --adapter-id flash-1784401342-0d51be72/step-1850 --repository <owner/name>`
+  (managed checkpoints can be GC'd ~7 days after last activity if never
+  deployed/exported)
 
 Local client helper: `model/serving.py` (points at `TECHTO_LLM_*` env vars).
 Keys live in `.env` / `.env.example`: `FREESOLO_API_KEY`, plus
@@ -309,7 +315,7 @@ option. Config: `model/grpo/config.toml`; env id `acmc/mcq-judge-env`; dataset
 `holdout_questions.json`). A/B/C/D are **question-specific option labels**, not
 a fixed Likert scale. W&B project: `techto-grpo` (metrics include `success`,
 `judge_ok`, `empty_or_bad`). Warm-start: `init_from_adapter =
-"flash-1784401342-0d51be72"`.
+"flash-1784401342-0d51be72/step-1850"` (synth-holdout best; not final e3).
 
 Two different models, do not conflate them:
 

@@ -17,8 +17,8 @@ batch_size = 16
 group_size = 8
 temperature = 1.0
 max_completion_tokens = 256
-init_from_adapter = "flash-1784401342-0d51be72"
+init_from_adapter = "flash-1784401342-0d51be72/step-1850"  # best on synth holdout (e2 > e1 > e3)
 
 [wandb]
 project = "torontwin-grpo"
-run_name = "mcq-judge-rewritten-qs-16x8"
+run_name = "mcq-judge-rewritten-qs-sft-e2-warm"
