@@ -48,7 +48,7 @@ describe("chat report export", () => {
     expect(html).not.toContain("<img src=x");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).toContain("City source &lt;unsafe&gt;");
-    expect(html).toContain("Simulated day-one acceptance is not public consultation");
+    expect(html).toContain("Simulated acceptance is not public consultation");
     expect(html).toContain("lifecycle costs");
     expect(html).toContain("@media print");
   });
