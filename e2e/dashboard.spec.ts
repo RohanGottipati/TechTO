@@ -6,27 +6,16 @@ test.describe("ToronTwin dashboard", () => {
     await expect(
       page.getByRole("heading", { name: "ToronTwin" })
     ).toBeVisible();
-    // Panels appear once geodata is loaded.
-    await expect(page.getByText("Scenario", { exact: true })).toBeVisible({
+    // Map layers appear once geodata is loaded. Scenario controls, the map
+    // legend, and the artificial idle caret are intentionally absent.
+    await expect(page.getByText("Layers", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByText("Day-one acceptance")).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.getByText("Scenario", { exact: true })).toHaveCount(0);
+    await expect(page.locator(".chat-blink-caret")).toHaveCount(0);
+    await expect(page.getByText("Neighbourhood sentiment")).toBeVisible();
     // The map canvas is present.
     await expect(page.locator(".maplibregl-canvas")).toBeVisible();
-  });
-
-  test("switches scenarios", async ({ page }) => {
-    await page.goto("/");
-    const king = page.getByRole("button", {
-      name: /King St full transit priority/,
-    });
-    await king.click({ timeout: 30_000 });
-    await expect(king).toHaveAttribute("aria-pressed", "true");
-    await expect(
-      page.getByText(/Ban through car traffic on King/)
-    ).toBeVisible();
   });
 
   test("toggles a layer", async ({ page }) => {

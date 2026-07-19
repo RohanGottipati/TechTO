@@ -2,15 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapCanvas } from "./MapCanvas";
-import { ScenarioPanel } from "./ScenarioPanel";
 import { LayersPanel } from "./LayersPanel";
 import { InspectorPanel } from "./InspectorPanel";
-import { Legend } from "./Legend";
 import { MapChatBar } from "@/components/chat/MapChatBar";
 import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
 import { CityPlanStrip, useCityPlanRun } from "@/components/planner/CityPlanStrip";
 import { buildPersonas } from "@/lib/sim/personas";
-import { SCENARIOS } from "@/lib/sim/scenarios";
 import { runScenario } from "@/lib/sim/engine";
 import { useSimStore } from "@/store/useSimStore";
 import { useMapStore } from "@/store/useMapStore";
@@ -36,6 +33,8 @@ export function Dashboard() {
   const status = useSimStore((s) => s.status);
   const scenarioId = useSimStore((s) => s.scenarioId);
   const selectedCode = useSimStore((s) => s.selectedCode);
+  const selectedPlace = useMapStore((s) => s.selectedPlace);
+  const placeChatOpen = useMapStore((s) => s.buildingMiniChatOpen);
   const dataRef = useRef<CityData | null>(null);
   const cityPlan = useCityPlanRun();
 
@@ -120,30 +119,26 @@ export function Dashboard() {
         />
       )}
 
-      {/* Left rail: identity, scenario, layers */}
+      {/* Left rail: identity and map layers */}
       <div className="pointer-events-none absolute left-4 top-4 z-10 hidden w-[288px] flex-col gap-3 md:flex">
         <Wordmark />
-        <ScenarioPanel />
         <LayersPanel />
       </div>
 
-      {/* Mobile: compact header + scenario chips */}
+      {/* Mobile: compact identity header */}
       <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col gap-2 md:hidden">
         <Wordmark />
-        <div className="pointer-events-auto -mx-1 overflow-x-auto px-1 pb-1">
-          <MobileScenarioChips />
+      </div>
+
+      {/* Right rail: selected-place information, then its local chat. */}
+      {data && (selectedCode || (selectedPlace && placeChatOpen)) && (
+        <div className="pointer-events-none absolute right-4 top-4 z-30 flex max-h-[calc(100dvh-7rem)] flex-col gap-3">
+          {selectedCode && (
+            <InspectorPanel index={nbhdIndex} personas={data.personas} />
+          )}
+          <BuildingMiniChat placement="below-inspector" />
         </div>
-      </div>
-
-      {/* Right: legend + neighbourhood inspector stacked */}
-      <div className="pointer-events-none absolute right-4 top-4 z-10 hidden flex-col items-end gap-2.5 lg:flex">
-        <Legend />
-        {data && selectedCode && (
-          <InspectorPanel index={nbhdIndex} personas={data.personas} />
-        )}
-      </div>
-
-      <BuildingMiniChat />
+      )}
 
       {/* Demo canned asks + live plan strip */}
       <div className="pointer-events-none absolute inset-x-0 bottom-[4.5rem] z-20 flex flex-col items-center gap-2 px-3 sm:px-4 md:bottom-24">
@@ -218,28 +213,5 @@ function Wordmark() {
         Toronto · Backboard planning dept · synthetic citizens
       </span>
     </header>
-  );
-}
-
-function MobileScenarioChips() {
-  const scenarioId = useSimStore((s) => s.scenarioId);
-  const setScenario = useSimStore((s) => s.setScenario);
-  return (
-    <div className="flex gap-1.5">
-      {SCENARIOS.map((s) => (
-        <button
-          key={s.id}
-          type="button"
-          onClick={() => setScenario(s.id)}
-          className={
-            s.id === scenarioId
-              ? "whitespace-nowrap border border-white/25 bg-white/10 px-3 py-1.5 text-[11px] text-ink-bright"
-              : "whitespace-nowrap border border-hairline bg-panel px-3 py-1.5 text-[11px] text-muted"
-          }
-        >
-          {s.name}
-        </button>
-      ))}
-    </div>
   );
 }

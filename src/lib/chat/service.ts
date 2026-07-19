@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import { selectAssistantsForIntent } from "@/lib/backboard/assistants";
 import {
   cityCopilotResponseSchema,
   type ChatMessageRecord,
@@ -8,13 +7,14 @@ import {
   type CityCopilotResponse,
   type PostChatMessageInput,
 } from "@/lib/chat/schemas";
-import { searchNeighbourhoods } from "@/data/transit/neighbourhoods";
+import { listNeighbourhoods } from "@/data/transit/neighbourhoods";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { getMongoDb } from "@/lib/mongodb/client";
 import { COLLECTIONS, DEMO_PROVENANCE } from "@/lib/mongodb/collections";
 import { isMongoConfigured } from "@/lib/mongodb/env";
 import { classifyPlanningIntent } from "@/lib/twinto/intent";
 import { parseMapActions } from "@/lib/twinto/map-actions";
+import { askPlaceChat } from "@/lib/backboard/place-chat";
 import {
   TORONTO_SCOPE_ASSUMPTIONS,
   TORONTO_SCOPE_LIMITATIONS,
@@ -96,7 +96,10 @@ function buildOutOfScopeResponse(threadId: string, messageId: string): CityCopil
 }
 
 function buildNavResponse(threadId: string, messageId: string, text: string): CityCopilotResponse {
-  const matches = searchNeighbourhoods(text, undefined, 3);
+  const normalized = text.toLowerCase();
+  const matches = listNeighbourhoods()
+    .filter((area) => normalized.includes(area.name.toLowerCase()))
+    .slice(0, 3);
   const rawActions =
     matches.length > 0
       ? [
@@ -148,14 +151,16 @@ function buildPlanningResponse(
   threadId: string,
   messageId: string,
   intent: string,
-  bundle: string[],
 ): CityCopilotResponse {
   return cityCopilotResponseSchema.parse({
     schemaVersion: 1,
     messageId,
     threadId,
     intent: [intent],
-    answer: `Intent classified as ${intent}. Activating ${bundle.length} specialist(s): ${bundle.join(", ")}. Starting a Backboard planning run on the flagship schedule scenario. Simulated evidence only.`,
+    answer:
+      intent === "EVENT_RESPONSE"
+        ? "I’m evaluating that Toronto event-service question with the planning team. I’ll add the recommendation here when the preview finishes."
+        : "I’m evaluating that Toronto schedule question with the planning team. I’ll add the recommendation here when the preview finishes.",
     summary: "Kick off consolidated planning department run.",
     assumptions: [
       ...TORONTO_SCOPE_ASSUMPTIONS,
@@ -167,18 +172,67 @@ function buildPlanningResponse(
       "Simulated citizen reactions are not real public consultation",
       "Synthetic fixture network, not live TTC GTFS",
     ],
-    mapActions: [
-      {
-        type: "open_panel",
-        panel: "evidence",
-      },
-    ],
+    mapActions: [],
     suggestedFollowUps: [
       "Compare the first and second choices",
       "How should service change after a concert at Scotiabank Arena?",
     ],
     startPlanningRun: true,
     scenarioId: FLAGSHIP_SCENARIO_ID,
+  });
+}
+
+function recentConversationContext(thread: ChatThreadRecord | null): string | undefined {
+  if (!thread) return undefined;
+  const messages = thread.messages
+    .filter((message) => message.role !== "system")
+    .slice(-6)
+    .map((message) => `${message.role}: ${message.content.slice(0, 1200)}`);
+  return messages.length > 0 ? messages.join("\n\n") : undefined;
+}
+
+async function buildDirectChatResponse(
+  input: PostChatMessageInput,
+  thread: ChatThreadRecord | null,
+  threadId: string,
+  messageId: string,
+  intent: "NEW_STATION_LOCATION" | "COMPARE_EXISTING_CANDIDATES" | "SIMPLE_EXPLANATION",
+): Promise<CityCopilotResponse> {
+  const direct = await askPlaceChat({
+    scenarioId: input.mapContext?.activeScenarioId ?? FLAGSHIP_SCENARIO_ID,
+    question: input.message,
+    conversationContext: recentConversationContext(thread),
+    mapContext: input.mapContext
+      ? {
+          center: [input.mapContext.viewport.longitude, input.mapContext.viewport.latitude],
+          zoom: input.mapContext.viewport.zoom,
+          selectedStationId: input.mapContext.selectedStopId,
+          selectedNeighbourhoodId: input.mapContext.selectedNeighbourhoodId,
+          visibleLayers: input.mapContext.visibleLayers,
+        }
+      : undefined,
+  });
+
+  return cityCopilotResponseSchema.parse({
+    schemaVersion: 1,
+    messageId,
+    threadId,
+    intent: [intent],
+    answer: direct.answer.answer,
+    summary: "Direct Toronto planning answer.",
+    assumptions: [...TORONTO_SCOPE_ASSUMPTIONS, ...direct.answer.citedEvidence],
+    limitations: [
+      ...TORONTO_SCOPE_LIMITATIONS,
+      "Not a live TTC feed",
+      "Simulated citizen reactions are not public consultation",
+    ],
+    mapActions: direct.mapActions,
+    suggestedFollowUps: [
+      "What evidence supports that answer?",
+      "What should be validated next?",
+    ],
+    startPlanningRun: false,
+    scenarioId: null,
   });
 }
 
@@ -212,34 +266,20 @@ export async function handleChatMessage(input: PostChatMessageInput): Promise<{
     intent = "SIMPLE_EXPLANATION";
   } else if (intent === "SIMPLE_MAP_NAVIGATION") {
     response = buildNavResponse(threadId, assistantMessageId, input.message);
-  } else if (intent === "COMPARE_EXISTING_CANDIDATES" || intent === "SIMPLE_EXPLANATION") {
-    response = cityCopilotResponseSchema.parse({
-      schemaVersion: 1,
-      messageId: assistantMessageId,
+  } else if (
+    intent === "NEW_STATION_LOCATION" ||
+    intent === "COMPARE_EXISTING_CANDIDATES" ||
+    intent === "SIMPLE_EXPLANATION"
+  ) {
+    response = await buildDirectChatResponse(
+      input,
+      existing,
       threadId,
-      intent: [intent],
-      answer:
-        intent === "COMPARE_EXISTING_CANDIDATES"
-          ? "Reusing prior Toronto planning context when available. Open the Recommendation panel to compare ranked candidates from the latest Backboard run. Ask for a fresh Toronto schedule or station question to start a new simulation."
-          : "I can explain ranked metrics and recommendations from the latest Toronto planning run. Simulated evidence only; the deterministic simulator remains numerical authority.",
-      summary: intent === "COMPARE_EXISTING_CANDIDATES" ? "Compare existing candidates" : "Explain prior result",
-      assumptions: [...TORONTO_SCOPE_ASSUMPTIONS, "Prior run context when present"],
-      limitations: [
-        ...TORONTO_SCOPE_LIMITATIONS,
-        "Not a live TTC feed",
-        "Simulated citizen reactions are not public consultation",
-      ],
-      mapActions: [{ type: "open_panel", panel: "policy_comparison" }],
-      suggestedFollowUps: [
-        "What happens if the 4:06 departure moves to 4:08?",
-        "What is the best neighbourhood to add a subway station?",
-      ],
-      startPlanningRun: false,
-      scenarioId: null,
-    });
+      assistantMessageId,
+      intent,
+    );
   } else {
-    const bundle = selectAssistantsForIntent(intent);
-    response = buildPlanningResponse(threadId, assistantMessageId, intent, bundle);
+    response = buildPlanningResponse(threadId, assistantMessageId, intent);
   }
 
   const assistantMessage: ChatMessageRecord = {

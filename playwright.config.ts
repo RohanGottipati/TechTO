@@ -21,7 +21,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run build && PORT=${PORT} npm run start`,
+    command: `NEXT_DIST_DIR=.next-playwright npm run build && NEXT_DIST_DIR=.next-playwright PORT=${PORT} npm run start`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

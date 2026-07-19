@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowUp, Loader2, MapPin, X } from "lucide-react";
+import { ArrowUp, Loader2, MapPin, Maximize2, Minimize2, X } from "lucide-react";
 import { createRunStreamClient } from "@/lib/backboard/stream-parser";
 import { parseMapActions } from "@/lib/twinto/map-actions";
 import { applyMapActions } from "@/lib/twinto/apply-map-actions";
@@ -37,7 +37,11 @@ function welcomeForPlace(kind: "building" | "station" | "neighbourhood", label: 
 /**
  * Compact liquid-glass chat for a selected map place (neighbourhood, building, or station).
  */
-export function BuildingMiniChat() {
+export function BuildingMiniChat({
+  placement = "floating",
+}: {
+  placement?: "floating" | "below-inspector";
+}) {
   const place = useMapStore((s) => s.selectedPlace);
   const open = useMapStore((s) => s.buildingMiniChatOpen);
   const clearPlaceSelection = useMapStore((s) => s.clearPlaceSelection);
@@ -46,7 +50,7 @@ export function BuildingMiniChat() {
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [focused, setFocused] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<MiniMessage[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const threadIdRef = useRef<string | undefined>(undefined);
@@ -67,6 +71,7 @@ export function BuildingMiniChat() {
       },
     ]);
     setInput("");
+    setExpanded(false);
   }, [place]);
 
   if (!open || !place) return null;
@@ -151,12 +156,13 @@ export function BuildingMiniChat() {
     });
   }
 
-  const showBlinkCaret = !input && !focused;
-
   return (
     <aside
       className={cn(
-        "pointer-events-auto absolute bottom-28 right-4 z-30 flex w-[min(92vw,340px)] flex-col overflow-hidden md:bottom-32",
+        "pointer-events-auto z-30 flex flex-col overflow-hidden",
+        placement === "floating"
+          ? "absolute bottom-28 right-4 w-[min(92vw,340px)] md:bottom-32"
+          : "relative w-[288px] max-w-[calc(100vw-2rem)]",
         "rounded-[26px] border border-white/30",
         "bg-black/35 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.35)]",
         "backdrop-blur-2xl backdrop-saturate-150",
@@ -174,17 +180,37 @@ export function BuildingMiniChat() {
             {activeAgent ? ` · ${activeAgent}` : " · ask about local reaction"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => clearPlaceSelection()}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/15 hover:text-white"
-          aria-label="Close place chat"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/15 hover:text-white"
+            aria-label={expanded ? "Restore place chat size" : "Expand place chat"}
+            aria-pressed={expanded}
+          >
+            {expanded ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => clearPlaceSelection()}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-white/60 transition hover:bg-white/15 hover:text-white"
+            aria-label="Close place chat"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </header>
 
-      <div className="max-h-52 space-y-2 overflow-y-auto px-3 py-2.5 text-xs twinto-scroll">
+      <div
+        className={cn(
+          "space-y-2 overflow-y-auto px-3 py-2.5 text-xs twinto-scroll",
+          expanded ? "max-h-[45vh]" : "max-h-64",
+        )}
+      >
         {messages.map((message) => (
           <div
             key={message.id}
@@ -222,19 +248,11 @@ export function BuildingMiniChat() {
           className="relative min-w-0 flex-1 cursor-text"
           onClick={() => inputRef.current?.focus()}
         >
-          {showBlinkCaret && (
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center gap-1 text-sm text-white/45">
-              <span className="chat-blink-caret" aria-hidden />
-              Ask about this area…
-            </span>
-          )}
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={focused ? "Ask about this area…" : ""}
+            placeholder="Ask about this area…"
             className="chat-glass-input relative w-full rounded-full bg-white/10 px-3 py-2 text-sm outline-none"
             data-testid="building-mini-chat-input"
             aria-label="Ask about this area"

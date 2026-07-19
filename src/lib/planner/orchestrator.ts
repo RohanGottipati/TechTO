@@ -198,13 +198,16 @@ export async function runCityOrchestration(
     "Respond as ToronTwin's planning agent (Claude Code for the city).",
     "You decide the whole turn: reply in prose, call tools, invoke specialists, or any mix.",
     "Tools are available and optional; use them only when they help.",
+    "For location screening, use query_city_layer before choosing an official Toronto neighbourhood.",
     "Never invent ScenarioPatches or fake rankings just to fill a pipeline.",
     "If you score population acceptance, say it is simulated day-one feel, not ridership.",
     "When comparing places or proposing geometry, use compose_map_actions to fly/highlight/draw on the map so the user can see it.",
+    "For recommendations, use concise Markdown sections when relevant: Recommendation, Why this area, Sustainability potential, Screening metrics, Success KPIs to validate, and What to validate next.",
+    "Separate measured screening indicators from proposed KPIs. Sustainability outcomes are potential mechanisms until validated, not forecasts or promises.",
     hintPatches.length
       ? `Caller supplied optional starter patches (use or ignore):\n${JSON.stringify(hintPatches)}`
       : "",
-    "Final reply: plain prose to the user. Be concise; no rambling.",
+    "Final reply: concise Markdown to the user. Lead with the answer; no rambling.",
   ]
     .filter(Boolean)
     .join("\n");
