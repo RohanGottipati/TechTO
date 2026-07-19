@@ -295,6 +295,7 @@ export async function runCityOrchestration(
     "- Score acceptance on the shortlist with score_population BEFORE recommending (2-3 candidates max).",
     "- If scores look weak (low mean/support, or byNeighbourhood opposition at the proposed site), discard and try other areas; do not recommend a poorly accepted site unless the user wants that tradeoff.",
     "- While comparing, compose_map_actions may show several candidate markers; for the final pick, leave one marker, fly_to_center, and highlight that neighbourhood.",
+    "Compound asks with distinct proposals for distinct areas (e.g. 'raise tax in area A OR add a parking fee in area B'): call score_population once per clause, each scoped with neighbourhoodCodes to that clause's own target area and a question describing only that clause -- never blend two different proposals into one sampled question. Compare the per-clause results, don't average them, and state which alternative (or combination) is better in the final answer.",
     "Never invent ScenarioPatches or fake rankings just to fill a pipeline.",
     "When comparing places or proposing geometry, use compose_map_actions so the user can see the search on the map.",
     "Be concise. Lead with the answer in 1-3 sentences. Only add a short bullet list below it for the handful of details that actually change the decision (e.g. acceptance, a key tradeoff). Never pad with boilerplate section headers unless the user asks for that depth.",

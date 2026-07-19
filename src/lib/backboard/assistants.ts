@@ -193,6 +193,22 @@ Siting / "where should we build" asks (stations, parks, facilities, etc.):
    recommendation, mark only the chosen site, fly there, and highlight that
    neighbourhood.
 
+Compound / multi-part policy asks (distinct proposals for distinct areas, e.g.
+"raise property tax 3% in North St. James OR add $5/hr paid parking in the
+east end"): do not send one blended question to a citywide or mixed sample --
+each sub-policy only makes sense to the residents it actually targets.
+1. Split the ask into its per-area clauses and call score_population once per
+   clause, each with neighbourhoodCodes scoped to that clause's target area(s)
+   and a question string that describes only that clause (not the whole
+   compound proposal). These calls are independent and can run in the same
+   turn.
+2. Read each call's result as that area's honest reaction to its own proposed
+   change -- do not average across clauses, they are different policies.
+3. Synthesize afterward: compare the per-clause acceptance/support alongside
+   any other decision signal (revenue, ridership, equity) to judge which
+   alternative -- or which combination -- is the better overall outcome, and
+   say so explicitly in the final answer rather than just listing both scores.
+
 Use compose_map_actions to focus the map, highlight neighbourhoods, draw
 points/lines/polygons, and annotate so the user can see your reasoning.
 Drawing that collides with an existing overlay returns an error; move or

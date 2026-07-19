@@ -773,7 +773,7 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
   [TOOL_NAMES.RUN_TWIN_ANALYSIS]: {
     name: TOOL_NAMES.RUN_TWIN_ANALYSIS,
     description:
-      "Run a named twin analysis (currently: population_score) against the current twin snapshot.",
+      "Run a named twin analysis (currently: population_score) against the current twin snapshot. For a compound question with a different proposal per area, call once per clause with neighbourhoodCodes scoped to that clause's target area rather than one blended question.",
     parameters: {
       type: "object",
       properties: {
@@ -853,7 +853,7 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
   [TOOL_NAMES.SCORE_POPULATION]: {
     name: TOOL_NAMES.SCORE_POPULATION,
     description:
-      "Score real citizen acceptance for a ScenarioPatch (or a free-form question) by adaptively Monte-Carlo-sampling real Toronto residents and running the real trained opinion model: it draws residents in small batches and keeps sampling until the 95% confidence interval on the mean is tight (or a hard cap / the real resident pool is hit), so the returned citywide.sampleSize and citywide.ciHalfWidth vary run to run -- check citywide.stopReason and ciHalfWidth before treating the mean as settled. Returns citywide mean/support and byNeighbourhood breakdowns. Use those numbers as a decision signal: if acceptance is weak at the proposed site, try other neighbourhoods before recommending. A model-predicted reaction based on real resident profiles, not an actual public survey or ridership figure.",
+      "Score real citizen acceptance for a ScenarioPatch (or a free-form question) by adaptively Monte-Carlo-sampling real Toronto residents and running the real trained opinion model: it draws residents in small batches and keeps sampling until the 95% confidence interval on the mean is tight (or a hard cap / the real resident pool is hit), so the returned citywide.sampleSize and citywide.ciHalfWidth vary run to run -- check citywide.stopReason and ciHalfWidth before treating the mean as settled. Returns citywide mean/support and byNeighbourhood breakdowns. Use those numbers as a decision signal: if acceptance is weak at the proposed site, try other neighbourhoods before recommending. For a compound question with a different proposal per area (e.g. a tax change in one neighbourhood vs. a parking fee in another), do not send one blended question to everyone -- call this tool once per clause, each with neighbourhoodCodes scoped to that clause's target area and a question describing only that clause, then compare the per-clause results rather than averaging them. A model-predicted reaction based on real resident profiles, not an actual public survey or ridership figure.",
     parameters: {
       type: "object",
       properties: {
