@@ -41,6 +41,10 @@ import { runAgentPython } from "@/lib/analysis/run-python";
 import { matchCannedAsk } from "@/lib/planner/canned";
 import { isTwinTOAssistantKey, ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
 import { getToolDefinitions } from "@/lib/backboard/tools";
+import {
+  queryTorontoAreas,
+  type TorontoAreaSortField,
+} from "@/lib/toronto/area-catalog";
 
 export class ToolDispatchError extends Error {}
 
@@ -814,6 +818,49 @@ async function executeTool(
         twinPoiCount: context.twin.pois.length,
         twinCorridorCount: context.twin.corridors.length,
       };
+    case TOOL_NAMES.QUERY_CITY_LAYER: {
+      const parsed = z
+        .object({
+          layer: z.literal("neighbourhoods"),
+          selector: z
+            .object({
+              name: z.string().optional(),
+              minPopulation: z.number().nonnegative().optional(),
+              maxMedianIncome: z.number().nonnegative().optional(),
+              minRapidTransitGapKm: z.number().nonnegative().optional(),
+            })
+            .strict()
+            .optional(),
+          sortBy: z
+            .enum([
+              "name",
+              "population",
+              "medianIncome",
+              "populationDensity",
+              "rapidTransitGapKm",
+              "surfaceTransitDistanceKm",
+              "fallbackScore",
+            ])
+            .optional(),
+          direction: z.enum(["asc", "desc"]).optional(),
+          limit: z.number().int().positive().max(25).optional(),
+        })
+        .strict()
+        .parse(args);
+      const areas = queryTorontoAreas({
+        ...parsed.selector,
+        sortBy: parsed.sortBy as TorontoAreaSortField | undefined,
+        direction: parsed.direction,
+        limit: parsed.limit,
+      });
+      return {
+        layer: parsed.layer,
+        dataMode: "official-open-data",
+        count: areas.length,
+        areas,
+        note: "Screening features only; not a ridership forecast or final siting decision.",
+      };
+    }
     case TOOL_NAMES.SEARCH_NEIGHBOURHOODS: {
       const parsed = z
         .object({

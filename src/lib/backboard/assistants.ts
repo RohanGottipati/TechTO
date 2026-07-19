@@ -116,6 +116,7 @@ export const ASSISTANT_ROSTER: Record<TwinTOAssistantKey, AssistantRoleDefinitio
     modelRequirement: MODEL_PROFILES.FAST_CLASSIFICATION,
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
+      TOOL_NAMES.QUERY_CITY_LAYER,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
       TOOL_NAMES.QUERY_TWIN,
       TOOL_NAMES.RETRIEVE_DOCUMENTS,
@@ -140,6 +141,7 @@ acceptance yourself; cite tools and specialists. Keep replies short.
     thinking: { effort: "medium" },
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
+      TOOL_NAMES.QUERY_CITY_LAYER,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
       TOOL_NAMES.QUERY_TWIN,
       TOOL_NAMES.PATCH_TWIN,
@@ -190,6 +192,7 @@ actually happened this turn.
     modelRequirement: MODEL_PROFILES.TOOL_ANALYSIS,
     toolNames: [
       TOOL_NAMES.GET_CURRENT_MAP_CONTEXT,
+      TOOL_NAMES.QUERY_CITY_LAYER,
       TOOL_NAMES.SEARCH_NEIGHBOURHOODS,
       TOOL_NAMES.QUERY_TWIN,
       TOOL_NAMES.PATCH_TWIN,

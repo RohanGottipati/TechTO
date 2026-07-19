@@ -9,6 +9,7 @@ import type { ChatToolDefinition } from "@/lib/backboard/client";
  */
 export const TOOL_NAMES = {
   GET_CURRENT_MAP_CONTEXT: "get_current_map_context",
+  QUERY_CITY_LAYER: "query_city_layer",
   SEARCH_NEIGHBOURHOODS: "search_neighbourhoods",
   GET_NETWORK_SNAPSHOT: "get_network_snapshot",
   GET_ROUTE_SCHEDULE: "get_route_schedule",
@@ -242,6 +243,41 @@ export const TOOL_DEFINITIONS: Record<ToolName, ChatToolDefinition> = {
         scenarioId: scenarioIdParameter,
       },
       required: [],
+    },
+  },
+  [TOOL_NAMES.QUERY_CITY_LAYER]: {
+    name: TOOL_NAMES.QUERY_CITY_LAYER,
+    description:
+      "Query a typed Toronto city-twin layer. The neighbourhood layer covers all 158 official areas and exposes Census population/income plus exact TTC-route proximity features. This is a read-only query, not a final policy ranking.",
+    parameters: {
+      type: "object",
+      properties: {
+        layer: { type: "string", enum: ["neighbourhoods"] },
+        selector: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            minPopulation: { type: "number" },
+            maxMedianIncome: { type: "number" },
+            minRapidTransitGapKm: { type: "number" },
+          },
+        },
+        sortBy: {
+          type: "string",
+          enum: [
+            "name",
+            "population",
+            "medianIncome",
+            "populationDensity",
+            "rapidTransitGapKm",
+            "surfaceTransitDistanceKm",
+            "fallbackScore",
+          ],
+        },
+        direction: { type: "string", enum: ["asc", "desc"] },
+        limit: { type: "number", description: "Maximum 25 results; defaults to 10." },
+      },
+      required: ["layer"],
     },
   },
   [TOOL_NAMES.SEARCH_NEIGHBOURHOODS]: {

@@ -52,6 +52,7 @@ export function selectChatAgentForTask(input: {
 export interface AskPlaceChatInput {
   scenarioId: string;
   question: string;
+  conversationContext?: string;
   threadId?: string;
   place?: SelectedMapPlace | null;
   mapContext?: Partial<MapContextState>;
@@ -81,6 +82,9 @@ function buildPlacePrompt(input: AskPlaceChatInput, intent: PlanningIntent, agen
         `- neighbourhoodId: ${place.neighbourhoodId ?? "none"}`,
       ].join("\n")
     : "No specific building or station is selected; answer for citywide Toronto context.";
+  const conversationBlock = input.conversationContext?.trim()
+    ? `Recent conversation for follow-up context:\n${input.conversationContext.trim()}`
+    : "No earlier conversation context was provided.";
 
   return `
 ${TORONTO_SCOPE_SHORT}
@@ -91,6 +95,8 @@ Scenario: ${input.scenarioId}.
 
 ${placeBlock}
 
+${conversationBlock}
+
 User question: ${input.question}
 
 Rules:
@@ -98,6 +104,10 @@ Rules:
 - Ground every factual claim in tool results. Label synthetic fixture data clearly.
 - Never present simulated citizen reactions as real public opinion.
 - If the question is about this building or place, relate it to the nearest station and neighbourhood from tools.
+- Answer the user's actual question directly. Do not substitute a generic description of what you can explain.
+- Make the answer easy to scan with short Markdown paragraphs, headings, and bullet lists when useful.
+- For a location, intervention, or policy recommendation, separate: recommendation, why it fits, sustainability potential, measured screening metrics, proposed success KPIs, and next validation steps.
+- Keep measured indicators separate from projected KPIs. Frame sustainability outcomes as potential mechanisms until validated, not forecasts or promises.
 
 Respond with ONLY JSON matching:
 {"answer": string, "citedEvidence": string[], "mapActions": unknown[]}

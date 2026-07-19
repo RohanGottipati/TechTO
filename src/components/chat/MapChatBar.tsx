@@ -2,7 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
-import { ArrowUp, Columns2, Loader2, Plus, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowUp,
+  Columns2,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Plus,
+  SlidersHorizontal,
+} from "lucide-react";
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
 import { parseMapActions } from "@/lib/twinto/map-actions";
 import { applyMapActions } from "@/lib/twinto/apply-map-actions";
@@ -65,7 +73,7 @@ export function MapChatBar({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [focused, setFocused] = useState(false);
+  const [maximized, setMaximized] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -282,28 +290,44 @@ export function MapChatBar({
 
   const showTranscript = expanded && messages.length > 0;
   const isRunning = Boolean(run?.isRunning) || cityPlanRunning;
-  const showBlinkCaret = !input && !focused;
 
   return (
     <section className="mx-auto w-full max-w-3xl" data-testid="city-copilot-chat">
       {showTranscript && (
         <div
           className={cn(
-            "mb-3 max-h-44 overflow-y-auto rounded-[28px] border border-white/25 px-4 py-3 text-xs twinto-scroll",
+            "mb-3 flex min-h-0 flex-col rounded-[28px] border border-white/25 px-4 py-3 text-[13px]",
+            maximized ? "h-[min(68vh,680px)]" : "max-h-80",
             "bg-white/18 shadow-[0_12px_40px_-16px_rgba(15,40,80,0.45)] backdrop-blur-2xl backdrop-saturate-150",
           )}
         >
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <p className="text-[11px] font-medium text-white">ToronTwin</p>
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              className="text-[11px] text-white/55 transition hover:text-white"
-            >
-              Collapse
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setMaximized((value) => !value)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full px-2 text-[11px] text-white/55 transition hover:bg-white/10 hover:text-white"
+                aria-label={maximized ? "Restore conversation size" : "Expand conversation"}
+                aria-pressed={maximized}
+              >
+                {maximized ? (
+                  <Minimize2 className="h-3 w-3" aria-hidden />
+                ) : (
+                  <Maximize2 className="h-3 w-3" aria-hidden />
+                )}
+                {maximized ? "Restore" : "Expand"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="h-7 rounded-full px-2 text-[11px] text-white/55 transition hover:bg-white/10 hover:text-white"
+              >
+                Collapse
+              </button>
+            </div>
           </div>
-          <div ref={transcriptRef} className="space-y-2">
+          <div ref={transcriptRef} className="min-h-0 space-y-2 overflow-y-auto pr-1 twinto-scroll">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -361,26 +385,11 @@ export function MapChatBar({
           className="relative min-w-0 flex-1 cursor-text"
           onClick={() => inputRef.current?.focus()}
         >
-          {showBlinkCaret && (
-            <button
-              type="button"
-              className="pointer-events-auto absolute inset-y-0 left-1 right-1 flex items-center gap-1 truncate text-left text-[15px] text-white/45 transition hover:text-white/70"
-              onClick={() => {
-                setInput(EXAMPLE_ASK);
-                inputRef.current?.focus();
-              }}
-            >
-              <span className="chat-blink-caret shrink-0" aria-hidden />
-              <span className="truncate">{EXAMPLE_ASK}</span>
-            </button>
-          )}
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={focused ? EXAMPLE_ASK : ""}
+            placeholder={EXAMPLE_ASK}
             className="chat-glass-input relative w-full bg-transparent px-1 py-2 text-[15px] outline-none"
             data-testid="city-copilot-input"
             aria-label="Ask a Toronto planning question"

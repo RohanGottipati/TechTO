@@ -79,7 +79,7 @@ body {
   color: #cfd8d0 !important;
 }
 
-/* Map chat input: bright text + visible blinking caret on dark glass. */
+/* Map chat input: bright text + native caret, visible only while focused. */
 .chat-glass-input {
   color: #ffffff;
   caret-color: #ffffff;
@@ -93,27 +93,6 @@ body {
   caret-color: #ffffff;
 }
 
-.chat-blink-caret {
-  display: inline-block;
-  width: 2px;
-  height: 1.05em;
-  margin-left: 1px;
-  background: #ffffff;
-  vertical-align: text-bottom;
-  animation: chat-caret-blink 1.05s steps(1, end) infinite;
-}
-
-@keyframes chat-caret-blink {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -121,10 +100,5 @@ body {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
-  }
-
-  .chat-blink-caret {
-    animation: none;
-    opacity: 1;
   }
 }
