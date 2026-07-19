@@ -9,20 +9,21 @@ import { createRunContext, type ToolCallOutcome } from "@/lib/backboard/tool-dis
 import { getToolDefinitions, TOOL_NAMES } from "@/lib/backboard/tools";
 import type { TechTOAssistantKey } from "@/lib/backboard/assistants";
 import type { ScenarioPatch } from "@/lib/planner/scenario";
-import { emptyTwinSnapshot, patchTwin } from "@/lib/planner/state";
 import {
-  getPopulationProvider,
-  type PopulationProvider,
-} from "@/lib/population/provider";
-import type { PopulationScoreResult } from "@/lib/population/score";
+  scoreRealPolicyAcceptance,
+  policyTextForPatch,
+  type PolicyAcceptanceResult,
+} from "@/lib/citizen-reaction/policy-acceptance";
 import type { MapAction } from "@/lib/techto/map-actions";
 import type { AgentMapOverlay } from "@/lib/techto/map-overlays";
 import { focusPrimaryMapRecommendation, parseMapActions } from "@/lib/techto/map-actions";
+import { clipToolDetail, toolOutputPreview } from "@/lib/planner/tool-detail";
 
 export type CityRunEvent =
   | { type: "run.started"; runId: string; question: string }
   | { type: "agent.started"; runId: string; role: TechTOAssistantKey; name: string }
   | { type: "assistant.delta"; runId: string; content: string }
+  | { type: "assistant.reasoning"; runId: string; content: string }
   | { type: "assistant.clear"; runId: string }
   | { type: "status"; runId: string; message: string }
   | {
@@ -31,6 +32,8 @@ export type CityRunEvent =
       role: TechTOAssistantKey;
       toolName: string;
       toolCallId: string;
+      /** Compact args preview for the toggleable detail pane. */
+      detail?: string;
     }
   | {
       type: "tool.completed";
@@ -39,8 +42,18 @@ export type CityRunEvent =
       toolName: string;
       toolCallId: string;
       ok: boolean;
+      /** Compact output preview for the toggleable detail pane. */
+      detail?: string;
     }
   | { type: "scenarios.proposed"; runId: string; patches: ScenarioPatch[] }
+  | {
+      type: "persona.scored";
+      runId: string;
+      personaId: string;
+      code: string;
+      acceptance: number;
+      opinionText: string;
+    }
   | {
       type: "citizens.scored";
       runId: string;
@@ -61,8 +74,7 @@ export type CityRunEvent =
 
 export interface CityCandidateResult {
   patch: ScenarioPatch;
-  score: PopulationScoreResult;
-  twinVersion: number;
+  score: PolicyAcceptanceResult;
 }
 
 export interface CityOrchestrationResult {
@@ -84,7 +96,6 @@ export interface RunCityOrchestrationInput {
   question: string;
   patches?: ScenarioPatch[];
   adapter?: BackboardAdapter;
-  population?: PopulationProvider;
   onEvent?: (event: CityRunEvent) => void;
   seed?: number;
   /** Current UI map drawings so collision checks see what the user already sees. */
@@ -120,22 +131,12 @@ function emit(
 
 async function harvestScores(
   patches: ScenarioPatch[],
-  question: string,
-  seed: number | undefined,
-  pop: PopulationProvider,
-  personas: Awaited<ReturnType<PopulationProvider["load"]>>,
+  onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void,
 ): Promise<CityCandidateResult[]> {
   return Promise.all(
     patches.map(async (patch) => {
-      const twin = patchTwin(emptyTwinSnapshot(), patch);
-      const score = await pop.score({
-        personas,
-        twin,
-        question,
-        scenarioId: patch.id,
-        seed,
-      });
-      return { patch, score, twinVersion: twin.version };
+      const score = await scoreRealPolicyAcceptance(patch.id, policyTextForPatch(patch), undefined, onPersonaScored);
+      return { patch, score };
     }),
   );
 }
@@ -191,8 +192,6 @@ export async function runCityOrchestration(
   const runId = randomUUID();
   const events: CityRunEvent[] = [];
   const onEvent = input.onEvent;
-  const pop = input.population ?? getPopulationProvider();
-  const seed = input.seed ?? 2262;
   const adapter = input.adapter ?? getBackboardAdapter();
 
   emit(events, onEvent, { type: "run.started", runId, question: input.question });
@@ -205,10 +204,68 @@ export async function runCityOrchestration(
     name: orch.role.name,
   });
 
+  const emitToolStart = (
+    call: { id: string; name: string; arguments: Record<string, unknown> },
+    role: TechTOAssistantKey,
+  ) => {
+    emit(events, onEvent, {
+      type: "tool.requested",
+      runId,
+      role,
+      toolName: call.name,
+      toolCallId: call.id,
+      detail: clipToolDetail(call.arguments),
+    });
+  };
+
+  const emitToolEnd = (outcome: ToolCallOutcome, role: TechTOAssistantKey) => {
+    emit(events, onEvent, {
+      type: "tool.completed",
+      runId,
+      role,
+      toolName: outcome.toolName,
+      toolCallId: outcome.toolCallId,
+      ok: outcome.ok,
+      detail: outcome.ok ? toolOutputPreview(outcome.toolName, outcome.output) : clipToolDetail(outcome.output),
+    });
+    if (outcome.ok && outcome.toolName === TOOL_NAMES.COMPOSE_MAP_ACTIONS) {
+      const accepted = (outcome.output as { accepted?: MapAction[] }).accepted ?? [];
+      if (accepted.length) {
+        emit(events, onEvent, { type: "map.actions", runId, actions: accepted });
+      }
+    }
+    if (outcome.ok && outcome.toolName === TOOL_NAMES.PROPOSE_SCENARIOS) {
+      const patches = (outcome.output as { patches?: ScenarioPatch[] }).patches ?? [];
+      if (patches.length) emit(events, onEvent, { type: "scenarios.proposed", runId, patches });
+    }
+    if (outcome.ok && outcome.toolName === TOOL_NAMES.SCORE_POPULATION) {
+      const out = outcome.output as {
+        scenarioId?: string;
+        citywide?: { mean: number; supportShare: number };
+        provider?: string;
+      };
+      if (out.scenarioId && out.citywide) {
+        emit(events, onEvent, {
+          type: "citizens.scored",
+          runId,
+          candidateId: out.scenarioId,
+          mean: out.citywide.mean,
+          supportShare: out.citywide.supportShare,
+          provider: out.provider ?? "unknown",
+        });
+      }
+    }
+  };
+
   const context = createRunContext("open-city", adapter, undefined, runId, {
-    populationProvider: pop,
-    populationSeed: seed,
     agentOverlays: input.agentOverlays,
+    onNestedToolStart: (call, role) =>
+      emitToolStart(call, (role as TechTOAssistantKey) ?? "planning-orchestrator"),
+    onNestedToolEnd: (outcome, role) =>
+      emitToolEnd(outcome, (role as TechTOAssistantKey) ?? "planning-orchestrator"),
+    onPersonaScored: (result) => {
+      emit(events, onEvent, { type: "persona.scored", runId, ...result });
+    },
   });
 
   const hintPatches = input.patches?.length ? input.patches : [];
@@ -257,7 +314,7 @@ export async function runCityOrchestration(
     thinking: orch.role.thinking,
     memory: orch.role.memory,
     context,
-    maxRounds: 12,
+    maxRounds: 18,
     jsonOutput: false,
     onEvent: (streamEvent) => {
       if (streamEvent.type === "content_delta" && streamEvent.content) {
@@ -268,58 +325,22 @@ export async function runCityOrchestration(
           content: streamEvent.content,
         });
       }
+      // model thinking tokens (Backboard reasoning_streaming); was dropped before
+      if (streamEvent.type === "reasoning_delta" && streamEvent.content) {
+        emit(events, onEvent, {
+          type: "assistant.reasoning",
+          runId,
+          content: streamEvent.content,
+        });
+      }
       // mid-turn tool round: wipe any partial prose so the final reply streams clean
       if (streamEvent.type === "tool_submit_required") {
         streamedAssistantText = "";
         emit(events, onEvent, { type: "assistant.clear", runId });
       }
     },
-    onToolCallStart: (call) => {
-      emit(events, onEvent, {
-        type: "tool.requested",
-        runId,
-        role: "planning-orchestrator",
-        toolName: call.name,
-        toolCallId: call.id,
-      });
-    },
-    onToolCallEnd: (outcome) => {
-      emit(events, onEvent, {
-        type: "tool.completed",
-        runId,
-        role: "planning-orchestrator",
-        toolName: outcome.toolName,
-        toolCallId: outcome.toolCallId,
-        ok: outcome.ok,
-      });
-      if (outcome.ok && outcome.toolName === TOOL_NAMES.COMPOSE_MAP_ACTIONS) {
-        const accepted = (outcome.output as { accepted?: MapAction[] }).accepted ?? [];
-        if (accepted.length) {
-          emit(events, onEvent, { type: "map.actions", runId, actions: accepted });
-        }
-      }
-      if (outcome.ok && outcome.toolName === TOOL_NAMES.PROPOSE_SCENARIOS) {
-        const patches = (outcome.output as { patches?: ScenarioPatch[] }).patches ?? [];
-        if (patches.length) emit(events, onEvent, { type: "scenarios.proposed", runId, patches });
-      }
-      if (outcome.ok && outcome.toolName === TOOL_NAMES.SCORE_POPULATION) {
-        const out = outcome.output as {
-          scenarioId?: string;
-          citywide?: { mean: number; supportShare: number };
-          provider?: string;
-        };
-        if (out.scenarioId && out.citywide) {
-          emit(events, onEvent, {
-            type: "citizens.scored",
-            runId,
-            candidateId: out.scenarioId,
-            mean: out.citywide.mean,
-            supportShare: out.citywide.supportShare,
-            provider: out.provider ?? "unknown",
-          });
-        }
-      }
-    },
+    onToolCallStart: (call) => emitToolStart(call, "planning-orchestrator"),
+    onToolCallEnd: (outcome) => emitToolEnd(outcome, "planning-orchestrator"),
   });
 
   // only patches the agent (or explicit caller input) put forward; never invent
@@ -334,10 +355,11 @@ export async function runCityOrchestration(
     emit(events, onEvent, {
       type: "status",
       runId,
-      message: "Scoring day-one acceptance…",
+      message: "Scoring real citizen acceptance…",
     });
-    const personas = await pop.load();
-    candidates = await harvestScores(patches, input.question, seed, pop, personas);
+    candidates = await harvestScores(patches, (result) => {
+      emit(events, onEvent, { type: "persona.scored", runId, ...result });
+    });
     emit(events, onEvent, {
       type: "status",
       runId,

@@ -150,6 +150,7 @@ export function MapCanvas({
     new Float32Array(personas.length).fill(0.5)
   );
   const sweepToken = useRef(0);
+  const sampledIndices = useRef<Set<number>>(new Set());
   const hoveredNbhd = useRef<number | null>(null);
   const personaPopupRef = useRef<maplibregl.Popup | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -193,14 +194,6 @@ export function MapCanvas({
       pitchWithRotate: false,
     });
     map.touchZoomRotate.disableRotation();
-    map.addControl(
-      new maplibregl.AttributionControl({
-        compact: true,
-        customAttribution:
-          "Boundaries & census: open.toronto.ca · Routes: TTC GTFS",
-      }),
-      "bottom-left"
-    );
     map.addControl(
       new maplibregl.NavigationControl({ showCompass: false }),
       "bottom-right"
@@ -660,7 +653,11 @@ export function MapCanvas({
         const featureId = personaHits[0].id;
         const acceptanceState =
           featureId !== undefined
-            ? (map.getFeatureState({ source: "personas", id: featureId }) as { a?: number })
+            ? (map.getFeatureState({ source: "personas", id: featureId }) as {
+                a?: number;
+                opinion?: string;
+                sampled?: boolean;
+              })
             : {};
         const acceptance = acceptanceState.a ?? 0.5;
         const nbhdName = nbhdByCode.get(p.code)?.name ?? p.code;
@@ -679,7 +676,15 @@ export function MapCanvas({
                   ${p.commuteMode ? `<div>Commute: <b>${escapeHtml(p.commuteMode)}</b></div>` : ""}
                   ${p.incomeBand ? `<div>Household income: <b>${escapeHtml(p.incomeBand)}</b></div>` : ""}
                   ${p.education ? `<div>Education: <b>${escapeHtml(p.education)}</b></div>` : ""}
-                  <div style="margin-top:6px;opacity:0.7">Scenario acceptance: <b>${Math.round(acceptance * 100)}%</b></div>
+                  ${
+                    acceptanceState.sampled
+                      ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1)">
+                          <div style="opacity:0.7;margin-bottom:2px">Real opinion on this scenario:</div>
+                          <div style="font-style:italic">&ldquo;${escapeHtml(acceptanceState.opinion ?? "")}&rdquo;</div>
+                          <div style="margin-top:6px;opacity:0.7">Acceptance: <b>${Math.round(acceptance * 100)}%</b></div>
+                        </div>`
+                      : `<div style="margin-top:6px;opacity:0.7">Not sampled for this scenario</div>`
+                  }
                 </div>`
               : `<div style="font-family:inherit;font-size:12px;line-height:1.5">
                   <div style="font-weight:600;font-size:13px;margin-bottom:4px">${escapeHtml(nbhdName)}</div>
@@ -856,6 +861,23 @@ export function MapCanvas({
         map.setFeatureState({ source: "personas", id: i }, { a: values[i] });
       }
     };
+
+    // Real opinion text only exists for residents actually Monte-Carlo-sampled
+    // this scenario -- mark those dots so the click popup can show a real
+    // quote instead of a bare acceptance percentage for everyone else. Clear
+    // stale markers left over from a previous scenario's sample first (a new
+    // scenario starts with an empty `opinions` map before any events stream in).
+    const nextSampled = result.opinions ?? new Map<number, string>();
+    for (const i of sampledIndices.current) {
+      if (!nextSampled.has(i)) {
+        map.removeFeatureState({ source: "personas", id: i }, "opinion");
+        map.removeFeatureState({ source: "personas", id: i }, "sampled");
+      }
+    }
+    for (const [i, text] of nextSampled) {
+      map.setFeatureState({ source: "personas", id: i }, { opinion: text, sampled: true });
+    }
+    sampledIndices.current = new Set(nextSampled.keys());
 
     const token = ++sweepToken.current;
     const target = result.acceptance;
@@ -1050,7 +1072,7 @@ export function MapCanvas({
       )}
       {tooltip && (
         <div
-          className="pointer-events-none absolute z-20 max-w-[240px] -translate-y-full rounded-sm border border-white/10 bg-[#14181a]/95 px-2.5 py-1.5"
+ className="pointer-events-none absolute z-20 max-w-[240px] -translate-y-full border border-white/10 bg-[#14181a]/95 px-2.5 py-1.5"
           style={{ left: tooltip.x + 12, top: tooltip.y - 8 }}
         >
           <div className="font-ui text-[12px] font-semibold leading-tight text-[#e8ede9]">

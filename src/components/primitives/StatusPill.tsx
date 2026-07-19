@@ -13,8 +13,8 @@ const toneClasses: Record<
   NonNullable<StatusPillProps["tone"]>,
   { dot: string; text: string }
 > = {
-  ready: { dot: "bg-[#5B8DEF]", text: "text-[#5B8DEF]" },
-  loading: { dot: "bg-[#5B8DEF] animate-pulse", text: "text-[#5B8DEF]" },
+  ready: { dot: "bg-[#007ACC]", text: "text-[#007ACC]" },
+  loading: { dot: "bg-[#007ACC] animate-pulse", text: "text-[#007ACC]" },
   warning: { dot: "bg-[#E3A83B]", text: "text-[#E3A83B]" },
   error: { dot: "bg-[#FF6B6B]", text: "text-[#FF6B6B]" },
 };
@@ -30,12 +30,12 @@ export function StatusPill({
     <span
       data-testid={dataTestId}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium",
+"inline-flex items-center gap-2 border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium",
         classes.text,
         className
       )}
     >
-      <span className={cn("h-1.5 w-1.5 rounded-full", classes.dot)} />
+ <span className={cn("h-1.5 w-1.5", classes.dot)} />
       {children}
     </span>
   );

@@ -3,7 +3,7 @@ import { errorMessage, jsonError } from "@/lib/backboard/route-helpers";
 import { createSseResponse, createSseStream } from "@/lib/backboard/sse";
 import { runCityOrchestration, type CityRunEvent } from "@/lib/planner/orchestrator";
 import { plannerRunBodySchema } from "@/lib/planner/request";
-import { getPopulationProviderMode } from "@/lib/population/provider";
+import { getCitizenReactionProviderMode } from "@/lib/citizen-reaction/provider";
 import type { TechTORunEventEnvelope } from "@/lib/transit/schemas";
 
 export const runtime = "nodejs";
@@ -68,6 +68,10 @@ export async function POST(request: Request) {
             send("planner.delta", { content: event.content }, event.runId);
             return;
           }
+          if (event.type === "assistant.reasoning") {
+            send("planner.reasoning", { content: event.content }, event.runId);
+            return;
+          }
           if (event.type === "assistant.clear") {
             send("planner.clear", {}, event.runId);
             return;
@@ -81,6 +85,20 @@ export async function POST(request: Request) {
             send("planner.map_actions", { actions: event.actions }, event.runId);
             return;
           }
+          if (event.type === "persona.scored") {
+            // Colour the sampled resident's dot on the map as soon as this one real model call resolves.
+            send(
+              "planner.persona_scored",
+              {
+                personaId: event.personaId,
+                code: event.code,
+                acceptance: event.acceptance,
+                opinionText: event.opinionText,
+              },
+              event.runId,
+            );
+            return;
+          }
           // coarse lifecycle for the strip / debug
           send(event.type, { ...event }, event.runId);
         },
@@ -92,7 +110,7 @@ export async function POST(request: Request) {
         {
           schemaVersion: 1,
           backboardMode: result.adapterMode,
-          populationMode: getPopulationProviderMode(),
+          populationMode: getCitizenReactionProviderMode(),
           availableRoster: PRINCIPLED_CITY_BUNDLE,
           participatingAgents: result.participatingAgents,
           runId: result.runId,
@@ -105,7 +123,6 @@ export async function POST(request: Request) {
           events: result.events.map((e) => e.type),
           candidates: result.candidates.map((c) => ({
             patch: c.patch,
-            twinVersion: c.twinVersion,
             score: {
               scenarioId: c.score.scenarioId,
               provider: c.score.provider,

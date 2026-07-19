@@ -18,6 +18,7 @@ interface NeighbourhoodGeoJsonFeature {
 }
 
 interface ResidentPersonaDoc {
+  persona_id: string;
   neighbourhood_code: string;
   household_income_decile: number | null;
   commute_mode: string | null;
@@ -100,6 +101,7 @@ export async function GET() {
         {},
         {
           projection: {
+            persona_id: 1,
             neighbourhood_code: 1,
             household_income_decile: 1,
             household_income_band: 1,
@@ -139,6 +141,7 @@ export async function GET() {
         const { transitAffinity, carDependence } = affinitiesFromCommuteMode(source.commute_mode, rng);
         personas.push({
           id: id++,
+          personaId: source.persona_id,
           lng,
           lat,
           code,

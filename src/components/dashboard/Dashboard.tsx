@@ -8,7 +8,7 @@ import { InspectorPanel } from "./InspectorPanel";
 import { Legend } from "./Legend";
 import { MapChatBar } from "@/components/chat/MapChatBar";
 import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
-import { CityPlanStrip, useCityPlanRun } from "@/components/planner/CityPlanStrip";
+import { useCityPlanRun } from "@/components/planner/CityPlanStrip";
 import { buildPersonas } from "@/lib/sim/personas";
 import { SCENARIOS } from "@/lib/sim/scenarios";
 import { runScenario } from "@/lib/sim/engine";
@@ -19,7 +19,61 @@ import type {
   Persona,
   RouteCollection,
 } from "@/lib/sim/types";
-import { CANNED_CITY_ASKS } from "@/lib/planner/canned";
+
+/**
+ * Streams real per-resident acceptance (src/app/api/neighbourhood-acceptance/route.ts,
+ * Monte-Carlo-sampled from real resident_personas against the real trained
+ * opinion model). Each event is exactly one resident who was actually
+ * sampled and scored -- we only ever light up that one dot, never every
+ * resident sharing its neighbourhood, so the map honestly reflects "these
+ * few people were asked" rather than implying the whole population was.
+ */
+async function streamRealAcceptance(
+  scenarioId: string,
+  personaIndexById: Map<string, number>,
+  acceptance: Float32Array,
+  opinions: Map<number, string>,
+  onSample: (acceptance: Float32Array, opinions: Map<number, string>) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`/api/neighbourhood-acceptance?scenarioId=${encodeURIComponent(scenarioId)}`, {
+    signal,
+  });
+  if (!response.ok || !response.body) return;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+
+    for (const block of blocks) {
+      const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
+      if (!dataLine) continue;
+      let parsed: { personaId?: string; acceptance?: number; opinionText?: string; done?: boolean };
+      try {
+        parsed = JSON.parse(dataLine.slice("data:".length).trim());
+      } catch {
+        continue;
+      }
+      if (parsed.done) return;
+      if (parsed.personaId && typeof parsed.acceptance === "number") {
+        const index = personaIndexById.get(parsed.personaId);
+        if (index !== undefined) {
+          acceptance[index] = parsed.acceptance;
+          if (parsed.opinionText) opinions.set(index, parsed.opinionText);
+          onSample(acceptance, opinions);
+        }
+      }
+    }
+  }
+}
 
 interface CityData {
   neighbourhoods: NeighbourhoodCollection;
@@ -28,21 +82,49 @@ interface CityData {
   personas: Persona[];
 }
 
+/** Zoning-filtered residential building centroids (public/data/home-sites.json). */
+async function loadHomeSites(): Promise<HomeSitesByCode | null> {
+  const response = await fetch("/data/home-sites.json");
+  if (!response.ok) return null;
+  return (await response.json()) as HomeSitesByCode;
+}
+
 /**
  * Loads real residents from `/api/personas` (backed by MongoDB's
- * `resident_personas`). Falls back to fully-synthetic `buildPersonas()`
- * only if the API is unreachable, so the map still renders during an
- * outage -- this fallback path is not the intended steady state.
+ * `resident_personas`), placed on residential-zone building centroids.
+ * Falls back to synthetic `buildPersonas()` (also building-snapped when
+ * home-sites.json is available) if the API is unreachable.
  */
 async function loadPersonas(neighbourhoods: NeighbourhoodCollection): Promise<Persona[]> {
   try {
     const response = await fetch("/api/personas");
     if (!response.ok) throw new Error("personas fetch failed");
-    const data = (await response.json()) as { personas: Persona[] };
-    if (data.personas?.length) return data.personas;
+    const data = (await response.json()) as {
+      personas: Persona[];
+      placement?: string;
+    };
+    if (data.personas?.length) {
+      // if API fell back to polygon scatter, re-snap client-side when we can
+      if (data.placement === "neighbourhood-polygon") {
+        const homes = await loadHomeSites();
+        if (homes) {
+          // rebuild coords from homes while keeping persona attrs from API
+          for (const p of data.personas) {
+            const rng = mulberry32(hashString(`resnap:${p.code}:${p.id}`));
+            const spot = sampleHomeSite(homes, p.code, rng);
+            if (spot) {
+              p.lng = spot[0];
+              p.lat = spot[1];
+            }
+          }
+        }
+      }
+      return data.personas;
+    }
     throw new Error("personas response empty");
   } catch {
-    return buildPersonas(neighbourhoods);
+    const homes = await loadHomeSites();
+    return buildPersonas(neighbourhoods, homes);
   }
 }
 
@@ -51,9 +133,13 @@ export function Dashboard() {
   const [mapReady, setMapReady] = useState(false);
   const status = useSimStore((s) => s.status);
   const scenarioId = useSimStore((s) => s.scenarioId);
+  const acceptanceLoading = useSimStore((s) => s.acceptanceLoading);
   const selectedCode = useSimStore((s) => s.selectedCode);
   const dataRef = useRef<CityData | null>(null);
   const cityPlan = useCityPlanRun();
+  const acceptanceRef = useRef<Float32Array | null>(null);
+  const opinionsRef = useRef<Map<number, string>>(new Map());
+  const sweepKmRef = useRef<Float32Array | null>(null);
 
   // Load the real geodata once, then load the real resident population.
   useEffect(() => {
@@ -87,13 +173,60 @@ export function Dashboard() {
     };
   }, []);
 
-  // Re-run the preview engine whenever the scenario changes.
+  const personaIndexById = useMemo(() => {
+    const index = new Map<string, number>();
+    (data?.personas ?? []).forEach((p, i) => {
+      if (p.personaId) index.set(p.personaId, i);
+    });
+    return index;
+  }, [data]);
+
+  // Whenever the scenario changes to an actual proposed intervention (never
+  // on initial load, where scenarioId is still "baseline" and there's
+  // nothing yet to react to): get sweepKm (positional only, for the reveal
+  // animation) from the local engine, show neutral dots immediately (never
+  // the fake formula's acceptance -- see engine.ts's own header), then
+  // stream in real Monte-Carlo-sampled acceptance resident by resident as it
+  // arrives -- only the residents actually sampled get lit.
   useEffect(() => {
     const city = dataRef.current;
     if (!city) return;
-    const result = runScenario(scenarioId, city.personas, city.routes);
-    useSimStore.getState().setResult(result);
-  }, [scenarioId, data]);
+
+    const { sweepKm } = runScenario(scenarioId, city.personas, city.routes);
+    const acceptance = new Float32Array(city.personas.length).fill(0.5);
+    const opinions = new Map<number, string>();
+    acceptanceRef.current = acceptance;
+    opinionsRef.current = opinions;
+    sweepKmRef.current = sweepKm;
+    useSimStore.getState().setResult(aggregate(scenarioId, city.personas, acceptance, sweepKm));
+
+    if (scenarioId === "baseline") return;
+
+    const controller = new AbortController();
+    useSimStore.getState().setAcceptanceLoading(true);
+
+    streamRealAcceptance(
+      scenarioId,
+      personaIndexById,
+      acceptance,
+      opinions,
+      (updated, updatedOpinions) => {
+        if (controller.signal.aborted) return;
+        const result = aggregate(scenarioId, city.personas, updated, sweepKm);
+        result.opinions = updatedOpinions;
+        useSimStore.getState().setResult(result);
+      },
+      controller.signal,
+    )
+      .catch(() => {
+        // Aborted (scenario changed again) or the request failed; whatever streamed in stays, no fake fallback.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) useSimStore.getState().setAcceptanceLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [scenarioId, data, personaIndexById]);
 
   useEffect(() => {
     if (mapReady && data) useSimStore.getState().setStatus("ready");
@@ -159,25 +292,6 @@ export function Dashboard() {
 
       <BuildingMiniChat />
 
-      {/* Demo canned asks + live plan strip */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-[4.5rem] z-20 flex flex-col items-center gap-2 px-3 sm:px-4 md:bottom-24">
-        <div className="pointer-events-auto flex max-w-3xl flex-wrap justify-center gap-1.5">
-          {CANNED_CITY_ASKS.map((ask) => (
-            <button
-              key={ask.id}
-              type="button"
-              disabled={cityPlan.isRunning}
-              onClick={() => void cityPlan.start(ask.question)}
-              className="border border-hairline bg-panel/90 px-2.5 py-1 text-[10px] text-muted backdrop-blur hover:text-ink-bright disabled:opacity-50"
-              title={ask.question}
-            >
-              {ask.id}
-            </button>
-          ))}
-        </div>
-        <CityPlanStrip summary={cityPlan.summary} isRunning={cityPlan.isRunning} />
-      </div>
-
       {/* Bottom: liquid-glass City Copilot */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3 sm:p-4">
         <div className="pointer-events-auto w-full max-w-3xl px-1 md:px-0">
@@ -185,8 +299,24 @@ export function Dashboard() {
             enablePlanningRun={false}
             enableCityPlanRun
             cityPlanRunning={cityPlan.isRunning}
-            onCityPlanQuestion={async (q) => {
-              const payload = await cityPlan.start(q);
+            onCityPlanQuestion={async (q, handlers) => {
+              const payload = await cityPlan.start(q, {
+                ...handlers,
+                onPersonaScored: (result) => {
+                  handlers.onPersonaScored?.(result);
+                  const city = dataRef.current;
+                  const acceptance = acceptanceRef.current;
+                  const sweepKm = sweepKmRef.current;
+                  if (!city || !acceptance || !sweepKm) return;
+                  const index = personaIndexById.get(result.personaId);
+                  if (index === undefined) return;
+                  acceptance[index] = result.acceptance;
+                  if (result.opinionText) opinionsRef.current.set(index, result.opinionText);
+                  const merged = aggregate(scenarioId, city.personas, acceptance, sweepKm);
+                  merged.opinions = opinionsRef.current;
+                  useSimStore.getState().setResult(merged);
+                },
+              });
               return payload;
             }}
           />

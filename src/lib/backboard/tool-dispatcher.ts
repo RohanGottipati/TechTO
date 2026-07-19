@@ -35,8 +35,7 @@ import {
 import { emptyTwinSnapshot, patchTwin, queryTwin, type TwinSnapshot } from "@/lib/planner/state";
 import { diffTwin } from "@/lib/planner/diff";
 import { parseScenarioPatch, parseScenarioPatches, type ScenarioPatch } from "@/lib/planner/scenario";
-import { getPopulationProvider } from "@/lib/population/provider";
-import type { PopulationProvider } from "@/lib/population/provider";
+import { scoreRealPolicyAcceptance, policyTextForPatch } from "@/lib/citizen-reaction/policy-acceptance";
 import { runAgentPython } from "@/lib/analysis/run-python";
 import { matchCannedAsk } from "@/lib/planner/canned";
 import { isTechTOAssistantKey, ASSISTANT_ROSTER } from "@/lib/backboard/assistants";
@@ -102,13 +101,15 @@ export interface RunContext {
   twinBaseline: TwinSnapshot;
   twinSnapshots: Map<string, TwinSnapshot>;
   proposedCityPatches: ScenarioPatch[];
-  /** Optional injected population provider (tests / city runs). */
-  populationProvider?: PopulationProvider;
-  populationSeed?: number;
   /** Roles invoked via invoke_assistant during this run. */
   invokedAssistants: string[];
   /** Prevent nested invoke recursion. */
   invokeDepth: number;
+  /** Bubble nested specialist tool calls up to the city orchestrator UI. */
+  onNestedToolStart?: (call: ChatToolCall, role: string) => void;
+  onNestedToolEnd?: (outcome: ToolCallOutcome, role: string) => void;
+  /** Bubble each real Monte-Carlo-sampled resident's score.population/run_twin_analysis result up to the map so its dot can be coloured live. */
+  onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void;
 }
 
 const DEFAULT_MAP_CONTEXT: MapContextState = {
@@ -126,9 +127,10 @@ export function createRunContext(
   mapContext?: Partial<MapContextState>,
   runId?: string,
   extras?: {
-    populationProvider?: PopulationProvider;
-    populationSeed?: number;
     agentOverlays?: AgentMapOverlay[];
+    onNestedToolStart?: (call: ChatToolCall, role: string) => void;
+    onNestedToolEnd?: (outcome: ToolCallOutcome, role: string) => void;
+    onPersonaScored?: (result: { personaId: string; code: string; acceptance: number; opinionText: string }) => void;
   },
 ): RunContext {
   return {
@@ -145,10 +147,11 @@ export function createRunContext(
     twinBaseline: emptyTwinSnapshot(),
     twinSnapshots: new Map(),
     proposedCityPatches: [],
-    populationProvider: extras?.populationProvider,
-    populationSeed: extras?.populationSeed,
     invokedAssistants: [],
     invokeDepth: 0,
+    onNestedToolStart: extras?.onNestedToolStart,
+    onNestedToolEnd: extras?.onNestedToolEnd,
+    onPersonaScored: extras?.onPersonaScored,
   };
 }
 
@@ -1172,32 +1175,36 @@ async function executeTool(
           patch: z.unknown().optional(),
           question: z.string().min(1),
           scenarioId: z.string().optional(),
+          neighbourhoodCodes: z.array(z.string()).optional(),
         })
         .strict()
         .parse(args);
-      const pop = context.populationProvider ?? getPopulationProvider();
-      const personas = await pop.load();
-      let twin = context.twin;
       let scenarioId = parsed.scenarioId ?? `score-${context.twin.version}`;
+      let policyText = parsed.question;
       if (parsed.patch) {
         const patch = parseScenarioPatch(parsed.patch);
-        twin = patchTwin(emptyTwinSnapshot(), patch);
         scenarioId = parsed.scenarioId ?? patch.id;
+        policyText = policyTextForPatch(patch);
       }
-      const score = await pop.score({
-        personas,
-        twin,
-        question: parsed.question,
-        scenarioId,
-        seed: context.populationSeed,
+      const score = await scoreRealPolicyAcceptance(scenarioId, policyText, {
+        neighbourhoodCodes: parsed.neighbourhoodCodes,
+        onPersonaScored: context.onPersonaScored,
       });
+      // compact neighbourhood readout so the agent can reject weak local sites
+      const nhRows = Object.entries(score.byNeighbourhood)
+        .map(([code, v]) => ({ code, mean: v.mean, count: v.count }))
+        .sort((a, b) => a.mean - b.mean);
+      const weakest = nhRows.slice(0, 5);
+      const strongest = nhRows.slice(-5).reverse();
       return {
-        dataMode: "population-provider",
+        dataMode: "real-opinion-model",
         provider: score.provider,
         scenarioId: score.scenarioId,
         citywide: score.citywide,
-        neighbourhoodCount: Object.keys(score.byNeighbourhood).length,
-        note: "Simulated day-one acceptance; not real public opinion or ridership.",
+        neighbourhoodCount: nhRows.length,
+        weakestNeighbourhoods: weakest,
+        strongestNeighbourhoods: strongest,
+        note: `Real acceptance: adaptively Monte-Carlo-sampled real residents (${score.citywide.sampleSize} sampled, stopped because "${score.citywide.stopReason}", 95% CI ±${score.citywide.ciHalfWidth.toFixed(3)}) scored by the trained opinion model, not simulated public opinion or ridership. If citywide.stopReason is "max-sample" the CI may still be wide -- treat the mean cautiously. If weakestNeighbourhoods include your proposed site or citywide support is low, try other areas before recommending. Pass neighbourhoodCodes to score only the areas you're actually comparing instead of the whole city when you don't need a citywide read.`,
       };
     }
     case TOOL_NAMES.INVOKE_ASSISTANT: {
@@ -1235,6 +1242,8 @@ async function executeTool(
         context,
         maxRounds: 4,
         jsonOutput: true,
+        onToolCallStart: (call) => context.onNestedToolStart?.(call, parsed.role),
+        onToolCallEnd: (outcome) => context.onNestedToolEnd?.(outcome, parsed.role),
       });
       context.invokeDepth -= 1;
       return {
@@ -1254,20 +1263,22 @@ async function executeTool(
         })
         .strict()
         .parse(args);
-      const pop = context.populationProvider ?? getPopulationProvider();
-      const personas = await pop.load();
-      const score = await pop.score({
-        personas,
-        twin: context.twin,
-        question: parsed.question,
-        scenarioId: parsed.scenarioId ?? `analysis-${context.twin.version}`,
-        seed: context.populationSeed,
-      });
+      const score = await scoreRealPolicyAcceptance(
+        parsed.scenarioId ?? `analysis-${context.twin.version}`,
+        parsed.question,
+        undefined,
+        context.onPersonaScored,
+      );
+      const nhRows = Object.entries(score.byNeighbourhood)
+        .map(([code, v]) => ({ code, mean: v.mean, count: v.count }))
+        .sort((a, b) => a.mean - b.mean);
       return {
         analysis: parsed.analysis,
         provider: score.provider,
         citywide: score.citywide,
-        note: "Simulated acceptance readout.",
+        weakestNeighbourhoods: nhRows.slice(0, 5),
+        strongestNeighbourhoods: nhRows.slice(-5).reverse(),
+        note: "Real acceptance readout: Monte-Carlo-sampled real residents scored by the trained opinion model, not simulated public opinion or ridership. Weak local scores should trigger trying other sites.",
       };
     }
     case TOOL_NAMES.RUN_PYTHON: {
@@ -1284,7 +1295,7 @@ async function executeTool(
         timeoutMs,
         twin: context.twin,
         overlays: context.agentOverlays,
-        seed: context.populationSeed ?? 2262,
+        seed: 2262,
       });
       // return errors to the model so it can fix code; only spawn/parse throws
       return result;

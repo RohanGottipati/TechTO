@@ -25,10 +25,11 @@ separate `/techto` UI route. GridTwin is archived under `docs/archive/gridtwin/`
 
 **Live Backboard only.** There is no `MockBackboardAdapter`, no
 `BACKBOARD_MOCK_MODE`, and no planner mock path. `BACKBOARD_API_KEY` is
-required. Citizen reactions use live FreeSolo
-(`TECHTO_CITIZEN_REACTION_PROVIDER=freesolo`); there is no mock citizen
-provider. Open-city population scoring uses a pluggable
-`PopulationProvider` (`TECHTO_POPULATION_PROVIDER=synthetic|census`).
+required. Citizen reactions and open-city population scoring
+(`score_population`, `run_twin_analysis`) both use the same live real-opinion
+pipeline (`TECHTO_CITIZEN_REACTION_PROVIDER=real-opinion`,
+`src/lib/citizen-reaction/policy-acceptance.ts`); there is no synthetic or
+mock fallback for either.
 
 **Geographic scope (hard):** City of Toronto only. Fixtures, map actions,
 chat assumptions, and every Backboard agent suggestion must stay inside

@@ -5,12 +5,17 @@ import { ArrowUp, Columns2, Loader2, Plus, SlidersHorizontal } from "lucide-reac
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
 import { parseMapActions } from "@/lib/techto/map-actions";
 import { applyMapActions } from "@/lib/techto/apply-map-actions";
+import { enqueueMapActions, resetMapActionQueue } from "@/lib/techto/map-action-queue";
 import { useMapStore } from "@/store/useMapStore";
 import { useTechTOStore } from "@/store/useTechTOStore";
 import type { UseBackboardRunResult } from "@/lib/techto/use-backboard-run";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { cn } from "@/lib/utils/cn";
-import type { CityPlanRankingRow } from "@/components/planner/CityPlanStrip";
+import type {
+  CityPlanRankingRow,
+  CityPlanRunHandlers,
+  CityPlanTraceLine,
+} from "@/components/planner/CityPlanStrip";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
 import { PdfExportButton } from "@/components/chat/PdfExportButton";
 
@@ -30,9 +35,12 @@ export interface MapChatBarProps {
   includeWebSearch?: boolean;
   /** When false, chat answers only (no Backboard planning kickoff). Default true if `run` is provided. */
   enablePlanningRun?: boolean;
-  /** Coolness open-city planner via /api/planner/run (orchestrator agent). */
+  /** Coolness open-city planner via /api/planner/stream (orchestrator agent). */
   enableCityPlanRun?: boolean;
-  onCityPlanQuestion?: (question: string) => Promise<{
+  onCityPlanQuestion?: (
+    question: string,
+    handlers: CityPlanRunHandlers,
+  ) => Promise<{
     summary?: string;
     ranking?: CityPlanRankingRow[];
     chosenId?: string;
@@ -60,6 +68,7 @@ export function MapChatBar({
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const appliedMapMidstream = useRef(false);
 
   const selectedPlace = useMapStore((s) => s.selectedPlace);
   const layers = useMapStore((s) => s.layers);
@@ -139,11 +148,65 @@ export function MapChatBar({
       .map(([key]) => key);
 
     try {
-      // Open-city path: Planning Orchestrator agent (tools + optional subagents)
+      // Open-city path: Planning Orchestrator agent (tools + optional subagents),
+      // streamed live -- tokens, tool calls, subagent starts, and scoring results
+      // all appear as they happen instead of a spinner followed by one final blob.
       if (enableCityPlanRun && onCityPlanQuestion) {
-        const payload = await onCityPlanQuestion(text);
-        const mapParsed = parseMapActions(payload?.mapActions ?? []);
-        if (mapParsed.ok) applyMapActions(mapParsed.actions);
+        const liveId = `plan-${Date.now()}`;
+        appliedMapMidstream.current = false;
+        resetMapActionQueue();
+        setMessages((prev) => [...prev, { id: liveId, role: "assistant", content: "", trace: [], streaming: true }]);
+
+        const payload = await onCityPlanQuestion(text, {
+          onDelta: (chunk) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === liveId ? { ...m, content: m.content + chunk } : m)),
+            );
+          },
+          onReasoning: (chunk) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === liveId ? { ...m, reasoning: (m.reasoning ?? "") + chunk } : m,
+              ),
+            );
+          },
+          onClear: () => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === liveId ? { ...m, content: "" } : m)),
+            );
+          },
+          onTrace: (line) => {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== liveId) return m;
+                const trace = m.trace ?? [];
+                const idx = trace.findIndex((t) => t.id === line.id);
+                if (idx < 0) return { ...m, trace: [...trace, line] };
+                const prevLine = trace[idx];
+                const next = [...trace];
+                next[idx] = {
+                  ...prevLine,
+                  ...line,
+                  // keep args from the running row when the done event only sends result
+                  argsDetail: line.argsDetail ?? prevLine.argsDetail,
+                  resultDetail: line.resultDetail ?? prevLine.resultDetail,
+                };
+                return { ...m, trace: next };
+              }),
+            );
+          },
+          onMapActions: (actions) => {
+            // play each compose batch as it lands; queue keeps camera moves sequential
+            appliedMapMidstream.current = true;
+            enqueueMapActions(actions);
+          },
+        });
+
+        // fallback only if the agent never streamed map.actions mid-turn
+        if (!appliedMapMidstream.current) {
+          const mapParsed = parseMapActions(payload?.mapActions ?? []);
+          if (mapParsed.ok) enqueueMapActions(mapParsed.actions);
+        }
         const ranking = payload?.ranking ?? [];
         const rankLines = ranking
           .slice(0, 5)
@@ -152,23 +215,24 @@ export function MapChatBar({
               `${i + 1}. ${r.title} (mean ${Number(r.mean).toFixed(2)}, support ${(Number(r.supportShare) * 100).toFixed(0)}%)`,
           )
           .join("\n");
-        let body =
-          payload?.summary?.trim() ||
-          "The planning agent finished without a written reply. Try asking again.";
-        if (ranking.length) {
-          body +=
-            `\n\nRanked scenarios:\n${rankLines}` +
-            (payload?.chosenId ? `\n\nLeading: ${payload.chosenId}` : "") +
-            "\n\n(Simulated day-one acceptance; not real public opinion or ridership.)";
-        }
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `plan-${Date.now()}`,
-            role: "assistant",
-            content: body,
-          },
-        ]);
+        // prefer live streamed prose; only replace if the agent left the bubble empty
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== liveId) return m;
+            let body = m.content.trim();
+            if (!body) {
+              body =
+                payload?.summary?.trim() ||
+                "The planning agent finished without a written reply. Try asking again.";
+            }
+            if (ranking.length) {
+              body +=
+                `\n\nRanked scenarios:\n${rankLines}` +
+                (payload?.chosenId ? `\n\nLeading: ${payload.chosenId}` : "");
+            }
+            return { ...m, content: body, streaming: false };
+          }),
+        );
         return;
       }
 
@@ -287,8 +351,8 @@ export function MapChatBar({
                 key={message.id}
                 className={
                   message.role === "user"
-                    ? "ml-8 rounded-2xl bg-white/25 px-3 py-2 text-white"
-                    : "mr-4 rounded-2xl bg-white/10 px-3 py-2 text-white/90"
+                    ? "ml-8 bg-white/25 px-3 py-2 text-white"
+                    : "mr-4 bg-white/10 px-3 py-2 text-white/90"
                 }
               >
                 {message.role === "user" ? (
@@ -298,10 +362,10 @@ export function MapChatBar({
                 )}
               </div>
             ))}
-            {(isRunning || busy) && (
+            {busy && !enableCityPlanRun && (
               <div className="inline-flex items-center gap-2 text-white/80">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                {busy ? "Thinking…" : "Running the preview…"}
+                Thinking…
               </div>
             )}
           </div>
@@ -311,27 +375,10 @@ export function MapChatBar({
       <form
         onSubmit={onSubmit}
         className={cn(
-          "flex items-center gap-2 rounded-full border border-white/35 px-3 py-2",
-          "bg-white/14 shadow-[0_10px_36px_-12px_rgba(40,80,140,0.55),inset_0_1px_0_rgba(255,255,255,0.35)]",
-          "backdrop-blur-2xl backdrop-saturate-150",
+          "flex items-center gap-2 border border-white/35 px-3 py-2",
+          "bg-white/14 backdrop-blur-2xl backdrop-saturate-150",
         )}
       >
-        <button
-          type="button"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
-          aria-label="Add"
-        >
-          <Plus className="h-4 w-4" strokeWidth={1.75} />
-        </button>
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
-          aria-label="Chat options"
-        >
-          <SlidersHorizontal className="h-4 w-4" strokeWidth={1.75} />
-        </button>
-
         <div
           className="relative min-w-0 flex-1 cursor-text"
           onClick={() => inputRef.current?.focus()}
@@ -366,7 +413,7 @@ export function MapChatBar({
           <button
             type="button"
             onClick={() => useTechTOStore.getState().setPanelFocus("chat")}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
+ className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:bg-white/15 hover:text-white"
             aria-label="Open council panel"
           >
             <Columns2 className="h-4 w-4" strokeWidth={1.75} />
@@ -375,7 +422,7 @@ export function MapChatBar({
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
+ className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:bg-white/15 hover:text-white"
             aria-label="Toggle conversation"
           >
             <Columns2 className="h-4 w-4" strokeWidth={1.75} />
@@ -385,7 +432,7 @@ export function MapChatBar({
         <button
           type="submit"
           disabled={isRunning || busy || !input.trim()}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/25 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:bg-white/40 disabled:opacity-40"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center bg-white/25 text-white transition hover:bg-white/40 disabled:opacity-40"
           data-testid="city-copilot-send"
           aria-label="Send"
         >

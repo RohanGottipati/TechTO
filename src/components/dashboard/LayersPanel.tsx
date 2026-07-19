@@ -43,16 +43,16 @@ export function LayersPanel() {
                 <span
                   aria-hidden
                   className={cn(
-                    "relative h-[14px] w-[26px] rounded-full border transition-colors",
+"relative h-[14px] w-[26px] border transition-colors",
                     on
-                      ? "border-support/60 bg-support/25"
+                      ? "border-accent-magenta/60 bg-accent-magenta/25"
                       : "border-white/15 bg-white/5"
                   )}
                 >
                   <span
                     className={cn(
-                      "absolute top-[2px] h-[8px] w-[8px] rounded-full transition-all",
-                      on ? "left-[14px] bg-support" : "left-[3px] bg-white/40"
+                      "absolute top-[2px] h-[8px] w-[8px] transition-all",
+                      on ? "left-[14px] bg-accent-magenta" : "left-[3px] bg-white/40"
                     )}
                   />
                 </span>

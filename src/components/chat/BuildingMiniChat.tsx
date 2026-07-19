@@ -184,7 +184,7 @@ export function BuildingMiniChat() {
       data-testid="building-mini-chat"
     >
       <header className="flex items-start gap-2 border-b border-white/15 px-3 py-2.5">
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
+ <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center bg-white/15 text-white">
           <MapPin className="h-3.5 w-3.5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -217,8 +217,8 @@ export function BuildingMiniChat() {
             key={message.id}
             className={
               message.role === "user"
-                ? "ml-6 rounded-2xl bg-white/20 px-2.5 py-1.5 text-white"
-                : "mr-4 rounded-2xl bg-white/10 px-2.5 py-1.5 text-white/90"
+ ?"ml-6 bg-white/20 px-2.5 py-1.5 text-white"
+ :"mr-4 bg-white/10 px-2.5 py-1.5 text-white/90"
             }
           >
             {message.role === "user" ? (
@@ -270,7 +270,7 @@ export function BuildingMiniChat() {
         <button
           type="submit"
           disabled={busy || !input.trim()}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-white disabled:opacity-40"
+ className="inline-flex h-9 w-9 shrink-0 items-center justify-center bg-white/20 text-white disabled:opacity-40"
           data-testid="building-mini-chat-send"
           aria-label="Send"
         >
