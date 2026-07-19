@@ -33,6 +33,14 @@ const SELECTED_BUILDING_SOURCE = "torontwin-selected-building";
 const SELECTED_BUILDING_FILL = "torontwin-selected-building-fill";
 const SELECTED_BUILDING_LINE = "torontwin-selected-building-line";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function buildingLayerIds(map: maplibregl.Map): string[] {
   const style = map.getStyle();
   if (!style?.layers) return [];
@@ -72,16 +80,31 @@ interface MapCanvasProps {
   onReady: () => void;
 }
 
-function personaCollection(
-  personas: Persona[],
-  acceptance: Float32Array | null
-): GeoJSON.FeatureCollection {
+/**
+ * Built once per persona set (not per acceptance tick -- acceptance updates
+ * flow through map feature-state instead, see the results effect below, so
+ * this heavier per-persona profile payload, including full profile text for
+ * real personas, isn't re-serialized on every reveal-sweep frame).
+ */
+function personaCollection(personas: Persona[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: personas.map((p) => ({
       type: "Feature",
       id: p.id,
-      properties: { a: acceptance ? acceptance[p.id] : 0.5 },
+      properties: {
+        code: p.code,
+        incomeZ: p.incomeZ,
+        transitAffinity: p.transitAffinity,
+        carDependence: p.carDependence,
+        ageBand: p.ageBand ?? null,
+        gender: p.gender ?? null,
+        education: p.education ?? null,
+        tenure: p.tenure ?? null,
+        commuteMode: p.commuteMode ?? null,
+        incomeBand: p.incomeBand ?? null,
+        profileText: p.profileText ?? null,
+      },
       geometry: { type: "Point", coordinates: [p.lng, p.lat] },
     })),
   };
@@ -136,6 +159,7 @@ export function MapCanvas({
   );
   const sweepToken = useRef(0);
   const hoveredNbhd = useRef<number | null>(null);
+  const personaPopupRef = useRef<maplibregl.Popup | null>(null);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const reducedMotion = useReducedMotion();
   const reducedMotionRef = useRef(reducedMotion);
@@ -205,7 +229,7 @@ export function MapCanvas({
       });
       map.addSource("personas", {
         type: "geojson",
-        data: personaCollection(personas, null),
+        data: personaCollection(personas),
       });
 
       map.addLayer(
@@ -496,7 +520,7 @@ export function MapCanvas({
           "circle-color": [
             "interpolate",
             ["linear"],
-            ["get", "a"],
+            ["coalesce", ["feature-state", "a"], 0.5],
             0,
             ACCEPT_OPPOSE,
             0.5,
@@ -558,6 +582,12 @@ export function MapCanvas({
 
     map.on("mousemove", (e) => {
       if (!loadedRef.current) return;
+      const personaHits = map.queryRenderedFeatures(e.point, { layers: ["personas"] });
+      if (personaHits.length > 0) {
+        map.getCanvas().style.cursor = "pointer";
+        setTooltip(null);
+        return;
+      }
       const routeHits = map.queryRenderedFeatures(e.point, {
         layers: [
           "rail-line",
@@ -622,6 +652,51 @@ export function MapCanvas({
 
     map.on("click", (e) => {
       if (!loadedRef.current) return;
+
+      const personaHits = map.queryRenderedFeatures(e.point, { layers: ["personas"] });
+      if (personaHits[0]) {
+        const p = personaHits[0].properties as {
+          code: string;
+          ageBand: string | null;
+          gender: string | null;
+          education: string | null;
+          tenure: string | null;
+          commuteMode: string | null;
+          incomeBand: string | null;
+          profileText: string | null;
+        };
+        const featureId = personaHits[0].id;
+        const acceptanceState =
+          featureId !== undefined
+            ? (map.getFeatureState({ source: "personas", id: featureId }) as { a?: number })
+            : {};
+        const acceptance = acceptanceState.a ?? 0.5;
+        const nbhdName = nbhdByCode.get(p.code)?.name ?? p.code;
+
+        personaPopupRef.current?.remove();
+        personaPopupRef.current = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "260px" })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            p.profileText
+              ? `<div style="font-family:inherit;font-size:12px;line-height:1.5">
+                  <div style="font-weight:600;font-size:13px;margin-bottom:4px">${escapeHtml(nbhdName)}</div>
+                  <div style="opacity:0.7;margin-bottom:6px">
+                    ${escapeHtml(p.ageBand ?? "")}${p.gender ? ` &middot; ${escapeHtml(p.gender)}` : ""}${p.tenure ? ` &middot; ${escapeHtml(p.tenure)}` : ""}
+                  </div>
+                  <div style="margin-bottom:8px">${escapeHtml(p.profileText)}</div>
+                  ${p.commuteMode ? `<div>Commute: <b>${escapeHtml(p.commuteMode)}</b></div>` : ""}
+                  ${p.incomeBand ? `<div>Household income: <b>${escapeHtml(p.incomeBand)}</b></div>` : ""}
+                  ${p.education ? `<div>Education: <b>${escapeHtml(p.education)}</b></div>` : ""}
+                  <div style="margin-top:6px;opacity:0.7">Scenario acceptance: <b>${Math.round(acceptance * 100)}%</b></div>
+                </div>`
+              : `<div style="font-family:inherit;font-size:12px;line-height:1.5">
+                  <div style="font-weight:600;font-size:13px;margin-bottom:4px">${escapeHtml(nbhdName)}</div>
+                  <div style="opacity:0.7">Synthetic fallback dot (real persona data unavailable)</div>
+                </div>`,
+          )
+          .addTo(map);
+        return;
+      }
 
       const buildingLayers = buildingLayerIds(map);
       const buildingHits =
@@ -784,6 +859,12 @@ export function MapCanvas({
     const source = map.getSource<maplibregl.GeoJSONSource>("personas");
     if (!source) return;
 
+    const setPersonaAcceptance = (values: Float32Array) => {
+      for (let i = 0; i < values.length; i++) {
+        map.setFeatureState({ source: "personas", id: i }, { a: values[i] });
+      }
+    };
+
     const token = ++sweepToken.current;
     const target = result.acceptance;
     const sweep = result.sweepKm;
@@ -791,7 +872,7 @@ export function MapCanvas({
 
     if (reducedMotionRef.current) {
       current.set(target);
-      source.setData(personaCollection(personas, target));
+      setPersonaAcceptance(current);
       return;
     }
 
@@ -811,7 +892,7 @@ export function MapCanvas({
         if (sweep[i] <= threshold) current[i] = target[i];
       }
       if (t >= 1) current.set(target);
-      source.setData(personaCollection(personas, current));
+      setPersonaAcceptance(current);
       if (t < 1) {
         window.setTimeout(
           () => requestAnimationFrame(tick),

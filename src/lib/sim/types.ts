@@ -63,6 +63,19 @@ export interface Persona {
   transitAffinity: number;
   /** Reliance on driving, [0, 1]. */
   carDependence: number;
+  /**
+   * Real fields, present only when this persona came from `/api/personas`
+   * (absent for the synthetic `buildPersonas()` fallback). All raw
+   * StatCan-census-grounded categorical values -- not derived proxies.
+   */
+  ageBand?: string;
+  gender?: string;
+  education?: string;
+  tenure?: string;
+  commuteMode?: string | null;
+  incomeBand?: string;
+  /** The persona's LLM-rendered profile description (see population/persona_text.py). */
+  profileText?: string;
 }
 
 export interface NeighbourhoodAggregate {
