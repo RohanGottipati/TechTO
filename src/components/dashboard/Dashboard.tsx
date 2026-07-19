@@ -178,7 +178,6 @@ export function Dashboard() {
         <CityPlanStrip
           summary={cityPlan.summary}
           isRunning={cityPlan.isRunning}
-          statusMessage={cityPlan.statusMessage}
           liveText={cityPlan.liveText}
         />
       </div>

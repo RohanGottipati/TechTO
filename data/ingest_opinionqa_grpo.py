@@ -16,6 +16,7 @@ SEED = 2262
 WAVE = "American_Trends_Panel_W92"
 OPINIONQA_DIR = Path("data/raw/opinionqa/human_resp")
 OUT = Path("model/grpo/dataset/train.jsonl")
+REWRITE_CACHE = Path("model/grpo/dataset/question_rewrites.json")
 N_ROWS = 4000
 N_HOLD_OUT_Q = 8  # hold out whole questions for eval later
 REFUSAL = {"Refused", "Don't Know", "Dont know", "DK/Refused", "No answer"}
@@ -78,8 +79,23 @@ def _template_persona(attrs: dict, rng: random.Random) -> str:
     return body + "."
 
 
+def _load_rewrites() -> dict:
+    # run data/rewrite_opinionqa_questions.py first; fail hard if missing
+    assert REWRITE_CACHE.exists(), f"missing {REWRITE_CACHE}; run rewrite script first"
+    return json.loads(REWRITE_CACHE.read_text())
+
+
+def _policy_for(key: str, stem: str, rewrites: dict) -> tuple[str, bool]:
+    rec = rewrites[key]
+    text = rec["rewritten"].strip()
+    kept = bool(rec.get("kept"))
+    assert text, f"empty rewrite for {key}"
+    return text, kept
+
+
 def main() -> None:
     rng = random.Random(SEED)
+    rewrites = _load_rewrites()
     wave_dir = OPINIONQA_DIR / WAVE
     info = pd.read_csv(wave_dir / "info.csv")
     responses = pd.read_csv(wave_dir / "responses.csv", low_memory=False)
@@ -95,6 +111,10 @@ def main() -> None:
     hold_keys = set(k for k, _, _ in rng.sample(usable, min(N_HOLD_OUT_Q, len(usable))))
     train_q = [(k, q, opts) for k, q, opts in usable if k not in hold_keys]
     print(f"usable qs={len(usable)} holdout={len(hold_keys)} train_qs={len(train_q)}")
+
+    # need rewrites for every train q
+    missing = [k for k, _, _ in train_q if k not in rewrites]
+    assert not missing, f"missing rewrites for {len(missing)} qs e.g. {missing[:3]}; run data/rewrite_opinionqa_questions.py"
 
     # build pool of (resp_idx, qkey) candidates
     pool = []
@@ -116,6 +136,7 @@ def main() -> None:
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     n = 0
+    n_kept = 0
     with OUT.open("w") as f:
         for resp_i, key, question, options, letter, ans_label in picked:
             row = responses.iloc[resp_i]
@@ -129,10 +150,13 @@ def main() -> None:
             if len(attrs) < 2:
                 continue
             persona = _template_persona(attrs, rng)
+            policy, kept = _policy_for(key, question, rewrites)
+            if kept:
+                n_kept += 1
             rec = {
                 "input": {
                     "persona_text": persona,
-                    "policy_text": question,
+                    "policy_text": policy,  # student sees this; never lettered opts
                     "spatial_features_text": None,
                 },
                 "output": "",  # GRPO samples; no gold prose
@@ -146,6 +170,8 @@ def main() -> None:
                     "persona_text_renderer": "template_v1",
                     "respondent_id": str(row.get("QKEY", resp_i)),
                     "holdout_questions": sorted(hold_keys),
+                    "question_original": question,
+                    "question_rewritten": not kept,
                 },
             }
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -154,7 +180,7 @@ def main() -> None:
     # also dump holdout q keys for later eval
     meta_path = OUT.parent / "holdout_questions.json"
     meta_path.write_text(json.dumps(sorted(hold_keys), indent=2))
-    print(f"wrote {n} -> {OUT}")
+    print(f"wrote {n} -> {OUT} (kept_stem_rows={n_kept})")
     print(f"holdout qs -> {meta_path}")
 
 

@@ -20,8 +20,9 @@ export function encodeSseEvent(eventId: string | number, data: unknown, eventNam
 
 const SSE_HEADERS: Record<string, string> = {
   "Content-Type": "text/event-stream",
-  "Cache-Control": "no-cache",
+  "Cache-Control": "no-cache, no-transform",
   Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
 };
 
 export function createSseResponse(stream: ReadableStream<Uint8Array>): Response {

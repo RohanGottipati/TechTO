@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { ArrowUp, Columns2, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
 import { parseMapActions } from "@/lib/twinto/map-actions";
@@ -17,6 +18,8 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  /** true while tokens are still arriving */
+  streaming?: boolean;
 }
 
 const EXAMPLE_ASK =
@@ -28,9 +31,16 @@ export interface MapChatBarProps {
   includeWebSearch?: boolean;
   /** When false, chat answers only (no Backboard planning kickoff). Default true if `run` is provided. */
   enablePlanningRun?: boolean;
-  /** Coolness open-city planner via /api/planner/run (orchestrator agent). */
+  /** Coolness open-city planner via /api/planner/stream (orchestrator agent). */
   enableCityPlanRun?: boolean;
-  onCityPlanQuestion?: (question: string) => Promise<{
+  onCityPlanQuestion?: (
+    question: string,
+    handlers?: {
+      onDelta?: (content: string) => void;
+      onClear?: () => void;
+      onStep?: (message: string) => void;
+    },
+  ) => Promise<{
     summary?: string;
     ranking?: CityPlanRankingRow[];
     chosenId?: string;
@@ -58,6 +68,7 @@ export function MapChatBar({
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   const selectedPlace = useMapStore((s) => s.selectedPlace);
   const layers = useMapStore((s) => s.layers);
@@ -139,7 +150,46 @@ export function MapChatBar({
     try {
       // Open-city path: Planning Orchestrator agent (tools + optional subagents)
       if (enableCityPlanRun && onCityPlanQuestion) {
-        const payload = await onCityPlanQuestion(text);
+        let assistantId: string | null = null;
+        let streamed = "";
+
+        const appendStep = (message: string) => {
+          flushSync(() => {
+            setMessages((prev) => [
+              ...prev,
+              { id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, role: "system", content: message },
+            ]);
+          });
+          transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
+        };
+
+        const paintReply = (content: string, streaming = true) => {
+          flushSync(() => {
+            setMessages((prev) => {
+              if (!assistantId) {
+                assistantId = `plan-${Date.now()}`;
+                return [...prev, { id: assistantId, role: "assistant", content, streaming }];
+              }
+              const id = assistantId;
+              return prev.map((message) =>
+                message.id === id ? { ...message, content, streaming } : message,
+              );
+            });
+          });
+          transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
+        };
+
+        const payload = await onCityPlanQuestion(text, {
+          onDelta: (chunk) => {
+            streamed += chunk;
+            paintReply(streamed, true);
+          },
+          onClear: () => {
+            streamed = "";
+            if (assistantId) paintReply("", true);
+          },
+          onStep: (message) => appendStep(message),
+        });
         const mapParsed = parseMapActions(payload?.mapActions ?? []);
         if (mapParsed.ok) applyMapActions(mapParsed.actions);
         const ranking = payload?.ranking ?? [];
@@ -150,21 +200,14 @@ export function MapChatBar({
               `${i + 1}. ${r.title} (mean ${Number(r.mean).toFixed(2)}, support ${(Number(r.supportShare) * 100).toFixed(0)}%)`,
           )
           .join("\n");
-        let body = payload?.summary?.trim() || "Done.";
+        let body = payload?.summary?.trim() || streamed.trim() || "Done.";
         if (ranking.length) {
           body +=
             `\n\nRanked scenarios:\n${rankLines}` +
             (payload?.chosenId ? `\n\nLeading: ${payload.chosenId}` : "") +
             "\n\n(Simulated day-one acceptance; not real public opinion or ridership.)";
         }
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `plan-${Date.now()}`,
-            role: "assistant",
-            content: body,
-          },
-        ]);
+        paintReply(body, false);
         return;
       }
 
@@ -260,29 +303,32 @@ export function MapChatBar({
               Collapse
             </button>
           </div>
-          <div className="space-y-2">
+          <div ref={transcriptRef} className="space-y-2">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={
                   message.role === "user"
                     ? "ml-8 rounded-2xl bg-white/25 px-3 py-2 text-white"
-                    : "mr-4 rounded-2xl bg-white/10 px-3 py-2 text-white/90"
+                    : message.role === "system"
+                      ? "px-1 py-0.5 text-[11px] text-white/50"
+                      : "mr-4 rounded-2xl bg-white/10 px-3 py-2 text-white/90"
                 }
               >
                 {message.role === "user" ? (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed">{message.content}</p>
+                ) : message.role === "system" ? (
+                  <p className="leading-snug">{message.content}</p>
                 ) : (
-                  <ChatMarkdown content={message.content} />
+                  <div>
+                    {message.content ? <ChatMarkdown content={message.content} /> : null}
+                    {message.streaming ? (
+                      <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-white/70 align-middle" aria-hidden />
+                    ) : null}
+                  </div>
                 )}
               </div>
             ))}
-            {(isRunning || busy) && (
-              <div className="inline-flex items-center gap-2 text-white/80">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                {busy ? "Thinking…" : "Running the preview…"}
-              </div>
-            )}
           </div>
         </div>
       )}

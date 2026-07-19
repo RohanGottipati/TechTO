@@ -22,6 +22,9 @@ import { parseMapActions } from "@/lib/twinto/map-actions";
 export type CityRunEvent =
   | { type: "run.started"; runId: string; question: string }
   | { type: "agent.started"; runId: string; role: TwinTOAssistantKey; name: string }
+  | { type: "assistant.delta"; runId: string; content: string }
+  | { type: "assistant.clear"; runId: string }
+  | { type: "status"; runId: string; message: string }
   | { type: "tool.requested"; runId: string; role: TwinTOAssistantKey; toolName: string }
   | { type: "tool.completed"; runId: string; role: TwinTOAssistantKey; toolName: string; ok: boolean }
   | { type: "scenarios.proposed"; runId: string; patches: ScenarioPatch[] }
@@ -209,6 +212,13 @@ export async function runCityOrchestration(
     .filter(Boolean)
     .join("\n");
 
+  // drop generic status spam; tool.requested / tool.completed drive the chat log
+  // emit(events, onEvent, {
+  //   type: "status",
+  //   runId,
+  //   message: "City Code agent is working…",
+  // });
+
   const loop = await runToolLoop({
     adapter,
     assistantId: orch.record.assistantId,
@@ -222,13 +232,27 @@ export async function runCityOrchestration(
     context,
     maxRounds: 12,
     jsonOutput: false,
-    onToolCallStart: (call) =>
+    onEvent: (streamEvent) => {
+      if (streamEvent.type === "content_delta" && streamEvent.content) {
+        emit(events, onEvent, {
+          type: "assistant.delta",
+          runId,
+          content: streamEvent.content,
+        });
+      }
+      // mid-turn tool round: wipe any partial prose so the final reply streams clean
+      if (streamEvent.type === "tool_submit_required") {
+        emit(events, onEvent, { type: "assistant.clear", runId });
+      }
+    },
+    onToolCallStart: (call) => {
       emit(events, onEvent, {
         type: "tool.requested",
         runId,
         role: "planning-orchestrator",
         toolName: call.name,
-      }),
+      });
+    },
     onToolCallEnd: (outcome) => {
       emit(events, onEvent, {
         type: "tool.completed",
@@ -270,8 +294,18 @@ export async function runCityOrchestration(
 
   let candidates: CityCandidateResult[] = [];
   if (patches.length) {
+    emit(events, onEvent, {
+      type: "status",
+      runId,
+      message: "Scoring day-one acceptance…",
+    });
     const personas = await pop.load();
     candidates = await harvestScores(patches, input.question, seed, pop, personas);
+    emit(events, onEvent, {
+      type: "status",
+      runId,
+      message: "Acceptance scores ready",
+    });
   }
 
   const reply = extractReply(loop.finalResult.content);
