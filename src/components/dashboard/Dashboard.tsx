@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapCanvas } from "./MapCanvas";
-import { ScenarioPanel } from "./ScenarioPanel";
 import { LayersPanel } from "./LayersPanel";
+import { ScenarioPanel } from "./ScenarioPanel";
 import { InspectorPanel } from "./InspectorPanel";
-import { Legend } from "./Legend";
 import { MapChatBar } from "@/components/chat/MapChatBar";
 import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
 import { useCityPlanRun } from "@/components/planner/CityPlanStrip";
 import { buildPersonas } from "@/lib/sim/personas";
-import { SCENARIOS } from "@/lib/sim/scenarios";
-import { runScenario } from "@/lib/sim/engine";
+import { runScenario, aggregate } from "@/lib/sim/engine";
+import type { HomeSitesByCode } from "@/lib/sim/home-sites";
+import { sampleHomeSite } from "@/lib/sim/home-sites";
+import { hashString, mulberry32 } from "@/lib/random";
 import { useSimStore } from "@/store/useSimStore";
 import { useMapStore } from "@/store/useMapStore";
 import type {
@@ -135,6 +136,8 @@ export function Dashboard() {
   const scenarioId = useSimStore((s) => s.scenarioId);
   const acceptanceLoading = useSimStore((s) => s.acceptanceLoading);
   const selectedCode = useSimStore((s) => s.selectedCode);
+  const selectedPlace = useMapStore((s) => s.selectedPlace);
+  const placeChatOpen = useMapStore((s) => s.buildingMiniChatOpen);
   const dataRef = useRef<CityData | null>(null);
   const cityPlan = useCityPlanRun();
   const acceptanceRef = useRef<Float32Array | null>(null);
@@ -238,6 +241,7 @@ export function Dashboard() {
       if (e.key === "Escape") {
         useSimStore.getState().select(null);
         useMapStore.getState().clearPlaceSelection();
+        useMapStore.getState().clearAgent3DFocus();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -267,30 +271,36 @@ export function Dashboard() {
         />
       )}
 
-      {/* Left rail: identity, scenario, layers */}
+      {/* Top center: scenario tabs -- switch which version of the city is shown */}
+      <div className="pointer-events-none absolute inset-x-0 top-4 z-10 hidden justify-center overflow-x-auto px-3 md:flex">
+        <ScenarioPanel />
+      </div>
+
+      {/* Left rail: identity and map layers */}
       <div className="pointer-events-none absolute left-4 top-4 z-10 hidden w-[288px] flex-col gap-3 md:flex">
         <Wordmark />
-        <ScenarioPanel />
+        {acceptanceLoading && (
+          <div className="border border-hairline bg-panel px-3 py-2 font-mono text-[10px] text-muted">
+            Computing real citizen reactions from resident opinions…
+          </div>
+        )}
         <LayersPanel />
       </div>
 
-      {/* Mobile: compact header + scenario chips */}
+      {/* Mobile: compact identity header */}
       <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col gap-2 md:hidden">
         <Wordmark />
-        <div className="pointer-events-auto -mx-1 overflow-x-auto px-1 pb-1">
-          <MobileScenarioChips />
+      </div>
+
+      {/* Right rail: selected-place information, then its local chat. */}
+      {data && (selectedCode || (selectedPlace && placeChatOpen)) && (
+        <div className="pointer-events-none absolute right-4 top-4 z-30 flex max-h-[calc(100dvh-7rem)] flex-col gap-3">
+          {selectedCode && (
+            <InspectorPanel index={nbhdIndex} personas={data.personas} />
+          )}
+          <BuildingMiniChat placement="below-inspector" />
         </div>
-      </div>
-
-      {/* Right: legend + neighbourhood inspector stacked */}
-      <div className="pointer-events-none absolute right-4 top-4 z-10 hidden flex-col items-end gap-2.5 lg:flex">
-        <Legend />
-        {data && selectedCode && (
-          <InspectorPanel index={nbhdIndex} personas={data.personas} />
-        )}
-      </div>
-
-      <BuildingMiniChat />
+      )}
 
       {/* Bottom: liquid-glass City Copilot */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3 sm:p-4">
@@ -358,32 +368,6 @@ function Wordmark() {
       <h1 className="font-ui text-[13px] font-bold uppercase tracking-[0.26em] text-ink-bright">
         TechTO
       </h1>
-      <span className="font-mono text-[9.5px] uppercase tracking-wider text-muted">
-        Toronto · planning sandbox · synthetic citizens
-      </span>
     </header>
-  );
-}
-
-function MobileScenarioChips() {
-  const scenarioId = useSimStore((s) => s.scenarioId);
-  const setScenario = useSimStore((s) => s.setScenario);
-  return (
-    <div className="flex gap-1.5">
-      {SCENARIOS.map((s) => (
-        <button
-          key={s.id}
-          type="button"
-          onClick={() => setScenario(s.id)}
-          className={
-            s.id === scenarioId
-              ? "whitespace-nowrap border border-white/25 bg-white/10 px-3 py-1.5 text-[11px] text-ink-bright"
-              : "whitespace-nowrap border border-hairline bg-panel px-3 py-1.5 text-[11px] text-muted"
-          }
-        >
-          {s.name}
-        </button>
-      ))}
-    </div>
   );
 }

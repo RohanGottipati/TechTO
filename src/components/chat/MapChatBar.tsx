@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowUp, Columns2, Loader2, Plus, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowUp,
+  Columns2,
+  Loader2,
+  Maximize2,
+  Minimize2,
+} from "lucide-react";
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
 import { parseMapActions } from "@/lib/techto/map-actions";
 import { applyMapActions } from "@/lib/techto/apply-map-actions";
@@ -23,14 +29,19 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  citedEvidence?: string[];
+  /** Live tool/agent/scoring trace lines for a city-plan run, shown above the prose. */
+  trace?: CityPlanTraceLine[];
+  /** Accumulated model thinking tokens for this turn (click to expand). */
+  reasoning?: string;
+  /** True while this message is still streaming in. */
+  streaming?: boolean;
 }
 
 const EXAMPLE_ASK =
   "Should I place a new train station in Wychwood or in Ionview?";
 
 export interface MapChatBarProps {
-  /** Optional planning run. Omit on the TechTO dashboard. */
+  /** Optional TechTO planning run. Omit on the TechTO dashboard. */
   run?: UseBackboardRunResult;
   includeWebSearch?: boolean;
   /** When false, chat answers only (no Backboard planning kickoff). Default true if `run` is provided. */
@@ -65,7 +76,9 @@ export function MapChatBar({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [focused, setFocused] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  /** Which trace line ids are expanded (click the row to toggle). */
+  const [openTraceIds, setOpenTraceIds] = useState<Record<string, boolean>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const appliedMapMidstream = useRef(false);
@@ -307,46 +320,62 @@ export function MapChatBar({
 
   const showTranscript = expanded && messages.length > 0;
   const isRunning = Boolean(run?.isRunning) || cityPlanRunning;
-  const showBlinkCaret = !input && !focused;
-  const exportReport = useMemo(
-    () => ({
-      title: "TechTO planning chat",
-      subtitle: selectedPlace
-        ? `${selectedPlace.label} · ${selectedPlace.kind}`
-        : "Toronto planning conversation",
-      messages: messages.map((message) => ({
-        role: message.role,
-        content: message.content,
-        citedEvidence: message.citedEvidence,
-      })),
-    }),
-    [messages, selectedPlace]
-  );
+
+  function answerReportMessages(answerIndex: number): ChatMessage[] {
+    const answer = messages[answerIndex];
+    const question = messages
+      .slice(0, answerIndex)
+      .reverse()
+      .find((message) => message.role === "user");
+    return question ? [question, answer] : [answer];
+  }
 
   return (
     <section className="mx-auto w-full max-w-3xl" data-testid="city-copilot-chat">
       {showTranscript && (
         <div
           className={cn(
-            "mb-3 max-h-44 overflow-y-auto rounded-[28px] border border-white/25 px-4 py-3 text-xs twinto-scroll",
-            "bg-white/18 shadow-[0_12px_40px_-16px_rgba(15,40,80,0.45)] backdrop-blur-2xl backdrop-saturate-150",
+            "mb-3 flex min-h-0 flex-col border border-white/25 px-4 py-3 text-[13px]",
+            maximized ? "h-[min(72vh,720px)]" : "max-h-[28rem]",
+            "bg-white/18 backdrop-blur-2xl backdrop-saturate-150",
           )}
         >
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <p className="text-[11px] font-medium text-white">TechTO</p>
             <div className="flex items-center gap-1">
-              <PdfExportButton report={exportReport} className="px-2" />
+              <PdfExportButton
+                report={{
+                  title: "TechTO conversation",
+                  subtitle: "Toronto planning questions and responses",
+                  messages,
+                }}
+                testId="city-chat-export-pdf"
+              />
+              <button
+                type="button"
+                onClick={() => setMaximized((value) => !value)}
+ className="inline-flex h-7 items-center gap-1.5 px-2 text-[11px] text-white/55 transition hover:bg-white/10 hover:text-white"
+                aria-label={maximized ? "Restore conversation size" : "Expand conversation"}
+                aria-pressed={maximized}
+              >
+                {maximized ? (
+                  <Minimize2 className="h-3 w-3" aria-hidden />
+                ) : (
+                  <Maximize2 className="h-3 w-3" aria-hidden />
+                )}
+                {maximized ? "Restore" : "Expand"}
+              </button>
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
-                className="text-[11px] text-white/55 transition hover:text-white"
+ className="h-7 px-2 text-[11px] text-white/55 transition hover:bg-white/10 hover:text-white"
               >
                 Collapse
               </button>
             </div>
           </div>
-          <div className="space-y-2">
-            {messages.map((message) => (
+          <div className="min-h-0 space-y-2 overflow-y-auto pr-1 techto-scroll">
+            {messages.map((message, index) => (
               <div
                 key={message.id}
                 className={
@@ -358,7 +387,112 @@ export function MapChatBar({
                 {message.role === "user" ? (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed">{message.content}</p>
                 ) : (
-                  <ChatMarkdown content={message.content} />
+                  <>
+                    {message.reasoning && (
+                      <div className="mb-1.5 border-b border-white/10 pb-1.5 font-mono text-[10px] leading-snug text-white/45">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenTraceIds((prev) => ({
+                              ...prev,
+                              [`${message.id}:reasoning`]: !prev[`${message.id}:reasoning`],
+                            }))
+                          }
+                          className="flex w-full items-start gap-1.5 text-left hover:text-white/70"
+                          aria-expanded={Boolean(openTraceIds[`${message.id}:reasoning`])}
+                        >
+                          <span className="shrink-0">…</span>
+                          <span>
+                            Thinking
+                            {message.streaming && !message.content ? "…" : ""}
+                            <span className="ml-1 text-white/30">
+                              {openTraceIds[`${message.id}:reasoning`] ? "▾" : "▸"}
+                            </span>
+                          </span>
+                        </button>
+                        {openTraceIds[`${message.id}:reasoning`] && (
+                          <pre className="mt-0.5 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-black/25 px-1.5 py-1 text-[9px] text-white/40">
+                            {message.reasoning}
+                          </pre>
+                        )}
+                      </div>
+                    )}
+                    {message.trace && message.trace.length > 0 && (
+                      <ul className="mb-1.5 space-y-0.5 border-b border-white/10 pb-1.5 font-mono text-[10px] leading-snug text-white/50">
+                        {message.trace.map((line) => {
+                          const hasDetail = Boolean(line.argsDetail || line.resultDetail);
+                          const open = Boolean(openTraceIds[line.id]);
+                          const icon =
+                            line.status === "running"
+                              ? "⚙"
+                              : line.status === "ok"
+                                ? "✓"
+                                : line.status === "fail"
+                                  ? "✗"
+                                  : "·";
+                          return (
+                            <li key={line.id}>
+                              <button
+                                type="button"
+                                disabled={!hasDetail}
+                                onClick={() =>
+                                  setOpenTraceIds((prev) => ({
+                                    ...prev,
+                                    [line.id]: !prev[line.id],
+                                  }))
+                                }
+                                className={cn(
+                                  "flex w-full items-start gap-1.5 text-left",
+                                  hasDetail
+                                    ? "cursor-pointer hover:text-white/75"
+                                    : "cursor-default",
+                                )}
+                                aria-expanded={hasDetail ? open : undefined}
+                              >
+                                <span className="shrink-0 tabular-nums">{icon}</span>
+                                <span>
+                                  {line.label}
+                                  {line.status === "running" ? "…" : ""}
+                                  {hasDetail && (
+                                    <span className="ml-1 text-white/30">{open ? "▾" : "▸"}</span>
+                                  )}
+                                </span>
+                              </button>
+                              {open && hasDetail && (
+                                <pre className="mt-0.5 overflow-auto whitespace-pre-wrap break-all rounded-sm bg-black/25 px-1.5 py-1 text-[9px] text-white/45">
+                                  {[line.argsDetail, line.resultDetail].filter(Boolean).join("\n───\n")}
+                                </pre>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {message.streaming && !message.content ? (
+                      <div className="inline-flex items-center gap-2 text-white/70">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        working…
+                      </div>
+                    ) : (
+                      <ChatMarkdown content={message.content} />
+                    )}
+                    {message.streaming && message.content && (
+                      <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-white/60 align-text-bottom" />
+                    )}
+                    {!message.streaming && (
+                      <div className="mt-1.5 flex justify-end border-t border-white/10 pt-1">
+                        <PdfExportButton
+                          report={{
+                            title: "TechTO planning answer",
+                            subtitle: "Question and response",
+                            messages: answerReportMessages(index),
+                          }}
+                          compact
+                          testId={`city-answer-export-pdf-${index}`}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ))}
@@ -383,26 +517,11 @@ export function MapChatBar({
           className="relative min-w-0 flex-1 cursor-text"
           onClick={() => inputRef.current?.focus()}
         >
-          {showBlinkCaret && (
-            <button
-              type="button"
-              className="pointer-events-auto absolute inset-y-0 left-1 right-1 flex items-center gap-1 truncate text-left text-[15px] text-white/45 transition hover:text-white/70"
-              onClick={() => {
-                setInput(EXAMPLE_ASK);
-                inputRef.current?.focus();
-              }}
-            >
-              <span className="chat-blink-caret shrink-0" aria-hidden />
-              <span className="truncate">{EXAMPLE_ASK}</span>
-            </button>
-          )}
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={focused ? EXAMPLE_ASK : ""}
+            placeholder={EXAMPLE_ASK}
             className="chat-glass-input relative w-full bg-transparent px-1 py-2 text-[15px] outline-none"
             data-testid="city-copilot-input"
             aria-label="Ask a Toronto planning question"

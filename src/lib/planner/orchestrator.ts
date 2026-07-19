@@ -135,7 +135,7 @@ async function harvestScores(
 ): Promise<CityCandidateResult[]> {
   return Promise.all(
     patches.map(async (patch) => {
-      const score = await scoreRealPolicyAcceptance(patch.id, policyTextForPatch(patch), undefined, onPersonaScored);
+      const score = await scoreRealPolicyAcceptance(patch.id, policyTextForPatch(patch), { onPersonaScored });
       return { patch, score };
     }),
   );
@@ -285,17 +285,23 @@ export async function runCityOrchestration(
     "",
     "Respond as TechTO's planning agent (Claude Code for the city).",
     "You decide the whole turn: reply in prose, call tools, invoke specialists, or any mix.",
-    "Tools are available and optional; use them only when they help.",
+    "You have many tool rounds; use them. Prefer explore → score → revise → recommend over a one-shot guess.",
+    "For location / siting questions (stations, parks, facilities, corridors):",
+    "- Screen multiple geographically distinct Toronto neighbourhoods (not just one corridor or the first hit).",
+    "- Prefer run_python (pandas on DATA_DIR/census_profile.csv or Mongo) for ranking/filtering; use search_neighbourhoods / generate_station_candidates / propose_scenarios for shortlists.",
+    "- Avoid query_city_layer dumps: only use it for a named neighbourhood or tiny top-N (limit ≤ 3). Big screens belong in run_python RESULT.",
+    "- Score acceptance on the shortlist with score_population BEFORE recommending.",
+    "- If scores look weak (low mean/support, or byNeighbourhood opposition at the proposed site), discard and try other areas; do not recommend a poorly accepted site unless the user wants that tradeoff.",
+    "- While comparing, compose_map_actions may show several candidate markers; for the final pick, leave one marker, fly_to_center, and highlight that neighbourhood.",
     "Never invent ScenarioPatches or fake rankings just to fill a pipeline.",
-    "If you score population acceptance, say it is simulated day-one feel, not ridership.",
-    "When recommending a single place, compose_map_actions with exactly one show_candidate_markers entry (the chosen site), fly_to_center on it, and highlight that one neighbourhood. Do not put multiple candidate markers on the map unless the user explicitly asked to compare alternatives.",
-    "When comparing places or proposing geometry, use compose_map_actions to fly/highlight/draw on the map so the user can see it.",
-    "For recommendations, use concise sections when relevant: Recommendation, Why this area, Screening metrics, ROI and value case, Success KPIs, and What to validate next.",
-    "In ROI and value case, separate measured inputs, modeled monetized benefits, assumptions, and scenario ranges. Calculate ROI only when both lifecycle costs and monetized benefits are evidenced; otherwise state that no ROI figure is being claimed yet.",
+    "When comparing places or proposing geometry, use compose_map_actions so the user can see the search on the map.",
+    "Be concise. Lead with the answer in 1-3 sentences. Only add a short bullet list below it for the handful of details that actually change the decision (e.g. acceptance, a key tradeoff). Never pad with boilerplate section headers unless the user asks for that depth.",
+    "If you score population acceptance or ROI, state the one-line caveat (simulated day-one feel, not ridership; no ROI claimed until inputs are validated) only once, briefly.",
+    "For capital or operating recommendations where a value case is material, invoke the feasibility specialist when lifecycle cost or monetized-benefit evidence is needed, then summarize its result in a sentence or two.",
     hintPatches.length
       ? `Caller supplied optional starter patches (use or ignore):\n${JSON.stringify(hintPatches)}`
       : "",
-    "Final reply: plain prose to the user. Be concise; no rambling.",
+    "Final reply: short, plain Markdown. No rambling, no restating the question, no closing summary paragraph.",
   ]
     .filter(Boolean)
     .join("\n");
