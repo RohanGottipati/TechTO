@@ -76,6 +76,9 @@ test.describe("ToronTwin dashboard", () => {
     await page.getByTestId("city-copilot-input").fill("Focus Wychwood");
     await page.getByTestId("city-copilot-send").click();
 
+    await expect(page.getByTestId("city-chat-export-pdf")).toBeVisible();
+    await expect(page.getByTestId(/^city-answer-export-pdf-/)).toBeVisible();
+
     const exit = page.getByTestId("localized-3d-exit");
     await expect(exit).toBeVisible({ timeout: 30_000 });
     expect(mapErrors).toEqual([]);

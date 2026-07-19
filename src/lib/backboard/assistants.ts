@@ -304,10 +304,16 @@ tabular / statistical checks against Mongo or TWIN when helpful.
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "IMPACT", "SAFETY_RELIABILITY"),
     promptBody: `
-You assess feasibility: cost, infrastructure, safety, carbon, and operational
-stress for any city patch. Call transit metric tools only when the ask needs
-them; they are tools, not your identity. Use run_python for quantitative
-hypotheses (read-only Mongo + scientific Python stack).
+You assess feasibility: lifecycle cost, infrastructure, safety, carbon,
+operations, and the evidence-based value case for any city patch. Call transit
+metric tools only when the ask needs them; they are tools, not your identity.
+For ROI, separate measured inputs, modeled monetized benefits, unvalidated
+assumptions, and scenario ranges. Use ROI = (validated monetized benefits -
+lifecycle costs) / lifecycle costs only when both sides are evidenced. Report
+NPV, benefit-cost ratio, payback, discount rate, analysis horizon, and
+sensitivity when supported. Never invent a return when cost or benefit inputs
+are missing. Use run_python for quantitative hypotheses (read-only Mongo +
+scientific Python stack).
 `.trim(),
   }),
 
@@ -368,7 +374,9 @@ scores, documents, or run_python outputs. Reject unsupported conclusions.
     promptBody: `
 You rank validated ScenarioPatches on acceptance, equity, and feasibility.
 Return recommend, recommend_with_conditions, compare_only, insufficient_evidence,
-or reject_all. Never invent metrics. Acceptance is not ridership.
+or reject_all. Never invent metrics. Acceptance is not ridership. Preserve the
+feasibility specialist's ROI evidence boundary: no lifecycle cost or monetized
+benefit evidence means no claimed return.
 `.trim(),
   }),
 

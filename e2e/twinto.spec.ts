@@ -36,6 +36,8 @@ test.describe("TwinTO", () => {
     await page.getByTestId("city-copilot-input").fill("Show Liberty Village on the map");
     await page.getByTestId("city-copilot-send").click();
     await expect(page.getByText(/Showing Liberty Village/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("city-chat-export-pdf")).toBeVisible();
+    await expect(page.getByTestId(/^city-answer-export-pdf-/)).toBeVisible();
     await expect(page.getByText(/SIMPLE_MAP_NAVIGATION/i)).toHaveCount(0);
   });
 

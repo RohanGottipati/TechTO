@@ -1,5 +1,9 @@
 # TwinTO Backboard roster consolidation baseline
 
+> Historical audit only. The current product uses the principled 11 role roster,
+> manifest schema version 4, and live providers as documented in `AGENTS.md` and
+> `docs/backboard/assistants.md`.
+
 Recorded before consolidating the active roster from 54 specialists to 16
 consolidated assistants. Branch: `backboard`. Main is untouched.
 

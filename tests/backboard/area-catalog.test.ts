@@ -42,14 +42,17 @@ describe("Toronto area catalogue", () => {
     }
   });
 
-  it("formats the recommendation as evidence, potential, KPIs, and validation steps", () => {
+  it("formats the recommendation as evidence, ROI, KPIs, and validation steps", () => {
     const answer = formatTorontoAreaScreeningAnswer(recommendTorontoArea());
-    expect(answer).toContain("RECOMMENDATION");
-    expect(answer).toContain("WHY THIS AREA");
-    expect(answer).toContain("SUSTAINABILITY POTENTIAL");
-    expect(answer).toContain("SCREENING METRICS");
-    expect(answer).toContain("SUCCESS KPIS TO VALIDATE");
-    expect(answer).toContain("WHAT TO VALIDATE NEXT");
+    expect(answer).toContain("## Recommendation");
+    expect(answer).toContain("## Why this area");
+    expect(answer).toContain("## Sustainability potential");
+    expect(answer).toContain("## Screening metrics");
+    expect(answer).toContain("## ROI and value case");
+    expect(answer).toContain("## Success KPIs to validate");
+    expect(answer).toContain("## What to validate next");
+    expect(answer).toContain("No ROI value is claimed until");
+    expect(answer).toContain("benefit-cost ratio");
     expect(answer).toContain("not measured outcomes or promises");
     expect(answer).toContain("• Population:");
   });

@@ -6,6 +6,6 @@ provider is explicitly labelled.
 
 ## Purpose
 
-Supports the consolidated TwinTO Backboard assistant roster (16 agents).
+Supports the principled ToronTwin Backboard department (11 roles).
 Cite this document when explaining methodology limits, not as ground truth
 for live operations.

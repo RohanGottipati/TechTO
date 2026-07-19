@@ -20,6 +20,7 @@ import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { cn } from "@/lib/utils/cn";
 import type { CityPlanRankingRow } from "@/components/planner/CityPlanStrip";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
+import { PdfExportButton } from "@/components/chat/PdfExportButton";
 
 interface ChatMessage {
   id: string;
@@ -248,6 +249,15 @@ export function MapChatBar({
   const showTranscript = expanded && messages.length > 0;
   const isRunning = Boolean(run?.isRunning) || cityPlanRunning;
 
+  function answerReportMessages(answerIndex: number): ChatMessage[] {
+    const answer = messages[answerIndex];
+    const question = messages
+      .slice(0, answerIndex)
+      .reverse()
+      .find((message) => message.role === "user");
+    return question ? [question, answer] : [answer];
+  }
+
   return (
     <section className="mx-auto w-full max-w-3xl" data-testid="city-copilot-chat">
       {showTranscript && (
@@ -261,6 +271,14 @@ export function MapChatBar({
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <p className="text-[11px] font-medium text-white">ToronTwin</p>
             <div className="flex items-center gap-1">
+              <PdfExportButton
+                report={{
+                  title: "ToronTwin conversation",
+                  subtitle: "Toronto planning questions and responses",
+                  messages,
+                }}
+                testId="city-chat-export-pdf"
+              />
               <button
                 type="button"
                 onClick={() => setMaximized((value) => !value)}
@@ -285,7 +303,7 @@ export function MapChatBar({
             </div>
           </div>
           <div className="min-h-0 space-y-2 overflow-y-auto pr-1 twinto-scroll">
-            {messages.map((message) => (
+            {messages.map((message, index) => (
               <div
                 key={message.id}
                 className={
@@ -297,7 +315,20 @@ export function MapChatBar({
                 {message.role === "user" ? (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed">{message.content}</p>
                 ) : (
-                  <ChatMarkdown content={message.content} />
+                  <>
+                    <ChatMarkdown content={message.content} />
+                    <div className="mt-1.5 flex justify-end border-t border-white/10 pt-1">
+                      <PdfExportButton
+                        report={{
+                          title: "ToronTwin planning answer",
+                          subtitle: "Question and response",
+                          messages: answerReportMessages(index),
+                        }}
+                        compact
+                        testId={`city-answer-export-pdf-${index}`}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             ))}

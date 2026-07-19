@@ -9,6 +9,7 @@ import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils/cn";
 import { ChatMarkdown } from "@/components/chat/ChatMarkdown";
+import { PdfExportButton } from "@/components/chat/PdfExportButton";
 
 interface MiniMessage {
   id: string;
@@ -84,6 +85,15 @@ export function BuildingMiniChat({
         return { ...entry, content: next };
       }),
     );
+  }
+
+  function answerReportMessages(answerIndex: number): MiniMessage[] {
+    const answer = messages[answerIndex];
+    const question = messages
+      .slice(0, answerIndex)
+      .reverse()
+      .find((message) => message.role === "user");
+    return question ? [question, answer] : [answer];
   }
 
   function onSubmit(event: FormEvent) {
@@ -181,6 +191,15 @@ export function BuildingMiniChat({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          <PdfExportButton
+            report={{
+              title: `${place.label} planning conversation`,
+              subtitle: `${placeKindLabel(place.kind)} context in Toronto`,
+              messages,
+            }}
+            compact
+            testId="place-chat-export-pdf"
+          />
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
@@ -211,7 +230,7 @@ export function BuildingMiniChat({
           expanded ? "max-h-[45vh]" : "max-h-64",
         )}
       >
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <div
             key={message.id}
             className={
@@ -223,7 +242,22 @@ export function BuildingMiniChat({
             {message.role === "user" ? (
               <p className="whitespace-pre-wrap">{message.content}</p>
             ) : (
-              <ChatMarkdown content={message.content || (busy ? "…" : "")} />
+              <>
+                <ChatMarkdown content={message.content || (busy ? "…" : "")} />
+                {message.content && (
+                  <div className="mt-1 flex justify-end border-t border-white/10 pt-1">
+                    <PdfExportButton
+                      report={{
+                        title: `${place.label} planning answer`,
+                        subtitle: `${placeKindLabel(place.kind)} context in Toronto`,
+                        messages: answerReportMessages(index),
+                      }}
+                      compact
+                      testId={`place-answer-export-pdf-${index}`}
+                    />
+                  </div>
+                )}
+              </>
             )}
             {message.citedEvidence && message.citedEvidence.length > 0 && (
               <p className="mt-1 text-[10px] text-white/45">
