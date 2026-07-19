@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 /** MapLibre needs the DOM; skip SSR for the TwinTO product shell. */
 export const TwinTOClient = dynamic(
-  () => import("./TwinTOAppShell").then((m) => m.TwinTOAppShell),
+  () => import("./TechTOAppShell").then((m) => m.TwinTOAppShell),
   {
     ssr: false,
     loading: () => (

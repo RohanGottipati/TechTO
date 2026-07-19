@@ -10,32 +10,32 @@ import { MobileBottomSheet } from "@/components/mobile/MobileBottomSheet";
 import { StatusPill } from "@/components/primitives/StatusPill";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { useMapStore } from "@/store/useMapStore";
-import { useTwinTOStore, type TwinTOPanelFocus } from "@/store/useTwinTOStore";
-import { useBackboardRun } from "@/lib/twinto/use-backboard-run";
-import type { StoredTwinTORun } from "@/lib/twinto/run-history";
+import { useTechTOStore, type TechTOPanelFocus } from "@/store/useTechTOStore";
+import { useBackboardRun } from "@/lib/techto/use-backboard-run";
+import type { StoredTechTORun } from "@/lib/techto/run-history";
 import { FLAGSHIP_SCENARIO_ID, requireScenario } from "@/data/transit/scenarios";
 import { simulateTransit } from "@/lib/transit/simulator";
 
-import { ScenarioPanel } from "@/components/twinto/ScenarioPanel";
-import { PlaybackControls } from "@/components/twinto/PlaybackControls";
-import { BaselinePanel } from "@/components/twinto/BaselinePanel";
-import { PolicyCandidates } from "@/components/twinto/PolicyCandidates";
-import { PolicyComparison } from "@/components/twinto/PolicyComparison";
-import { CohortReactionExplorer } from "@/components/twinto/CohortReactionExplorer";
-import { AgentCouncil } from "@/components/twinto/AgentCouncil";
-import { AgentTimeline } from "@/components/twinto/AgentTimeline";
-import { EvidenceDrawer } from "@/components/twinto/EvidenceDrawer";
-import { StressTestPanel } from "@/components/twinto/StressTestPanel";
-import { FinalRecommendation } from "@/components/twinto/FinalRecommendation";
-import { OperatorQuestionPanel } from "@/components/twinto/OperatorQuestionPanel";
-import { PreviousRunsPanel } from "@/components/twinto/PreviousRunsPanel";
-import { BackboardStatusPanel } from "@/components/twinto/BackboardStatusPanel";
+import { ScenarioPanel } from "@/components/techto/ScenarioPanel";
+import { PlaybackControls } from "@/components/techto/PlaybackControls";
+import { BaselinePanel } from "@/components/techto/BaselinePanel";
+import { PolicyCandidates } from "@/components/techto/PolicyCandidates";
+import { PolicyComparison } from "@/components/techto/PolicyComparison";
+import { CohortReactionExplorer } from "@/components/techto/CohortReactionExplorer";
+import { AgentCouncil } from "@/components/techto/AgentCouncil";
+import { AgentTimeline } from "@/components/techto/AgentTimeline";
+import { EvidenceDrawer } from "@/components/techto/EvidenceDrawer";
+import { StressTestPanel } from "@/components/techto/StressTestPanel";
+import { FinalRecommendation } from "@/components/techto/FinalRecommendation";
+import { OperatorQuestionPanel } from "@/components/techto/OperatorQuestionPanel";
+import { PreviousRunsPanel } from "@/components/techto/PreviousRunsPanel";
+import { BackboardStatusPanel } from "@/components/techto/BackboardStatusPanel";
 import { MapChatBar } from "@/components/chat/MapChatBar";
 import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
 
 const BASELINE_SEED = 20260718;
 
-const TABS: { key: TwinTOPanelFocus; label: string; icon: typeof Users2 }[] = [
+const TABS: { key: TechTOPanelFocus; label: string; icon: typeof Users2 }[] = [
   { key: "chat", label: "Council", icon: Users2 },
   { key: "citizens", label: "Policy Lab", icon: MessageSquareText },
   { key: "recommendation", label: "Recommendation", icon: Trophy },
@@ -46,7 +46,7 @@ const TABS: { key: TwinTOPanelFocus; label: string; icon: typeof Users2 }[] = [
  * TwinTO's product shell: the MapLibre Toronto map is the dominant visual
  * plane, with the scenario/policy controls docked left and the Backboard
  * council docked right on desktop, collapsing into bottom sheets on mobile
- * (see MobileToolbar/MobileBottomSheet). Wires useMapStore, useTwinTOStore,
+ * (see MobileToolbar/MobileBottomSheet). Wires useMapStore, useTechTOStore,
  * and useBackboardRun together; the flagship demo scenario is fixed to
  * FLAGSHIP_SCENARIO_ID (docs/twinto-implementation.md section 2).
  */
@@ -55,15 +55,15 @@ export function TwinTOAppShell() {
   const isMobile = useIsMobile();
 
   const setSelectedScenario = useMapStore((s) => s.setSelectedScenario);
-  const panelFocus = useTwinTOStore((s) => s.panelFocus);
-  const setPanelFocus = useTwinTOStore((s) => s.setPanelFocus);
-  const selectedCandidateId = useTwinTOStore((s) => s.selectedCandidateId);
-  const setSelectedCandidate = useTwinTOStore((s) => s.setSelectedCandidate);
-  const setActiveRun = useTwinTOStore((s) => s.setActiveRun);
+  const panelFocus = useTechTOStore((s) => s.panelFocus);
+  const setPanelFocus = useTechTOStore((s) => s.setPanelFocus);
+  const selectedCandidateId = useTechTOStore((s) => s.selectedCandidateId);
+  const setSelectedCandidate = useTechTOStore((s) => s.setSelectedCandidate);
+  const setActiveRun = useTechTOStore((s) => s.setActiveRun);
 
   const run = useBackboardRun();
   const [includeWebSearch, setIncludeWebSearch] = useState(false);
-  const [viewedRun, setViewedRun] = useState<StoredTwinTORun | null>(null);
+  const [viewedRun, setViewedRun] = useState<StoredTechTORun | null>(null);
   const [mobileSheet, setMobileSheet] = useState<"scenario" | "council" | null>(null);
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export function TwinTOAppShell() {
     run.start({ scenarioId: scenario.id, includeWebSearch });
   }
 
-  function handleSelectRun(stored: StoredTwinTORun) {
+  function handleSelectRun(stored: StoredTechTORun) {
     setViewedRun(stored);
     setSelectedCandidate(null);
     setMobileSheet(null);
