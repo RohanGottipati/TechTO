@@ -197,7 +197,7 @@ export class MongoTransitRepository implements TransitRepository {
         mobilityNeeds: raw.mobilityNeeds as string[],
         sensitivity: raw.sensitivity as TransitCohortFixture["sensitivity"],
         baselineModeShare: raw.baselineModeShare as TransitCohortFixture["baselineModeShare"],
-        dataMode: (raw.dataMode as TransitCohortFixture["dataMode"]) ?? "synthetic-fixture",
+        dataMode: (raw.dataMode as TransitCohortFixture["dataMode"]) ?? "resident-persona-aggregate",
       };
     });
 

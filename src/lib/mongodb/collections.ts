@@ -18,7 +18,6 @@ export const COLLECTIONS = {
   citizenCohorts: "citizen_cohorts",
   /** Real StatCan-census-grounded individual resident records (population/generate_and_store_personas.py). */
   residentPersonas: "resident_personas",
-  socialContexts: "social_contexts",
   activityPlans: "activity_plans",
   journeyTemplates: "journey_templates",
   interventions: "interventions",

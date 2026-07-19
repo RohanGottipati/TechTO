@@ -1,4 +1,3 @@
-import { listCohorts } from "@/data/transit/cohorts";
 import {
   getConcertEvent,
   getServiceIncidents,
@@ -158,41 +157,10 @@ export async function seedMongoFromFixtures(databaseName?: string): Promise<Seed
   }
   upserted[COLLECTIONS.neighbourhoods] = n;
 
-  n = 0;
-  for (const cohort of listCohorts()) {
-    await db.collection(COLLECTIONS.citizenCohorts).updateOne(
-      { cohortId: cohort.id },
-      {
-        $set: {
-          ...cohort,
-          cohortId: cohort.id,
-          provenance: DEMO_PROVENANCE,
-          updatedAt: now,
-        },
-      },
-      { upsert: true },
-    );
-    await db.collection(COLLECTIONS.socialContexts).updateOne(
-      { cohortId: cohort.id },
-      {
-        $set: {
-          cohortId: cohort.id,
-          peerTransitAdoption: cohort.baselineModeShare.transit,
-          householdVehicleAvailability: cohort.vehicleAccessProbability,
-          coworkerDepartureConcentration: "16:05-16:12",
-          neighbourhoodPolicySupport: 0.6,
-          recentDelayExperienceCount: cohort.workSchedule === "shift" ? 3 : 1,
-          dataMode: "synthetic-fixture",
-          provenance: DEMO_PROVENANCE,
-          updatedAt: now,
-        },
-      },
-      { upsert: true },
-    );
-    n += 1;
-  }
-  upserted[COLLECTIONS.citizenCohorts] = n;
-  upserted[COLLECTIONS.socialContexts] = n;
+  // citizen_cohorts is intentionally not seeded here: it holds only real
+  // resident-persona-aggregate data (population/build_neighbourhood_cohorts.py),
+  // never synthetic fixtures. socialContexts had no consumers and existed
+  // only as a byproduct of the old synthetic cohort seed.
 
   n = 0;
   for (const scenario of listScenarios()) {
