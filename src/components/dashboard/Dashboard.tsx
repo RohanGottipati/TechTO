@@ -22,19 +22,19 @@ import type {
 import { CANNED_CITY_ASKS } from "@/lib/planner/canned";
 
 /**
- * Streams real per-neighbourhood acceptance (src/app/api/neighbourhood-acceptance/route.ts,
+ * Streams real per-resident acceptance (src/app/api/neighbourhood-acceptance/route.ts,
  * Monte-Carlo-sampled from real resident_personas against the real trained
- * opinion model) and fans each neighbourhood's real value out to every
- * persona sharing that code as soon as it arrives, via `onNeighbourhood` --
- * so the map updates incrementally rather than waiting for all ~158
- * neighbourhoods. `acceptance` is real or, for a code with no data yet,
- * neutral (0.5) rather than a guess.
+ * opinion model). Each event is exactly one resident who was actually
+ * sampled and scored -- we only ever light up that one dot, never every
+ * resident sharing its neighbourhood, so the map honestly reflects "these
+ * few people were asked" rather than implying the whole population was.
  */
 async function streamRealAcceptance(
   scenarioId: string,
-  personasByCode: Map<string, number[]>,
+  personaIndexById: Map<string, number>,
   acceptance: Float32Array,
-  onNeighbourhood: (acceptance: Float32Array) => void,
+  opinions: Map<number, string>,
+  onSample: (acceptance: Float32Array, opinions: Map<number, string>) => void,
   signal: AbortSignal,
 ): Promise<void> {
   const response = await fetch(`/api/neighbourhood-acceptance?scenarioId=${encodeURIComponent(scenarioId)}`, {
@@ -57,18 +57,19 @@ async function streamRealAcceptance(
     for (const block of blocks) {
       const dataLine = block.split("\n").find((line) => line.startsWith("data:"));
       if (!dataLine) continue;
-      let parsed: { code?: string; acceptance?: number; done?: boolean };
+      let parsed: { personaId?: string; acceptance?: number; opinionText?: string; done?: boolean };
       try {
         parsed = JSON.parse(dataLine.slice("data:".length).trim());
       } catch {
         continue;
       }
       if (parsed.done) return;
-      if (parsed.code && typeof parsed.acceptance === "number") {
-        const indices = personasByCode.get(parsed.code);
-        if (indices) {
-          for (const i of indices) acceptance[i] = parsed.acceptance;
-          onNeighbourhood(acceptance);
+      if (parsed.personaId && typeof parsed.acceptance === "number") {
+        const index = personaIndexById.get(parsed.personaId);
+        if (index !== undefined) {
+          acceptance[index] = parsed.acceptance;
+          if (parsed.opinionText) opinions.set(index, parsed.opinionText);
+          onSample(acceptance, opinions);
         }
       }
     }
@@ -172,12 +173,10 @@ export function Dashboard() {
     };
   }, []);
 
-  const personasByCode = useMemo(() => {
-    const index = new Map<string, number[]>();
+  const personaIndexById = useMemo(() => {
+    const index = new Map<string, number>();
     (data?.personas ?? []).forEach((p, i) => {
-      const list = index.get(p.code) ?? [];
-      list.push(i);
-      index.set(p.code, list);
+      if (p.personaId) index.set(p.personaId, i);
     });
     return index;
   }, [data]);
@@ -185,8 +184,8 @@ export function Dashboard() {
   // Whenever the scenario changes: get sweepKm (positional only, for the
   // reveal animation) from the local engine, show neutral dots immediately
   // (never the fake formula's acceptance -- see engine.ts's own header),
-  // then stream in real Monte-Carlo-sampled acceptance neighbourhood by
-  // neighbourhood as it arrives.
+  // then stream in real Monte-Carlo-sampled acceptance resident by resident
+  // as it arrives -- only the residents actually sampled get lit.
   useEffect(() => {
     const city = dataRef.current;
     if (!city) return;
@@ -194,16 +193,20 @@ export function Dashboard() {
 
     const { sweepKm } = runScenario(scenarioId, city.personas, city.routes);
     const acceptance = new Float32Array(city.personas.length).fill(0.5);
+    const opinions = new Map<number, string>();
     useSimStore.getState().setResult(aggregate(scenarioId, city.personas, acceptance, sweepKm));
     useSimStore.getState().setAcceptanceLoading(true);
 
     streamRealAcceptance(
       scenarioId,
-      personasByCode,
+      personaIndexById,
       acceptance,
-      (updated) => {
+      opinions,
+      (updated, updatedOpinions) => {
         if (controller.signal.aborted) return;
-        useSimStore.getState().setResult(aggregate(scenarioId, city.personas, updated, sweepKm));
+        const result = aggregate(scenarioId, city.personas, updated, sweepKm);
+        result.opinions = updatedOpinions;
+        useSimStore.getState().setResult(result);
       },
       controller.signal,
     )
@@ -215,7 +218,7 @@ export function Dashboard() {
       });
 
     return () => controller.abort();
-  }, [scenarioId, data, personasByCode]);
+  }, [scenarioId, data, personaIndexById]);
 
   useEffect(() => {
     if (mapReady && data) useSimStore.getState().setStatus("ready");

@@ -76,6 +76,8 @@ export interface Persona {
   incomeBand?: string;
   /** The persona's LLM-rendered profile description (see population/persona_text.py). */
   profileText?: string;
+  /** Real `resident_personas.persona_id` -- correlates this dot with Monte-Carlo-sampled real opinions. */
+  personaId?: string;
 }
 
 export interface NeighbourhoodAggregate {
@@ -95,6 +97,8 @@ export interface ScenarioResult {
   supportShare: number;
   opposeShare: number;
   mean: number;
+  /** Real model-generated opinion text, index matches Persona.id -- present only for residents actually Monte-Carlo-sampled this scenario. */
+  opinions?: Map<number, string>;
 }
 
 export const HISTOGRAM_BINS = 22;
