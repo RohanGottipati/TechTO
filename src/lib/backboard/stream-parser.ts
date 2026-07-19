@@ -115,8 +115,16 @@ export function createRunStreamClient(options: CreateRunStreamClientOptions): Ru
         const chunk = decoder.decode(value, { stream: true });
         const { events, remainder } = parseSseChunk(buffer, chunk, seen);
         buffer = remainder;
+        // yield between events so React can paint mid-chunk (else deltas batch into one pop)
         for (const event of events) {
           options.onEvent(event);
+          await new Promise<void>((resolve) => {
+            if (typeof requestAnimationFrame === "function") {
+              requestAnimationFrame(() => resolve());
+            } else {
+              setTimeout(resolve, 0);
+            }
+          });
         }
       }
 

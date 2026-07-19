@@ -15,7 +15,6 @@ import type {
   NeighbourhoodCollection,
   Persona,
   RouteCollection,
-  StreetCollection,
 } from "@/lib/sim/types";
 import { CANNED_CITY_ASKS } from "@/lib/planner/canned";
 
@@ -23,8 +22,25 @@ interface CityData {
   neighbourhoods: NeighbourhoodCollection;
   routes: RouteCollection;
   busRoutes: RouteCollection;
-  streets: StreetCollection;
   personas: Persona[];
+}
+
+/**
+ * Loads real residents from `/api/personas` (backed by MongoDB's
+ * `resident_personas`). Falls back to fully-synthetic `buildPersonas()`
+ * only if the API is unreachable, so the map still renders during an
+ * outage -- this fallback path is not the intended steady state.
+ */
+async function loadPersonas(neighbourhoods: NeighbourhoodCollection): Promise<Persona[]> {
+  try {
+    const response = await fetch("/api/personas");
+    if (!response.ok) throw new Error("personas fetch failed");
+    const data = (await response.json()) as { personas: Persona[] };
+    if (data.personas?.length) return data.personas;
+    throw new Error("personas response empty");
+  } catch {
+    return buildPersonas(neighbourhoods);
+  }
 }
 
 export function Dashboard() {
@@ -38,27 +54,26 @@ export function Dashboard() {
   const dataRef = useRef<CityData | null>(null);
   const cityPlan = useCityPlanRun();
 
-  // Load the real geodata once, then synthesize the census-weighted population.
+  // Load the real geodata once, then load the real resident population.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [nbhdRes, routeRes, busRouteRes, streetRes] = await Promise.all([
+        const [nbhdRes, routeRes, busRouteRes] = await Promise.all([
           fetch("/data/neighbourhoods.geojson"),
           fetch("/data/ttc-routes.geojson"),
           fetch("/data/ttc-bus-routes.geojson"),
-          fetch("/data/streets.geojson"),
         ]);
-        if (!nbhdRes.ok || !routeRes.ok || !busRouteRes.ok || !streetRes.ok)
+        if (!nbhdRes.ok || !routeRes.ok || !busRouteRes.ok)
           throw new Error("geodata fetch failed");
         const neighbourhoods =
           (await nbhdRes.json()) as NeighbourhoodCollection;
         const routes = (await routeRes.json()) as RouteCollection;
         const busRoutes = (await busRouteRes.json()) as RouteCollection;
-        const streets = (await streetRes.json()) as StreetCollection;
         if (cancelled) return;
-        const personas = buildPersonas(neighbourhoods);
-        const city = { neighbourhoods, routes, busRoutes, streets, personas };
+        const personas = await loadPersonas(neighbourhoods);
+        if (cancelled) return;
+        const city = { neighbourhoods, routes, busRoutes, personas };
         dataRef.current = city;
         setData(city);
         useSimStore.getState().setPersonaCount(personas.length);
@@ -114,7 +129,6 @@ export function Dashboard() {
           neighbourhoods={data.neighbourhoods}
           routes={data.routes}
           busRoutes={data.busRoutes}
-          streets={data.streets}
           personas={data.personas}
           onReady={() => setMapReady(true)}
         />
@@ -157,7 +171,11 @@ export function Dashboard() {
             </button>
           ))}
         </div>
-        <CityPlanStrip summary={cityPlan.summary} isRunning={cityPlan.isRunning} />
+        <CityPlanStrip
+          summary={cityPlan.summary}
+          isRunning={cityPlan.isRunning}
+          liveText={cityPlan.liveText}
+        />
       </div>
 
       {/* Bottom: liquid-glass City Copilot */}
@@ -167,8 +185,8 @@ export function Dashboard() {
             enablePlanningRun={false}
             enableCityPlanRun
             cityPlanRunning={cityPlan.isRunning}
-            onCityPlanQuestion={async (q) => {
-              const payload = await cityPlan.start(q);
+            onCityPlanQuestion={async (q, handlers) => {
+              const payload = await cityPlan.start(q, handlers);
               return payload;
             }}
           />

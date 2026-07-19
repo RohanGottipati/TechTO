@@ -43,32 +43,39 @@ test.describe("ToronTwin dashboard", () => {
         mapErrors.push(text);
       }
     });
-    await page.route("**/api/planner/run", async (route) => {
+    await page.route("**/api/planner/stream", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          question: "Focus Wychwood",
-          summary: "Focused Wychwood on the map.",
-          ranking: [],
-          chosenId: null,
-          backboardMode: "test",
-          populationMode: "test",
-          participatingAgents: [],
-          events: [],
-          mapActions: [
-            {
-              type: "fit_bounds",
-              bounds: [-79.438, 43.67, -79.403, 43.696],
-              padding: 80,
-              durationMs: 0,
-            },
-            {
-              type: "highlight_neighbourhoods",
-              neighbourhoodIds: ["024"],
-            },
-          ],
-        }),
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({
+          eventId: "test-run:1",
+          runId: "test-run",
+          sequence: 1,
+          type: "planner.completed",
+          timestamp: new Date().toISOString(),
+          payload: {
+            question: "Focus Wychwood",
+            summary: "Focused Wychwood on the map.",
+            ranking: [],
+            chosenId: null,
+            backboardMode: "test",
+            populationMode: "test",
+            participatingAgents: [],
+            events: [],
+            mapActions: [
+              {
+                type: "fit_bounds",
+                bounds: [-79.438, 43.67, -79.403, 43.696],
+                padding: 80,
+                durationMs: 0,
+              },
+              {
+                type: "highlight_neighbourhoods",
+                neighbourhoodIds: ["024"],
+              },
+            ],
+          },
+        })}\n\n`,
       });
     });
 
