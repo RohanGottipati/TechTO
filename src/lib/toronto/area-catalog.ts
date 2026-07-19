@@ -290,7 +290,7 @@ export function formatTorontoAreaScreeningAnswer(area: TorontoAreaEvidence): str
     "• Origin-destination demand and ridership modelling",
     "• Station geometry, constructability, utilities, and network integration",
     "• Accessible walking and cycling catchments, including physical barriers",
-    "• Community consultation and a distribution of day-one acceptance",
+    "• Community consultation and a distribution of acceptance",
     "• Lifecycle carbon, operating cost, and alternatives comparison",
   ].join("\n");
 }

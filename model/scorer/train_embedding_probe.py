@@ -50,7 +50,7 @@ OUT_PATH = REPO_ROOT / "src" / "lib" / "citizen-reaction" / "embedding-probe-wei
 
 MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
 MIN_VOTES = 5
-C = 0.1
+C_GRID = [0.1, 0.3, 1.0, 3.0, 10.0]
 SEED = 42
 
 
@@ -85,17 +85,47 @@ def main() -> None:
         embeddings, y, test_size=0.2, random_state=SEED, stratify=y,
     )
 
-    clf = LogisticRegression(max_iter=3000, C=C, class_weight="balanced")
-    clf.fit(X_train, y_train)
+    # C=0.1 (the old fixed value) turns out to over-regularize on 384-dim
+    # embeddings: the learned weight vector shrinks so hard that raw dot
+    # products cluster within +-0.3 of zero, so sigmoid(dot) barely leaves
+    # 0.5 even for clearly polar text. Grid-search C on held-out AUC instead
+    # of hand-picking it, so the probe actually uses the discriminative
+    # signal the embeddings contain.
+    best_c, best_auc, best_clf = None, -1.0, None
+    for c in C_GRID:
+        trial = LogisticRegression(max_iter=3000, C=c, class_weight="balanced")
+        trial.fit(X_train, y_train)
+        trial_auc = roc_auc_score(y_val, trial.predict_proba(X_val)[:, 1])
+        print(f"  C={c}: val AUC={trial_auc:.4f}")
+        if trial_auc > best_auc:
+            best_c, best_auc, best_clf = c, trial_auc, trial
+    print(f"Selected C={best_c} (val AUC={best_auc:.4f}).")
 
+    clf = best_clf
     val_pred = clf.predict(X_val)
     val_proba = clf.predict_proba(X_val)[:, 1]
     acc = accuracy_score(y_val, val_pred)
     auc = roc_auc_score(y_val, val_proba)
     print(f"Held-out accuracy: {acc:.3f}, AUC: {auc:.3f} (n_val={len(y_val)})")
 
+    # Platt scaling: fit a 1-D (temperature, calibration bias) correction on
+    # the held-out raw logits so the deployed sigmoid actually spreads across
+    # the [0,1] range instead of staying compressed near 0.5. Fit on the
+    # held-out split (not train) so the correction reflects genuine
+    # generalization, not in-sample overconfidence.
+    val_logits = clf.decision_function(X_val).reshape(-1, 1)
+    platt = LogisticRegression(max_iter=3000)
+    platt.fit(val_logits, y_val)
+    temperature = float(platt.coef_[0][0])
+    calibration_bias = float(platt.intercept_[0])
+    calibrated_proba = 1 / (1 + np.exp(-(temperature * val_logits.ravel() + calibration_bias)))
+    print(
+        f"Platt scaling: temperature={temperature:.4f}, calibration_bias={calibration_bias:.4f} "
+        f"(raw logit std={val_logits.std():.4f} -> calibrated proba std={calibrated_proba.std():.4f})"
+    )
+
     # Refit on all real examples for the deployed weights (held-out metrics above already recorded).
-    final_clf = LogisticRegression(max_iter=3000, C=C, class_weight="balanced")
+    final_clf = LogisticRegression(max_iter=3000, C=best_c, class_weight="balanced")
     final_clf.fit(embeddings, y)
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -105,15 +135,20 @@ def main() -> None:
                 "_provenance": (
                     "Trained on real Polis comments + real human vote distributions "
                     "(data/processed/polis_vote_labels.jsonl, 12 public conversations); "
-                    "see model/scorer/train_embedding_probe.py. Not a synthetic/hand-picked lexicon."
+                    "see model/scorer/train_embedding_probe.py. Not a synthetic/hand-picked lexicon. "
+                    "temperature/calibrationBias are a Platt-scaling correction fit on the held-out "
+                    "split, applied at serving time as sigmoid(temperature * dot + calibrationBias)."
                 ),
                 "modelId": MODEL_ID,
                 "bias": round(float(final_clf.intercept_[0]), 6),
                 "weights": [round(float(w), 6) for w in final_clf.coef_[0]],
+                "temperature": round(temperature, 6),
+                "calibrationBias": round(calibration_bias, 6),
                 "trainedOn": {
                     "nExamples": len(texts),
                     "nTrain": len(X_train),
                     "nVal": len(X_val),
+                    "bestC": best_c,
                     "valAccuracy": round(float(acc), 4),
                     "valAuc": round(float(auc), 4),
                     "minVotes": MIN_VOTES,

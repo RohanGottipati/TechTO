@@ -27,12 +27,12 @@ function placeKindLabel(kind: "building" | "station" | "neighbourhood"): string 
 
 function welcomeForPlace(kind: "building" | "station" | "neighbourhood", label: string): string {
   if (kind === "neighbourhood") {
-    return `You're looking at ${label}. Ask about day-one acceptance here, who might oppose a change, or how this area compares citywide.`;
+    return `You're looking at ${label}. Ask about acceptance here, who might oppose a change, or how this area compares citywide.`;
   }
   if (kind === "station") {
     return `Selected ${label}. Ask how nearby residents might react to a transit or service change.`;
   }
-  return `Selected a building near ${label}. Ask how people living or working around here might react on day one.`;
+  return `Selected a building near ${label}. Ask how people living or working around here might react.`;
 }
 
 /**

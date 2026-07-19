@@ -30,8 +30,8 @@ export function ChatMarkdown({
         "[&_blockquote]:my-1.5 [&_blockquote]:border-l-2 [&_blockquote]:border-white/30 [&_blockquote]:pl-2 [&_blockquote]:text-white/70",
         "[&_hr]:my-2 [&_hr]:border-white/20",
         "[&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[11px]",
-        "[&_th]:border [&_th]:border-white/20 [&_th]:bg-white/10 [&_th]:px-1.5 [&_th]:py-1 [&_th]:text-left",
-        "[&_td]:border [&_td]:border-white/15 [&_td]:px-1.5 [&_td]:py-1",
+        "[&_th]:border [&_th]:border-white/20 [&_th]:bg-white/10 [&_th]:px-1.5 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold",
+        "[&_td]:border [&_td]:border-white/15 [&_td]:px-1.5 [&_td]:py-1 [&_td]:align-top",
         className,
       )}
     >

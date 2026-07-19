@@ -25,6 +25,10 @@ interface EmbeddingProbeWeights {
   modelId: string;
   bias: number;
   weights: number[];
+  /** Platt-scaling correction fit on held-out logits: sigmoid(temperature * dot + calibrationBias).
+   *  Defaults to (1, 0) -- i.e. a no-op -- for older weight files that predate calibration. */
+  temperature?: number;
+  calibrationBias?: number;
   trainedOn: { nExamples: number; valAccuracy: number; valAuc: number; embeddingDim: number };
 }
 
@@ -59,7 +63,9 @@ export async function scoreOpinionWithEmbeddingProbe(opinionText: string): Promi
   for (let i = 0; i < embedding.length; i++) {
     dot += embedding[i] * weights.weights[i];
   }
-  return 1 / (1 + Math.exp(-dot));
+  const temperature = weights.temperature ?? 1;
+  const calibrationBias = weights.calibrationBias ?? 0;
+  return 1 / (1 + Math.exp(-(temperature * dot + calibrationBias)));
 }
 
 export function embeddingProbeMetadata() {

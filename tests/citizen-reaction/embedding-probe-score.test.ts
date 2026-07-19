@@ -33,4 +33,21 @@ describe("scoreOpinionWithEmbeddingProbe", () => {
     expect(meta.nExamples).toBeGreaterThan(1000);
     expect(meta.valAuc).toBeGreaterThan(0.7);
   });
+
+  it("separates clearly polar opinions instead of clustering everything near 0.5", async () => {
+    // Regression guard: the pre-calibration probe scored blatantly positive
+    // and negative text within ~0.03 of neutral (dot products barely left
+    // zero). Platt scaling (temperature/calibrationBias in the weights file)
+    // should now visibly spread these apart.
+    const [positive, negative] = await Promise.all([
+      scoreOpinionWithEmbeddingProbe(
+        "I think it is important to make sure that we have a publicly run charging hub for those that need it.",
+      ),
+      scoreOpinionWithEmbeddingProbe(
+        "I am completely against this. It wastes taxpayer money and helps nobody in my neighbourhood.",
+      ),
+    ]);
+    expect(positive).toBeGreaterThan(0.55);
+    expect(negative).toBeLessThan(0.45);
+  });
 }, 30000);

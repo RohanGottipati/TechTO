@@ -24,7 +24,7 @@ export function DistributionPanel() {
     <section className="pointer-events-auto w-[464px] border border-hairline bg-panel px-5 pb-3.5 pt-3">
       <header className="flex items-baseline justify-between">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-          Day-one acceptance
+          Acceptance
         </h2>
         <span className="font-mono text-[9px] text-muted/60">
           n={personaCount.toLocaleString()}

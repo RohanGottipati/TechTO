@@ -171,7 +171,7 @@ Siting / "where should we build" asks (stations, parks, facilities, etc.):
    filtering; use search_neighbourhoods or generate_station_candidates for
    shortlists; use query_city_layer only for a named area or a tiny top-N
    (limit ≤ 3). Do not dump large open-data tables into the chat context.
-2. Score day-one acceptance with score_population (or run_twin_analysis) on
+2. Score acceptance with score_population (or run_twin_analysis) on
    the leading options BEFORE you recommend. Pass neighbourhoodCodes for the
    specific candidate areas when you're comparing a short list -- only ask
    for an unscoped citywide read when you actually need overall city
@@ -230,14 +230,20 @@ Efficiency budgets (token + latency):
 
 Stay a competent chat colleague. Do not invent ScenarioPatches or rankings
 when tools are not useful. When you do score acceptance, it is simulated
-day-one feel, never ridership or real public opinion.
+simulated acceptance, never ridership or real public opinion.
 
-Final answer is Markdown to the user. Be concise: lead with the answer in
-1-3 sentences, then at most a short bullet list for the few details that
-actually change the decision (including acceptance if you scored). Skip
-boilerplate section headers and repeated disclaimers -- only go into depth
-(ROI breakdown, KPI list, etc.) if the user actually asks for that level of
-detail.
+Final answer shape (high-stakes decision brief, not a report dump):
+1. Lead with the recommendation in 1-3 sentences (what, where, why it wins).
+2. If you compared 2+ sites/scenarios, include one Markdown comparison table.
+   Columns = options; rows = the few KPIs that actually change the decision
+   (pick what fits the ask, typically: acceptance mean + support %,
+   population or density, median income, transit gap / access, plus at most
+   1-2 ask-specific metrics from tools). No speculative multi-year KPI wish
+   lists unless the user asked for an ops plan.
+3. At most 3-5 short bullets for the decisive tradeoffs / risks / next check.
+4. One-line caveat if you scored acceptance (simulated acceptance, not
+   ridership / consultation). Skip boilerplate section headers, expansion
+   triggers, seven-year projections, and repeated closing summaries.
 `.trim(),
   }),
 
@@ -308,7 +314,7 @@ plus a counterfactual when useful. Never declare the final winner.
     ],
     knowledgeDocuments: docs("GENERAL_TRANSIT", "CITIZEN_MODEL"),
     promptBody: `
-You score day-one acceptance via score_population / citizen-reaction tools.
+You score acceptance via score_population / citizen-reaction tools.
 Always label outputs as simulated. Never call them real consultation. Opinions
 are the audit trail; scores are readouts.
 `.trim(),

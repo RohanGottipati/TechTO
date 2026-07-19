@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapCanvas } from "./MapCanvas";
 import { LayersPanel } from "./LayersPanel";
 import { ScenarioPanel } from "./ScenarioPanel";
-import { InspectorPanel } from "./InspectorPanel";
 import { MapChatBar } from "@/components/chat/MapChatBar";
 import { BuildingMiniChat } from "@/components/chat/BuildingMiniChat";
 import { useCityPlanRun } from "@/components/planner/CityPlanStrip";
@@ -166,7 +165,6 @@ export function Dashboard() {
   const status = useSimStore((s) => s.status);
   const scenarioId = useSimStore((s) => s.scenarioId);
   const acceptanceLoading = useSimStore((s) => s.acceptanceLoading);
-  const selectedCode = useSimStore((s) => s.selectedCode);
   const selectedPlace = useMapStore((s) => s.selectedPlace);
   const placeChatOpen = useMapStore((s) => s.buildingMiniChatOpen);
   const dataRef = useRef<CityData | null>(null);
@@ -280,16 +278,6 @@ export function Dashboard() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const nbhdIndex = useMemo(
-    () =>
-      new Map(
-        (data?.neighbourhoods.features ?? []).map((f) => [
-          f.properties.code,
-          f.properties,
-        ])
-      ),
-    [data]
-  );
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-ink text-ink-dim">
@@ -324,12 +312,9 @@ export function Dashboard() {
         <Wordmark />
       </div>
 
-      {/* Right rail: selected-place information, then its local chat. */}
-      {data && (selectedCode || (selectedPlace && placeChatOpen)) && (
+      {/* Right rail: selected-place local chat. */}
+      {data && selectedPlace && placeChatOpen && (
         <div className="pointer-events-none absolute right-4 top-4 z-30 flex max-h-[calc(100dvh-7rem)] flex-col gap-3">
-          {selectedCode && (
-            <InspectorPanel index={nbhdIndex} personas={data.personas} />
-          )}
           <BuildingMiniChat />
         </div>
       )}

@@ -4,7 +4,7 @@ const TOOL_LABEL: Record<string, string> = {
   search_neighbourhoods: "Searching neighbourhoods",
   compose_map_actions: "Updating the map",
   propose_scenarios: "Drafting scenario options",
-  score_population: "Scoring day-one acceptance",
+  score_population: "Scoring acceptance",
   get_current_map_context: "Reading map context",
   get_network_snapshot: "Loading transit network",
   invoke_assistant: "Calling a specialist",

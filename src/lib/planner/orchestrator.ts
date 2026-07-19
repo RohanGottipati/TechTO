@@ -298,13 +298,14 @@ export async function runCityOrchestration(
     "Compound asks with distinct proposals for distinct areas (e.g. 'raise tax in area A OR add a parking fee in area B'): call score_population once per clause, each scoped with neighbourhoodCodes to that clause's own target area and a question describing only that clause -- never blend two different proposals into one sampled question. Compare the per-clause results, don't average them, and state which alternative (or combination) is better in the final answer.",
     "Never invent ScenarioPatches or fake rankings just to fill a pipeline.",
     "When comparing places or proposing geometry, use compose_map_actions so the user can see the search on the map.",
-    "Be concise. Lead with the answer in 1-3 sentences. Only add a short bullet list below it for the handful of details that actually change the decision (e.g. acceptance, a key tradeoff). Never pad with boilerplate section headers unless the user asks for that depth.",
-    "If you score population acceptance or ROI, state the one-line caveat (simulated day-one feel, not ridership; no ROI claimed until inputs are validated) only once, briefly.",
-    "For capital or operating recommendations where a value case is material, invoke the feasibility specialist when lifecycle cost or monetized-benefit evidence is needed, then summarize its result in a sentence or two.",
+    "Final answer shape: (1) recommendation in 1-3 sentences; (2) if 2+ options were compared, one Markdown KPI table (options as columns; rows = the few decision KPIs only, e.g. acceptance mean/support, density or population, income, transit gap, plus at most 1-2 ask-specific metrics); (3) at most 3-5 short bullets for decisive tradeoffs/risks; (4) one-line acceptance caveat if scored.",
+    "Do NOT write long reports: no multi-section essays, no speculative year-1..year-7 KPI catalogues, no expansion-trigger checklists, no repeated closing summaries unless the user asked for an implementation plan.",
+    "If you score population acceptance or ROI, state the one-line caveat (simulated acceptance, not ridership; no ROI claimed until inputs are validated) only once, briefly.",
+    "For capital or operating recommendations where a value case is material, invoke the feasibility specialist when lifecycle cost or monetized-benefit evidence is needed, then put the key numbers in the KPI table or one bullet -- do not paste the specialist's full writeup.",
     hintPatches.length
       ? `Caller supplied optional starter patches (use or ignore):\n${JSON.stringify(hintPatches)}`
       : "",
-    "Final reply: short, plain Markdown. No rambling, no restating the question, no closing summary paragraph.",
+    "Final reply: short Markdown decision brief. No rambling, no restating the question.",
   ]
     .filter(Boolean)
     .join("\n");

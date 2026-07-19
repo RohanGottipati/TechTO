@@ -223,7 +223,7 @@ export function buildChatReportHtml(input: ChatReportInput): string {
       <div class="meta">Toronto, Ontario · Exported ${escapeHtml(exportedAt.toLocaleString("en-CA", { timeZone: "America/Toronto", timeZoneName: "short" }))}</div>
     </header>
     ${content || "<p>No conversation content was available to export.</p>"}
-    <aside class="notice"><strong>Decision-support limitation:</strong> Simulated day-one acceptance is not public consultation. Potential accessibility, ridership, cost, carbon, economic, and ROI effects are not consequence forecasts. Validate assumptions, lifecycle costs, monetized benefits, uncertainty ranges, and local evidence before making a decision.</aside>
+    <aside class="notice"><strong>Decision-support limitation:</strong> Simulated acceptance is not public consultation. Potential accessibility, ridership, cost, carbon, economic, and ROI effects are not consequence forecasts. Validate assumptions, lifecycle costs, monetized benefits, uncertainty ranges, and local evidence before making a decision.</aside>
     <footer>Generated from TechTO. Geographic scope: City of Toronto.</footer>
   </main>
 </body>

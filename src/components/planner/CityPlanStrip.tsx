@@ -101,7 +101,7 @@ function traceLineFor(event: { type: string; [key: string]: unknown }): CityPlan
       const support = (Number(event.supportShare) * 100).toFixed(0);
       return {
         id: "",
-        label: `real acceptance scored: mean ${mean}, ${support}% support (${event.provider as string})`,
+        label: `acceptance scored: mean ${mean}, ${support}% support`,
         status: "info",
       };
     }

@@ -32,7 +32,7 @@ export interface Scenario {
 export const SCENARIOS: Scenario[] = [
   {
     id: "baseline",
-    name: "Baseline · current network",
+    name: "Baseline · current scenario",
     kind: "baseline",
     summary:
       "No intervention. Dots read as satisfaction with today's rail access.",
