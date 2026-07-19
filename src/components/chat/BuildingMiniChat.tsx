@@ -173,8 +173,8 @@ export function BuildingMiniChat({
         placement === "floating"
           ? "absolute bottom-28 right-4 w-[min(92vw,340px)] md:bottom-32"
           : "relative w-[288px] max-w-[calc(100vw-2rem)]",
-"border border-white/30",
-"bg-black/35 _18px_50px_-18px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.35)]",
+        "border border-white/30",
+        "bg-black/35",
         "backdrop-blur-2xl backdrop-saturate-150",
       )}
       data-testid="building-mini-chat"

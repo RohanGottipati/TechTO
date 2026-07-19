@@ -265,9 +265,9 @@ export function MapChatBar({
       {showTranscript && (
         <div
           className={cn(
-"mb-3 flex min-h-0 flex-col border border-white/25 px-4 py-3 text-[13px]",
+            "mb-3 flex min-h-0 flex-col border border-white/25 px-4 py-3 text-[13px]",
             maximized ? "h-[min(72vh,720px)]" : "max-h-[28rem]",
-"bg-white/18 _12px_40px_-16px_rgba(15,40,80,0.45)] backdrop-blur-2xl backdrop-saturate-150",
+            "bg-white/18 backdrop-blur-2xl backdrop-saturate-150",
           )}
         >
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
@@ -347,9 +347,8 @@ export function MapChatBar({
       <form
         onSubmit={onSubmit}
         className={cn(
-"flex items-center gap-2 border border-white/35 px-3 py-2",
-"bg-white/14 _10px_36px_-12px_rgba(40,80,140,0.55),inset_0_1px_0_rgba(255,255,255,0.35)]",
-          "backdrop-blur-2xl backdrop-saturate-150",
+          "flex items-center gap-2 border border-white/35 px-3 py-2",
+          "bg-white/14 backdrop-blur-2xl backdrop-saturate-150",
         )}
       >
         <button
@@ -406,7 +405,7 @@ export function MapChatBar({
         <button
           type="submit"
           disabled={isRunning || busy || !input.trim()}
- className="inline-flex h-10 w-10 shrink-0 items-center justify-center bg-white/25 text-white _0_1px_0_rgba(255,255,255,0.45)] transition hover:bg-white/40 disabled:opacity-40"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center bg-white/25 text-white transition hover:bg-white/40 disabled:opacity-40"
           data-testid="city-copilot-send"
           aria-label="Send"
         >
