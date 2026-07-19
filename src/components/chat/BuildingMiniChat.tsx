@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowUp, Loader2, MapPin, X } from "lucide-react";
 import { createRunStreamClient } from "@/lib/backboard/stream-parser";
-import { parseMapActions } from "@/lib/twinto/map-actions";
-import { applyMapActions } from "@/lib/twinto/apply-map-actions";
+import { parseMapActions } from "@/lib/techto/map-actions";
+import { applyMapActions } from "@/lib/techto/apply-map-actions";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils/cn";

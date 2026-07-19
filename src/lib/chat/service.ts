@@ -19,7 +19,7 @@ import {
   TORONTO_SCOPE_ASSUMPTIONS,
   TORONTO_SCOPE_LIMITATIONS,
   TORONTO_SCOPE_SHORT,
-} from "@/lib/twinto/toronto-scope";
+} from "@/lib/techto/toronto-scope";
 
 const MEMORY_THREADS = new Map<string, ChatThreadRecord>();
 
@@ -98,26 +98,28 @@ function buildOutOfScopeResponse(threadId: string, messageId: string): CityCopil
 function buildNavResponse(threadId: string, messageId: string, text: string): CityCopilotResponse {
   const matches = searchNeighbourhoods(text, undefined, 3);
   const rawActions =
-    matches.length > 0
+    match != null
       ? [
           {
             type: "fly_to_center",
-            center: matches[0].center,
+            center: match.center,
             zoom: 14,
             durationMs: 1200,
           },
           {
             type: "highlight_neighbourhoods",
-            neighbourhoodIds: matches.map((m) => m.id),
+            neighbourhoodIds: [match.id],
           },
           {
             type: "show_candidate_markers",
-            candidates: matches.map((m, index) => ({
-              candidateId: `station-${m.id}`,
-              coordinates: m.center,
-              rank: index + 1,
-              label: m.name,
-            })),
+            candidates: [
+              {
+                candidateId: `station-${match.id}`,
+                coordinates: match.center,
+                rank: 1,
+                label: match.name,
+              },
+            ],
           },
         ]
       : [];
@@ -128,8 +130,8 @@ function buildNavResponse(threadId: string, messageId: string, text: string): Ci
     threadId,
     intent: ["SIMPLE_MAP_NAVIGATION", "MAP_NAVIGATION"],
     answer:
-      matches.length > 0
-        ? `Showing ${matches.map((m) => m.name).join(", ")} on the map (synthetic neighbourhood fixtures).`
+      match != null
+        ? `Showing ${match.name} on the map (synthetic neighbourhood fixtures).`
         : "I could not resolve a neighbourhood from that request.",
     summary: "Map navigation from City Copilot.",
     assumptions: [...TORONTO_SCOPE_ASSUMPTIONS, "Synthetic neighbourhood fixtures"],

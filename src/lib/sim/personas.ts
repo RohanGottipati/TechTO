@@ -20,6 +20,9 @@ const INCOME_SPREAD = 30_000;
  * Build the synthetic population: home points rejection-sampled inside each
  * real neighbourhood polygon, count proportional to 2021 census population.
  * Deterministic per neighbourhood code, so the map is stable across sessions.
+ *
+ * Prefer `/api/personas` (building-snapped real residents). This path is the
+ * offline/synthetic fallback only.
  */
 export function buildPersonas(
   neighbourhoods: NeighbourhoodCollection
@@ -29,7 +32,7 @@ export function buildPersonas(
 
   for (const feature of neighbourhoods.features) {
     const { code, population, income } = feature.properties;
-    const rng = mulberry32(hashString(`torontwin:${code}`));
+    const rng = mulberry32(hashString(`techto:${code}`));
     const target = Math.max(3, Math.round(population / PERSONS_PER_DOT));
     const [minX, minY, maxX, maxY] = geometryBbox(feature.geometry);
 

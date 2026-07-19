@@ -5,13 +5,13 @@ import {
   KNOWLEDGE_BUNDLES,
   type KnowledgeDocumentRef,
 } from "@/lib/backboard/knowledge-bundles";
-import { TORONTO_SCOPE_AGENT_RULE } from "@/lib/twinto/toronto-scope";
+import { TORONTO_SCOPE_AGENT_RULE } from "@/lib/techto/toronto-scope";
 
 /**
  * Principled city-planning roster (~11). Competence lives in tools + twin;
  * no niche one-use-case agents (no NuclearSitingAgent, no schedule-only roles).
  */
-export const TWINTO_ASSISTANT_KEYS = [
+export const TECHTO_ASSISTANT_KEYS = [
   "city-copilot",
   "planning-orchestrator",
   "geospatial-twin",
@@ -25,14 +25,14 @@ export const TWINTO_ASSISTANT_KEYS = [
   "explanation-map",
 ] as const;
 
-export type TwinTOAssistantKey = (typeof TWINTO_ASSISTANT_KEYS)[number];
-/** @deprecated Prefer TwinTOAssistantKey */
-export type AssistantRoleKey = TwinTOAssistantKey;
+export type TechTOAssistantKey = (typeof TECHTO_ASSISTANT_KEYS)[number];
+/** @deprecated Prefer TechTOAssistantKey */
+export type AssistantRoleKey = TechTOAssistantKey;
 
 export type { KnowledgeDocumentRef };
 
 export interface AssistantRoleDefinition {
-  key: TwinTOAssistantKey;
+  key: TechTOAssistantKey;
   name: string;
   shortDescription: string;
   systemPrompt: string;
@@ -106,7 +106,7 @@ function role(
   };
 }
 
-export const ASSISTANT_ROSTER: Record<TwinTOAssistantKey, AssistantRoleDefinition> = {
+export const ASSISTANT_ROSTER: Record<TechTOAssistantKey, AssistantRoleDefinition> = {
   "city-copilot": role({
     key: "city-copilot",
     name: "TechTO — City Copilot",
@@ -175,9 +175,15 @@ Stay a competent chat colleague. Do not invent ScenarioPatches or rankings
 when tools are not useful. When you do score acceptance, it is simulated
 day-one feel, never ridership or real public opinion.
 
-Final answer is plain prose to the user. Keep it concise: lead with the
-answer, skip filler and repeated disclaimers unless scoring or map draws
-actually happened this turn.
+When recommending one place, mark only that site (one show_candidate_markers
+entry), fly to it, and highlight that neighbourhood. Multiple markers only
+when the user asked to compare alternatives.
+
+Final answer is Markdown to the user. For place recommendations include the
+full sections from the turn brief (Recommendation, Why this area,
+Sustainability potential, Screening metrics, ROI and value case, Success
+KPIs to validate, What to validate next). Lead with the answer; skip filler
+and repeated disclaimers unless scoring or map draws actually happened.
 `.trim(),
   }),
 
@@ -393,7 +399,7 @@ opinions. Coordinates must stay in Toronto.
 };
 
 /** Same agents for every open city ask (station / stadium / nuclear / …). */
-export const PRINCIPLED_CITY_BUNDLE: readonly TwinTOAssistantKey[] = [
+export const PRINCIPLED_CITY_BUNDLE: readonly TechTOAssistantKey[] = [
   "city-copilot",
   "planning-orchestrator",
   "geospatial-twin",
@@ -413,9 +419,9 @@ export const ASSISTANT_UI_GROUPS = {
   Analysis: ["citizen-response", "equity-impact", "feasibility"],
   Validation: ["adversarial-reviewer", "evidence-auditor"],
   Decision: ["final-policy-judge"],
-} as const satisfies Record<string, readonly TwinTOAssistantKey[]>;
+} as const satisfies Record<string, readonly TechTOAssistantKey[]>;
 
-export const INTENT_BUNDLES: Record<PlanningIntent, readonly TwinTOAssistantKey[]> = {
+export const INTENT_BUNDLES: Record<PlanningIntent, readonly TechTOAssistantKey[]> = {
   SIMPLE_MAP_NAVIGATION: ["city-copilot", "geospatial-twin", "explanation-map"],
   SIMPLE_EXPLANATION: ["city-copilot", "evidence-auditor", "explanation-map"],
   NEW_STATION_LOCATION: PRINCIPLED_CITY_BUNDLE,
@@ -434,14 +440,14 @@ export const INTENT_BUNDLES: Record<PlanningIntent, readonly TwinTOAssistantKey[
 export function selectAssistantsForIntent(
   intent: PlanningIntent,
   _options?: { includeEvents?: boolean },
-): TwinTOAssistantKey[] {
+): TechTOAssistantKey[] {
   return Array.from(new Set(INTENT_BUNDLES[intent]));
 }
 
 export function selectAssistantBundle(
   scenarioId: string,
   options?: { includeConcert?: boolean; includeWeather?: boolean },
-): TwinTOAssistantKey[] {
+): TechTOAssistantKey[] {
   const includeEvents =
     options?.includeConcert === true ||
     options?.includeWeather === true ||
@@ -461,13 +467,13 @@ export const CONCERT_BUNDLE = ["adversarial-reviewer"] as const;
 export const WEATHER_BUNDLE = ["feasibility"] as const;
 
 export function listAssistantRoles(): AssistantRoleDefinition[] {
-  return TWINTO_ASSISTANT_KEYS.map((key) => ASSISTANT_ROSTER[key]);
+  return TECHTO_ASSISTANT_KEYS.map((key) => ASSISTANT_ROSTER[key]);
 }
 
-export function getAssistantRole(key: TwinTOAssistantKey): AssistantRoleDefinition {
+export function getAssistantRole(key: TechTOAssistantKey): AssistantRoleDefinition {
   return ASSISTANT_ROSTER[key];
 }
 
-export function isTwinTOAssistantKey(value: string): value is TwinTOAssistantKey {
-  return (TWINTO_ASSISTANT_KEYS as readonly string[]).includes(value);
+export function isTechTOAssistantKey(value: string): value is TechTOAssistantKey {
+  return (TECHTO_ASSISTANT_KEYS as readonly string[]).includes(value);
 }

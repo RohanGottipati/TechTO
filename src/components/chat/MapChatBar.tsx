@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowUp, Columns2, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import type { CityCopilotResponse } from "@/lib/chat/schemas";
-import { parseMapActions } from "@/lib/twinto/map-actions";
-import { applyMapActions } from "@/lib/twinto/apply-map-actions";
+import { parseMapActions } from "@/lib/techto/map-actions";
+import { applyMapActions } from "@/lib/techto/apply-map-actions";
 import { useMapStore } from "@/store/useMapStore";
-import { useTwinTOStore } from "@/store/useTwinTOStore";
-import type { UseBackboardRunResult } from "@/lib/twinto/use-backboard-run";
+import { useTechTOStore } from "@/store/useTechTOStore";
+import type { UseBackboardRunResult } from "@/lib/techto/use-backboard-run";
 import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { cn } from "@/lib/utils/cn";
 import type { CityPlanRankingRow } from "@/components/planner/CityPlanStrip";
@@ -152,7 +152,9 @@ export function MapChatBar({
               `${i + 1}. ${r.title} (mean ${Number(r.mean).toFixed(2)}, support ${(Number(r.supportShare) * 100).toFixed(0)}%)`,
           )
           .join("\n");
-        let body = payload?.summary?.trim() || "Done.";
+        let body =
+          payload?.summary?.trim() ||
+          "The planning agent finished without a written reply. Try asking again.";
         if (ranking.length) {
           body +=
             `\n\nRanked scenarios:\n${rankLines}` +
@@ -363,7 +365,7 @@ export function MapChatBar({
         {run ? (
           <button
             type="button"
-            onClick={() => useTwinTOStore.getState().setPanelFocus("chat")}
+            onClick={() => useTechTOStore.getState().setPanelFocus("chat")}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
             aria-label="Open council panel"
           >

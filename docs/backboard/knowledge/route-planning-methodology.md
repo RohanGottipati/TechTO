@@ -1,6 +1,6 @@
 # route-planning-methodology
 
-Synthetic TwinTO planning reference. Not an official TTC or City of Toronto
+Synthetic TechTO planning reference. Not an official TTC or City of Toronto
 policy document. Numbers in demos come from local fixtures unless a live
 provider is explicitly labelled.
 
