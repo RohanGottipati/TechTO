@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
-import type { SelectedMapPlace } from "@/lib/twinto/place-context";
-import type { AgentMapOverlay } from "@/lib/twinto/map-overlays";
+import type { SelectedMapPlace } from "@/lib/techto/place-context";
+import type { AgentMapOverlay } from "@/lib/techto/map-overlays";
 
 export interface MapLayerVisibility {
   transit: boolean;

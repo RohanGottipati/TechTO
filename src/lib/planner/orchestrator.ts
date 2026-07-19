@@ -229,29 +229,26 @@ export async function runCityOrchestration(
       detail: outcome.ok ? toolOutputPreview(outcome.toolName, outcome.output) : clipToolDetail(outcome.output),
     });
     if (outcome.ok && outcome.toolName === TOOL_NAMES.COMPOSE_MAP_ACTIONS) {
-      const accepted = (outcome.output as { accepted?: MapAction[] }).accepted ?? [];
-      if (accepted.length) {
-        emit(events, onEvent, { type: "map.actions", runId, actions: accepted });
-      }
+      // map actions are emitted via context.onMapActions (not echoed in tool output)
     }
     if (outcome.ok && outcome.toolName === TOOL_NAMES.PROPOSE_SCENARIOS) {
-      const patches = (outcome.output as { patches?: ScenarioPatch[] }).patches ?? [];
+      const patches = context.proposedCityPatches;
       if (patches.length) emit(events, onEvent, { type: "scenarios.proposed", runId, patches });
     }
     if (outcome.ok && outcome.toolName === TOOL_NAMES.SCORE_POPULATION) {
       const out = outcome.output as {
         scenarioId?: string;
-        citywide?: { mean: number; supportShare: number };
-        provider?: string;
+        mean?: number;
+        support?: number;
       };
-      if (out.scenarioId && out.citywide) {
+      if (out.scenarioId && typeof out.mean === "number") {
         emit(events, onEvent, {
           type: "citizens.scored",
           runId,
           candidateId: out.scenarioId,
-          mean: out.citywide.mean,
-          supportShare: out.citywide.supportShare,
-          provider: out.provider ?? "unknown",
+          mean: out.mean,
+          supportShare: out.support ?? 0,
+          provider: "real-opinion-model",
         });
       }
     }
@@ -265,6 +262,9 @@ export async function runCityOrchestration(
       emitToolEnd(outcome, (role as TechTOAssistantKey) ?? "planning-orchestrator"),
     onPersonaScored: (result) => {
       emit(events, onEvent, { type: "persona.scored", runId, ...result });
+    },
+    onMapActions: (actions) => {
+      if (actions.length) emit(events, onEvent, { type: "map.actions", runId, actions });
     },
   });
 

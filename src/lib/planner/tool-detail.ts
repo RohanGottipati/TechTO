@@ -24,8 +24,9 @@ export function toolOutputPreview(toolName: string, output: unknown): string | u
   }
   if (toolName === "compose_map_actions") {
     return clipToolDetail({
-      accepted: o.accepted,
-      rejected: o.rejected,
+      ok: o.ok,
+      applied: o.applied,
+      rejectedCount: o.rejectedCount,
       errors: o.errors,
     });
   }

@@ -1181,10 +1181,7 @@ async function executeTool(
         })
         .strict()
         .parse(args ?? {});
-      return {
-        dataMode: "in-memory-twin",
-        result: queryTwin(context.twin, parsed),
-      };
+      return queryTwin(context.twin, parsed);
     }
     case TOOL_NAMES.PATCH_TWIN: {
       const parsed = z.object({ patch: z.unknown() }).strict().parse(args);
@@ -1193,16 +1190,22 @@ async function executeTool(
       context.twin = patchTwin(context.twin, patch);
       context.proposedCityPatches.push(patch);
       return {
-        dataMode: "in-memory-twin",
         version: context.twin.version,
-        diff: diffTwin(before, context.twin),
         patchId: patch.id,
+        diff: diffTwin(before, context.twin),
       };
     }
     case TOOL_NAMES.SNAPSHOT_TWIN: {
       const key = `v${context.twin.version}`;
       context.twinSnapshots.set(key, structuredClone(context.twin));
-      return { dataMode: "in-memory-twin", key, snapshot: context.twin };
+      return {
+        key,
+        version: context.twin.version,
+        poiCount: context.twin.pois.length,
+        corridorCount: context.twin.corridors.length,
+        closedRoutes: context.twin.closedRoutes,
+        policyKeys: Object.keys(context.twin.policies),
+      };
     }
     case TOOL_NAMES.DIFF_TWIN: {
       const parsed = z.object({ against: z.string().optional() }).strict().parse(args ?? {});
@@ -1211,7 +1214,7 @@ async function executeTool(
         againstKey === "baseline"
           ? context.twinBaseline
           : context.twinSnapshots.get(againstKey) ?? context.twinBaseline;
-      return { dataMode: "in-memory-twin", diff: diffTwin(other, context.twin) };
+      return diffTwin(other, context.twin);
     }
     case TOOL_NAMES.PROPOSE_SCENARIOS: {
       const parsed = z

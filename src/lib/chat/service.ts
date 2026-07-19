@@ -13,8 +13,8 @@ import { FLAGSHIP_SCENARIO_ID } from "@/data/transit/scenarios";
 import { getMongoDb } from "@/lib/mongodb/client";
 import { COLLECTIONS, DEMO_PROVENANCE } from "@/lib/mongodb/collections";
 import { isMongoConfigured } from "@/lib/mongodb/env";
-import { classifyPlanningIntent } from "@/lib/twinto/intent";
-import { parseMapActions } from "@/lib/twinto/map-actions";
+import { classifyPlanningIntent } from "@/lib/techto/intent";
+import { parseMapActions } from "@/lib/techto/map-actions";
 import {
   TORONTO_SCOPE_ASSUMPTIONS,
   TORONTO_SCOPE_LIMITATIONS,
