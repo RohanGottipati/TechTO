@@ -475,7 +475,7 @@ export type OperatorExplanation = z.output<typeof operatorExplanationSchema>;
  * fields and safetyResult are always populated server-side straight from
  * TechTORunResult / TransitMetrics, never from a model's own arithmetic;
  * only mainRisk, majorAssumption, limitations, and summary are ever
- * generated text (see src/lib/backboard/executive.ts).
+ * generated text.
  */
 export const transitExecutiveSummarySchema = z
   .object({

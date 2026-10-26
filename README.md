@@ -46,7 +46,7 @@ not as a single authoritative forecast. See [AGENTS.md](AGENTS.md).
 | Planning agent | Claude Fable 5 (`claude-fable-5`) through Backboard | Reasons about the request, selects tools, coordinates specialists, and explains recommendations. Model selection is capability-based at runtime with Anthropic first in provider preference order. |
 | Population opinion model | Fine-tuned Qwen3.5-9B LoRA through FreeSolo Flash and Modal | Writes first-person opinions for sampled resident personas and supports the day-one acceptance distribution. |
 | Shared data | MongoDB Atlas, optional | Stores resident personas and, when `TECHTO_REPOSITORY_PROVIDER=mongo`, shared transit data. Local fixtures remain available for development and tests. |
-| Map tiles | OpenFreeMap by default | Supplies the configurable MapLibre basemap. |
+| Map tiles | CARTO Dark Matter | Supplies the MapLibre basemap (style URL set in `src/components/dashboard/MapCanvas.tsx`). |
 
 Backboard is live only: there is no mock Backboard adapter.
 
@@ -128,7 +128,6 @@ server-side; never expose one through a `NEXT_PUBLIC_` variable.
 | `TECHTO_REPOSITORY_PROVIDER` | `fixture` (local data, default) or `mongo` (Atlas). |
 | `MONGODB_URI`, `MONGODB_URI_READONLY`, `MONGODB_DATABASE` | Atlas connection, optional read-only connection, and database name. |
 | `MONGODB_SEARCH_INDEX`, `MONGODB_VECTOR_INDEX` | Atlas Search and Vector Search index names. |
-| `NEXT_PUBLIC_MAP_STYLE_URL` | Optional MapLibre style URL (defaults to OpenFreeMap). |
 | `NEXT_PUBLIC_TRANSIT_API_BASE_URL` | Optional; read only by the `services/transit-core` stub. |
 | `OPENROUTER_API_KEY`, `TECHTO_LLM_BASE_URL`, `TECHTO_LLM_API_KEY`, `TECHTO_LLM_MODEL` | Python research tooling (judges, serving, evaluation). |
 
