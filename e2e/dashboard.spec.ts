@@ -1,36 +1,43 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("TechTO dashboard", () => {
-  test("loads the map and core panels", async ({ page }) => {
+/**
+ * Shell smoke for the landing page and the /city dashboard. Live Backboard /
+ * opinion-model calls are not exercised here (cost / latency); use
+ * npm run backboard:smoke for that.
+ */
+
+test.describe("TechTO", () => {
+  test("landing page links to the city dashboard", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("heading", { name: "TechTO" })
-    ).toBeVisible();
-    // Panels appear once geodata is loaded.
-    await expect(page.getByText("Scenario", { exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.getByText("Day-one acceptance")).toBeVisible({
-      timeout: 30_000,
-    });
-    // The map canvas is present.
-    await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+    const enter = page.getByRole("link", { name: /Enter the twin/ });
+    await expect(enter).toBeVisible();
+    await enter.click();
+    await expect(page).toHaveURL(/\/city$/);
   });
 
-  test("switches scenarios", async ({ page }) => {
-    await page.goto("/");
-    const king = page.getByRole("button", {
-      name: /King St full transit priority/,
+  test("loads the map and core panels", async ({ page }) => {
+    await page.goto("/city");
+    await expect(page.getByRole("heading", { name: "TechTO" }).first()).toBeVisible({
+      timeout: 30_000,
     });
-    await king.click({ timeout: 30_000 });
-    await expect(king).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("tablist", { name: "City scenario" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("heading", { name: "Layers" })).toBeVisible();
+    await expect(page.locator(".maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("switches to a mock scenario", async ({ page }) => {
+    await page.goto("/city");
+    await page.getByRole("button", { name: /Mock scenarios/ }).click({ timeout: 30_000 });
+    await page.getByRole("button", { name: /King St full transit priority/ }).click();
     await expect(
-      page.getByText(/Ban through car traffic on King/)
-    ).toBeVisible();
+      page.getByRole("tab", { name: /King St full transit priority/ })
+    ).toHaveAttribute("aria-selected", "true");
   });
 
   test("toggles a layer", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/city");
     const toggle = page.getByRole("switch", { name: /Residents/ });
     await expect(toggle).toHaveAttribute("aria-checked", "true", {
       timeout: 30_000,

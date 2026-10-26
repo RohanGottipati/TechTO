@@ -9,7 +9,8 @@ Read this file fully before writing code. It encodes decisions that were argued
 through deliberately. Do not silently re-litigate them; if you think one is
 wrong, say so explicitly and wait.
 
-**Product surface.** The MapLibre dashboard at `/` is the only app front door.
+**Product surface.** The MapLibre dashboard at `/city` (linked from the landing
+page at `/`) is the only app front door.
 Chat there runs the **Planning Orchestrator** (`src/lib/planner/orchestrator.ts`,
 `POST /api/planner/run` or `/api/planner/stream`): a free-form Backboard agent
 with twin tools, not a scripted scenario pipeline. The shared Backboard roster

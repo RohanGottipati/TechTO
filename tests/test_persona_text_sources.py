@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import random
 
-import pandas as pd
-import pytest
-
 from population.persona_text import (
     match_ces_attitude,
     neighbourhood_narrative,
@@ -33,8 +30,6 @@ def test_match_ces_attitude_returns_nothing_for_children():
 
 
 def test_match_ces_attitude_returns_party_or_ideology_for_adults():
-    rng = random.Random(1)
-    result = match_ces_attitude("15-64", "Woman+", rng)
     # CES has ~20% non-identifiers and some missing ideology scale values,
     # so we can't require both keys on every draw, but across many draws
     # at least some should carry a real value.
