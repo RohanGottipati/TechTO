@@ -1,5 +1,10 @@
 # TwinTO — Full Implementation Specification
 
+> **Historical note:** this is the original TwinTO build specification and is
+> kept as a design reference (source comments cite its sections). Paths,
+> packages, and setup steps below may not match the current code; see the
+> root `README.md` and `AGENTS.md` for the current state.
+
 > **Repository:** `https://github.com/RohanGottipati/Twin`  
 > **Working product name:** TwinTO  
 > **Product:** AI Citizens for Adaptive Toronto Transit  

@@ -42,31 +42,21 @@ Planning SSE runs also append:
 
 Operator Q&A turns append messages on `backboard_threads` (`kind: operator-qa`).
 
-## Accept policy (§14.9)
+## Search and ingest
 
-`POST /api/backboard/policy/accept` runs an atomic accept bundle (transaction
-when the cluster supports it; sequential fallback otherwise):
-
-- `policy_iterations` status accepted
-- `policy_evaluations` status accepted
-- `model_versions` touch
-- `audit_events` (`policy_accepted`)
-- optional `training_examples` (`eligible`)
-
-## Change streams / search / ingest
-
-| Endpoint / command | Purpose |
+| Command | Purpose |
 | --- | --- |
-| `GET /api/mongo/runs/{runId}` | Persisted run + event timeline |
-| `GET /api/mongo/search?q=` | Atlas Search or regex fallback |
-| `GET /api/mongo/stream?collection=` | SSE change-stream proxy |
-| `npm run mongo:ingest` | Offline §8.3 ingest pipeline |
+| `npm run mongo:ingest` | Offline ingest pipeline: seeds Atlas from the `src/data/transit` fixtures |
+
+The `policy_accepted` audit bundle, `/api/mongo/*` run, search, and
+change-stream endpoints described in the spec are not implemented in this
+repository.
 
 Atlas Search / Vector index definitions: `atlas/search-indexes.json`
 (create in Atlas UI; app falls back to regex if the search index is absent).
 
 ## Collection catalog
 
-See `docs/twinto-implementation.md` §14 for the full Atlas collection list,
+See `docs/techto-implementation.md` §14 for the full Atlas collection list,
 time-series names, geospatial/search/vector intent, and transaction rules.
 Core hackathon path uses normal collections plus seeded fixtures.
