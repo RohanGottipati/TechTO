@@ -9,6 +9,43 @@ Toronto, propose and compare interventions, update the map, and examine a
 simulated distribution of day-one resident acceptance, with a written opinion
 behind each sampled resident.
 
+## MLH Fellowship Code Sample
+
+**Applicant:** Rohan Gottipati  
+**Primary Language:** TypeScript  
+**Recommended Code Sample:** [Transit Simulation Engine](src/lib/transit/)
+
+If you're reviewing this repository as part of my MLH Fellowship application, I recommend starting with the transit simulation engine linked above.
+
+### My Contributions
+
+I worked across TechTO's full stack, with a focus on backend architecture, AI agent orchestration, simulation systems, and database integration.
+
+My contributions included:
+
+- **AI Agent Orchestration:** Built and integrated multi-agent planning workflows using Backboard, including tool execution, streaming responses, and coordination between specialized agents.
+- **Transit Simulation:** Developed deterministic simulation logic for passenger demand, queues, vehicle capacity, accessibility constraints, and intervention ranking.
+- **Backend and Database:** Implemented TypeScript APIs, MongoDB Atlas integration, and data access functionality supporting the planning platform.
+- **Frontend Integration:** Worked on the interactive Toronto planning experience, map interfaces, and conversational planning workflows.
+- **Testing and Reliability:** Added unit and end-to-end tests for simulation behaviour, backend functionality, and application workflows.
+
+### Recommended Files to Review
+
+Although my contributions span multiple parts of TechTO, I've highlighted the transit simulation engine as a focused code sample that demonstrates my approach to software engineering.
+
+| File | Purpose |
+|---|---|
+| [simulator.ts](src/lib/transit/simulator.ts) | Core deterministic transit simulation |
+| [queue.ts](src/lib/transit/queue.ts) | Passenger queue management |
+| [metrics.ts](src/lib/transit/metrics.ts) | Performance calculations |
+| [candidate-ranker.ts](src/lib/transit/candidate-ranker.ts) | Multi-objective intervention ranking |
+| [schemas.ts](src/lib/transit/schemas.ts) | Type definitions and validation |
+| [simulator.test.ts](tests/backboard/simulator.test.ts) | Simulation tests and edge cases |
+
+**Relevant commits:** [Transit simulation](https://github.com/RohanGottipati/TechTO/commit/f78ca9f9) · [MongoDB integration](https://github.com/RohanGottipati/TechTO/commit/0942f174) · [Agent orchestration](https://github.com/RohanGottipati/TechTO/commit/f78c8071) · [Automated testing](https://github.com/RohanGottipati/TechTO/commit/496819f7)
+
+---
+
 ## Features
 
 - **Landing page** at `/` linking into the planning workspace at `/city`.
